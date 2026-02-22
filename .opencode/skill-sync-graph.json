@@ -1,0 +1,27 @@
+{
+  "name": "sync-to-graph",
+  "description": "Sync PostgreSQL data to Neo4j graph database",
+  "trigger": "sync graph database",
+  "steps": [
+    {
+      "action": "check-postgres",
+      "description": "Verify PostgreSQL is running and has data",
+      "command": "curl -s http://localhost:8080/api/db/status"
+    },
+    {
+      "action": "check-neo4j",
+      "description": "Verify Neo4j is accessible",
+      "command": "curl -s http://localhost:7474"
+    },
+    {
+      "action": "sync-data",
+      "description": "Sync data from PostgreSQL to Neo4j",
+      "command": "curl -X POST http://localhost:8080/api/graph/sync"
+    },
+    {
+      "action": "verify",
+      "description": "Verify graph sync status",
+      "command": "curl -s http://localhost:8080/api/graph/status"
+    }
+  ]
+}
