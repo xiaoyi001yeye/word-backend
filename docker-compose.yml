@@ -35,5 +35,16 @@ services:
       - ./books:/app/books
       - ./logs:/app/logs
 
+  frontend:
+    image: nginx:alpine
+    container_name: words-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
 volumes:
   postgres_data:

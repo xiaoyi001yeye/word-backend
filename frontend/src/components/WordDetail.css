@@ -1,0 +1,130 @@
+.word-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.word-detail__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  height: 100%;
+  color: var(--color-text-muted);
+}
+
+.word-detail__empty-icon {
+  font-size: 3rem;
+  opacity: 0.3;
+}
+
+.word-detail__empty-text {
+  font-size: 0.9375rem;
+}
+
+.word-detail__header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.word-detail__word {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem;
+  line-height: 1.2;
+}
+
+.word-detail__phonetic {
+  font-family: var(--font-mono);
+  font-size: 1.125rem;
+  color: var(--color-text-muted);
+}
+
+.word-detail__content {
+  flex: 1;
+}
+
+.word-detail__section {
+  margin-bottom: 1.5rem;
+}
+
+.word-detail__label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.word-detail__part-of-speech {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  color: var(--color-accent);
+  background: rgba(180, 83, 9, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+}
+
+.word-detail__definition,
+.word-detail__translation {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.word-detail__example {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--color-border);
+  font-style: italic;
+}
+
+.word-detail__difficulty {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.word-detail__difficulty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: background 0.2s ease;
+}
+
+.word-detail__difficulty-dot.active {
+  background: var(--color-accent);
+}
+
+.word-detail__difficulty-text {
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.word-detail__footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.word-detail__id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
