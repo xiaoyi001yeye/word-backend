@@ -3,6 +3,7 @@ package com.example.words.service;
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.repository.DictionaryWordRepository;
+import com.example.words.repository.MetaWordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,9 +18,11 @@ public class DictionaryWordService {
     private static final Logger log = LoggerFactory.getLogger(DictionaryWordService.class);
 
     private final DictionaryWordRepository dictionaryWordRepository;
+    private final MetaWordRepository metaWordRepository;
 
-    public DictionaryWordService(DictionaryWordRepository dictionaryWordRepository) {
+    public DictionaryWordService(DictionaryWordRepository dictionaryWordRepository, MetaWordRepository metaWordRepository) {
         this.dictionaryWordRepository = dictionaryWordRepository;
+        this.metaWordRepository = metaWordRepository;
     }
 
     public List<DictionaryWord> findByDictionaryId(Long dictionaryId) {
@@ -28,6 +31,11 @@ public class DictionaryWordService {
 
     public List<DictionaryWord> findByMetaWordId(Long metaWordId) {
         return dictionaryWordRepository.findByMetaWordId(metaWordId);
+    }
+
+    public List<MetaWord> findMetaWordsByDictionaryId(Long dictionaryId, int page, int size) {
+        int offset = (page - 1) * size;
+        return metaWordRepository.findByDictionaryIdWithPagination(dictionaryId, size, offset);
     }
 
     public Optional<DictionaryWord> findByDictionaryIdAndMetaWordId(Long dictionaryId, Long metaWordId) {

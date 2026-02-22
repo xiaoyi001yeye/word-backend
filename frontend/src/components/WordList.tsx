@@ -33,9 +33,6 @@ export function WordList({ words, selectedWord, onSelectWord, loading }: WordLis
 
   return (
     <div className="word-list">
-      <div className="word-list__header">
-        <span className="word-list__count">共 {words.length} 个单词</span>
-      </div>
       <div className="word-list__items">
         {words.map((word, index) => (
           <div

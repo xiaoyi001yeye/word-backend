@@ -30,6 +30,11 @@ public class MetaWordController {
         return metaWordService.findAll();
     }
 
+    @GetMapping("/search")
+    public List<MetaWord> search(@RequestParam String prefix) {
+        return metaWordService.findByWordStartingWith(prefix);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<MetaWord> get(@PathVariable Long id) {
         return metaWordService.findById(id)
@@ -42,11 +47,6 @@ public class MetaWordController {
         return metaWordService.findByWord(word)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/search")
-    public List<MetaWord> search(@RequestParam String prefix) {
-        return metaWordService.findByWordStartingWith(prefix);
     }
 
     @GetMapping("/difficulty/{difficulty}")

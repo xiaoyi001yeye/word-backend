@@ -2,7 +2,7 @@
   background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 0.875rem;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -44,13 +44,13 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .dictionary-card__title {
   font-family: var(--font-display);
-  font-size: 1.125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-primary);
   margin: 0;
@@ -70,18 +70,18 @@
 
 .dictionary-card__stats {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .dictionary-card__stat {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 0;
 }
 
 .dictionary-card__stat-value {
   font-family: var(--font-mono);
-  font-size: 1rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text-primary);
 }

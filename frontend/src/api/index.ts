@@ -39,6 +39,7 @@ export const metaWordApi = {
 
 export const dictionaryWordApi = {
   getByDictionary: (dictionaryId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`),
+  getWordsByDictionary: (dictionaryId: number, page: number = 1, size: number = 10) => fetchJson<MetaWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}/words?page=${page}&size=${size}`),
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
