@@ -1,81 +1,98 @@
 package com.example.words.service;
 
-import com.example.words.model.WordVocabulary;
-import com.example.words.repository.WordVocabularyRepository;
+import com.example.words.model.Dictionary;
+import com.example.words.repository.DictionaryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.File;
 import java.util.List;
 import java.util.Optional;
 
 @Service
-public class WordVocabularyService {
+public class DictionaryService {
 
-    private static final Logger log = LoggerFactory.getLogger(WordVocabularyService.class);
+    private static final Logger log = LoggerFactory.getLogger(DictionaryService.class);
     private static final String TRANSLATION_DIR = "/opt/translation";
 
-    private final WordVocabularyRepository wordVocabularyRepository;
+    private final DictionaryRepository dictionaryRepository;
 
-    public WordVocabularyService(WordVocabularyRepository wordVocabularyRepository) {
-        this.wordVocabularyRepository = wordVocabularyRepository;
+    public DictionaryService(DictionaryRepository dictionaryRepository) {
+        this.dictionaryRepository = dictionaryRepository;
     }
 
-    public List<WordVocabulary> findAll() {
-        return wordVocabularyRepository.findAll();
+    public List<Dictionary> findAll() {
+        return dictionaryRepository.findAll();
     }
 
-    public Optional<WordVocabulary> findById(Long id) {
-        return wordVocabularyRepository.findById(id);
+    public Optional<Dictionary> findById(Long id) {
+        return dictionaryRepository.findById(id);
     }
 
-    public Optional<WordVocabulary> findByFileName(String fileName) {
-        return wordVocabularyRepository.findByFileName(fileName);
+    public Optional<Dictionary> findByName(String name) {
+        return dictionaryRepository.findByName(name);
     }
 
-    public List<WordVocabulary> findByCategory(String category) {
-        return wordVocabularyRepository.findByCategory(category);
+    public List<Dictionary> findByCategory(String category) {
+        return dictionaryRepository.findByCategory(category);
     }
 
     @Transactional
-    public int importFilesFromDirectory() {
-        File dir = new File(TRANSLATION_DIR);
+    public Dictionary save(Dictionary dictionary) {
+        return dictionaryRepository.save(dictionary);
+    }
+
+    @Transactional
+    public int importFromDirectory() {
+        java.io.File dir = new java.io.File(TRANSLATION_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
             log.error("Directory not found: {}", TRANSLATION_DIR);
             return 0;
         }
 
-        File[] files = dir.listFiles();
+        java.io.File[] files = dir.listFiles();
         if (files == null) {
             log.warn("No files found in directory: {}", TRANSLATION_DIR);
             return 0;
         }
 
         int count = 0;
-        for (File file : files) {
+        for (java.io.File file : files) {
             if (file.isFile() && file.getName().endsWith(".csv")) {
-                if (!wordVocabularyRepository.existsByFileName(file.getName())) {
+                if (!dictionaryRepository.existsByName(file.getName())) {
                     String category = extractCategory(file.getName());
-                    WordVocabulary vocabulary = new WordVocabulary(
+                    Dictionary dictionary = new Dictionary(
                             file.getName(),
                             file.getAbsolutePath(),
                             file.length(),
                             category
                     );
-                    wordVocabularyRepository.save(vocabulary);
+                    dictionaryRepository.save(dictionary);
                     count++;
-                    log.info("Imported file: {}", file.getName());
+                    log.info("Imported dictionary: {}", file.getName());
                 }
             }
         }
 
-        log.info("Total files imported: {}", count);
+        log.info("Total dictionaries imported: {}", count);
         return count;
     }
 
-    private String extractCategory(String fileName) {
+    @Transactional
+    public void updateWordCount(Long dictionaryId, int wordCount) {
+        dictionaryRepository.findById(dictionaryId).ifPresent(dictionary -> {
+            dictionary.setWordCount(wordCount);
+            dictionaryRepository.save(dictionary);
+        });
+    }
+
+    @Transactional
+    public void deleteAll() {
+        dictionaryRepository.deleteAll();
+    }
+
+    public String extractCategory(String fileName) {
         if (fileName.contains("高考")) {
             return "高考";
         } else if (fileName.contains("考研")) {
@@ -86,7 +103,7 @@ public class WordVocabularyService {
             return "六级";
         } else if (fileName.contains("雅思")) {
             return "雅思";
-        } else if (fileName.contains("托福")) {
+        } else if (fileName.contains("托福") || fileName.contains("TOEFL")) {
             return "托福";
         } else if (fileName.contains("GRE")) {
             return "GRE";
@@ -110,8 +127,6 @@ public class WordVocabularyService {
             return "SAT";
         } else if (fileName.contains("GMAT")) {
             return "GMAT";
-        } else if (fileName.contains("托福") || fileName.contains("TOEFL")) {
-            return "托福";
         } else if (fileName.contains("IELTS")) {
             return "雅思";
         } else if (fileName.contains("MBA")) {
@@ -120,10 +135,5 @@ public class WordVocabularyService {
             return "考博";
         }
         return "其他";
-    }
-
-    @Transactional
-    public void deleteAll() {
-        wordVocabularyRepository.deleteAll();
     }
 }
