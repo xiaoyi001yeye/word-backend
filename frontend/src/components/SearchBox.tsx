@@ -1,43 +1,51 @@
 import { useState, useEffect, useRef } from 'react';
-import { metaWordApi } from '../api';
-import type { MetaWord } from '../types';
 import './SearchBox.css';
 
 interface SearchBoxProps {
-  onSearchResults: (words: MetaWord[]) => void;
   onLoading: (loading: boolean) => void;
   onClear: () => void;
+  onSearchQueryChange?: (query: string) => void;
+  dictionaryId?: number;
+  currentPage?: number;
+  value?: string;
 }
 
-export function SearchBox({ onSearchResults, onLoading, onClear }: SearchBoxProps) {
-  const [query, setQuery] = useState('');
+export function SearchBox({ onLoading, onClear, onSearchQueryChange, dictionaryId: _dictionaryId, currentPage: _currentPage, value = '' }: SearchBoxProps) {
+  const [query, setQuery] = useState(value);
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const prevQueryRef = useRef(query);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
 
   useEffect(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
 
-    if (!query.trim()) {
+    const trimmedQuery = query.trim();
+    prevQueryRef.current = trimmedQuery;
+
+    if (!trimmedQuery) {
       onClear();
+      if (onSearchQueryChange) {
+        onSearchQueryChange('');
+      }
       return;
     }
 
     setIsSearching(true);
     onLoading(true);
 
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const results = await metaWordApi.search(query.trim());
-        onSearchResults(results);
-      } catch (error) {
-        console.error('Search failed:', error);
-        onSearchResults([]);
-      } finally {
-        setIsSearching(false);
-        onLoading(false);
+    debounceRef.current = setTimeout(() => {
+      if (onSearchQueryChange) {
+        onSearchQueryChange(trimmedQuery);
       }
+      setIsSearching(false);
+      onLoading(false);
     }, 300);
 
     return () => {
@@ -45,7 +53,7 @@ export function SearchBox({ onSearchResults, onLoading, onClear }: SearchBoxProp
         clearTimeout(debounceRef.current);
       }
     };
-  }, [query, onSearchResults, onLoading, onClear]);
+  }, [query, onLoading, onClear, onSearchQueryChange]);
 
   return (
     <div className="search-box">

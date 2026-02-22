@@ -3,6 +3,7 @@ package com.example.words.service;
 import com.example.words.model.Dictionary;
 import com.example.words.model.MetaWord;
 import com.example.words.repository.MetaWordRepository;
+import com.example.words.dto.MetaWordSearchRequest;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import org.slf4j.Logger;
@@ -14,6 +15,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class MetaWordService {
@@ -185,5 +189,35 @@ public class MetaWordService {
             case "GRE", "GMAT", "考博", "SAT" -> 4;
             default -> 2;
         };
+    }
+
+    public Page<MetaWord> searchByKeyword(String keyword, Pageable pageable) {
+        return metaWordRepository.findByWordStartingWith(keyword, pageable);
+    }
+
+    public Page<MetaWord> searchByDictionaryIdAndKeyword(Long dictionaryId, String keyword, Pageable pageable) {
+        return metaWordRepository.findByDictionaryIdAndWordStartingWith(dictionaryId, keyword, pageable);
+    }
+
+    public Page<MetaWord> search(MetaWordSearchRequest request) {
+        int page = request.getPage() != null ? request.getPage() : 0;
+        int size = request.getSize() != null ? request.getSize() : 10;
+        Pageable pageable = Pageable.ofSize(size).withPage(page);
+        Long dictionaryId = request.getDictionaryId();
+        String keyword = request.getKeyword();
+        
+        if (dictionaryId != null) {
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                return searchByDictionaryIdAndKeyword(dictionaryId, keyword.trim(), pageable);
+            } else {
+                return metaWordRepository.findByDictionaryId(dictionaryId, pageable);
+            }
+        } else {
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                return searchByKeyword(keyword.trim(), pageable);
+            } else {
+                return metaWordRepository.findAll(pageable);
+            }
+        }
     }
 }

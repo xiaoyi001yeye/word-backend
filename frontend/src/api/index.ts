@@ -1,4 +1,4 @@
-import type { Dictionary, DictionaryWord, MetaWord } from '../types';
+import type { Dictionary, DictionaryWord, MetaWord, Page } from '../types';
 
 const API_BASE = '/api';
 
@@ -27,7 +27,19 @@ export const metaWordApi = {
   getAll: () => fetchJson<MetaWord[]>(`${API_BASE}/meta-words`),
   getById: (id: number) => fetchJson<MetaWord>(`${API_BASE}/meta-words/${id}`),
   getByWord: (word: string) => fetchJson<MetaWord>(`${API_BASE}/meta-words/word/${word}`),
-  search: (prefix: string) => fetchJson<MetaWord[]>(`${API_BASE}/meta-words/search?prefix=${encodeURIComponent(prefix)}`),
+  search: (keyword: string, dictionaryId?: number, page?: number, size?: number) => {
+    const requestBody = {
+      keyword,
+      dictionaryId,
+      page,
+      size
+    };
+    
+    return fetchJson<Page<MetaWord>>(`${API_BASE}/meta-words/search`, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+  },
   getByDifficulty: (difficulty: number) => fetchJson<MetaWord[]>(`${API_BASE}/meta-words/difficulty/${difficulty}`),
   create: (word: Omit<MetaWord, 'id'>) => fetchJson<MetaWord>(`${API_BASE}/meta-words`, {
     method: 'POST',
@@ -39,7 +51,7 @@ export const metaWordApi = {
 
 export const dictionaryWordApi = {
   getByDictionary: (dictionaryId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`),
-  getWordsByDictionary: (dictionaryId: number, page: number = 1, size: number = 10) => fetchJson<MetaWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}/words?page=${page}&size=${size}`),
+  getWordsByDictionary: (dictionaryId: number, page: number = 1, size: number = 10) => fetchJson<Page<MetaWord>>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}/words?page=${page}&size=${size}`),
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),

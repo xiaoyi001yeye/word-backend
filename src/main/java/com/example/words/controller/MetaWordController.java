@@ -2,15 +2,18 @@ package com.example.words.controller;
 
 import com.example.words.model.MetaWord;
 import com.example.words.service.MetaWordService;
+import com.example.words.dto.MetaWordSearchRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 import java.util.Map;
@@ -30,9 +33,9 @@ public class MetaWordController {
         return metaWordService.findAll();
     }
 
-    @GetMapping("/search")
-    public List<MetaWord> search(@RequestParam String prefix) {
-        return metaWordService.findByWordStartingWith(prefix);
+    @PostMapping("/search")
+    public Page<MetaWord> search(@RequestBody MetaWordSearchRequest request) {
+        return metaWordService.search(request);
     }
 
     @GetMapping("/{id}")

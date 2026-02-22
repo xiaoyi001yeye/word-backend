@@ -3,6 +3,7 @@ package com.example.words.controller;
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.service.DictionaryWordService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +26,7 @@ public class DictionaryWordController {
     }
 
     @GetMapping("/dictionary/{dictionaryId}/words")
-    public List<MetaWord> getWordsByDictionary(
+    public Page<MetaWord> getWordsByDictionary(
             @PathVariable Long dictionaryId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {

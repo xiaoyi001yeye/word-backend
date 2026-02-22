@@ -6,6 +6,9 @@ import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,9 +36,9 @@ public class DictionaryWordService {
         return dictionaryWordRepository.findByMetaWordId(metaWordId);
     }
 
-    public List<MetaWord> findMetaWordsByDictionaryId(Long dictionaryId, int page, int size) {
-        int offset = (page - 1) * size;
-        return metaWordRepository.findByDictionaryIdWithPagination(dictionaryId, size, offset);
+    public Page<MetaWord> findMetaWordsByDictionaryId(Long dictionaryId, int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        return metaWordRepository.findByDictionaryId(dictionaryId, pageable);
     }
 
     public Optional<DictionaryWord> findByDictionaryIdAndMetaWordId(Long dictionaryId, Long metaWordId) {

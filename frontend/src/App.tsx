@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { dictionaryApi, dictionaryWordApi } from './api';
+import { dictionaryApi, metaWordApi } from './api';
 import type { Dictionary, MetaWord } from './types';
 import { DictionaryCard } from './components/DictionaryCard';
 import { WordList } from './components/WordList';
@@ -14,6 +14,7 @@ function App() {
   const [selectedWord, setSelectedWord] = useState<MetaWord | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dictSearchQuery, setDictSearchQuery] = useState('');
   const [dictPage, setDictPage] = useState(1);
@@ -37,21 +38,20 @@ function App() {
     }
   }, []);
 
-  const loadDictionaryWords = useCallback(async (dictId: number, page: number = 1) => {
-    if (isLoadingRef.current) return;
-    if (lastLoadedRef.current?.dictId === dictId && lastLoadedRef.current?.page === page) return;
-    
-    isLoadingRef.current = true;
+  const performSearch = useCallback(async (keyword: string, page: number = 1, dictionaryId?: number) => {
     setLoading(true);
     try {
-      const words = await dictionaryWordApi.getWordsByDictionary(dictId, page, WORD_PAGE_SIZE);
-      setMetaWords(words);
-      lastLoadedRef.current = { dictId, page };
+      const pageResult = await metaWordApi.search(keyword.trim(), dictionaryId, page - 1);
+      setMetaWords(pageResult.content);
+      setTotalWords(pageResult.totalElements);
+      
+      setWordPage(page);
+      prevWordPageRef.current = 0;
+      lastLoadedRef.current = dictionaryId ? { dictId: dictionaryId, page } : null;
     } catch (error) {
-      console.error('Failed to load dictionary words:', error);
+      console.error('Search failed:', error);
     } finally {
       setLoading(false);
-      isLoadingRef.current = false;
     }
   }, []);
 
@@ -62,40 +62,63 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDictionary || isSearching) return;
+    if (isLoadingRef.current) return;
     
-    console.log('[useEffect] wordPage:', wordPage, 'prev:', prevWordPageRef.current, 'lastLoaded:', lastLoadedRef.current);
+    console.log('[useEffect] wordPage:', wordPage, 'selectedDictionary:', selectedDictionary?.id, 'searchKeyword:', searchKeyword, 'isSearching:', isSearching);
     
-    if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === selectedDictionary.id) {
-      console.log('[useEffect] Skip - already loaded');
-      return;
+    // Determine what to load based on current state
+    if (isSearching && searchKeyword.trim()) {
+      // Search mode: keyword search
+      if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === -1) {
+        console.log('[useEffect] Skip search - already loaded');
+        return;
+      }
+      prevWordPageRef.current = wordPage;
+      lastLoadedRef.current = { dictId: -1, page: wordPage };
+      
+      performSearch(searchKeyword, wordPage);
+    } else if (selectedDictionary && !isSearching) {
+      // Dictionary browsing mode: load dictionary words
+      if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === selectedDictionary.id) {
+        console.log('[useEffect] Skip dictionary - already loaded');
+        return;
+      }
+      prevWordPageRef.current = wordPage;
+      
+      performSearch('', wordPage, selectedDictionary.id);
     }
-    prevWordPageRef.current = wordPage;
-    
-    loadDictionaryWords(selectedDictionary.id, wordPage);
-  }, [selectedDictionary, wordPage, isSearching]);
+  }, [wordPage, selectedDictionary, isSearching, searchKeyword, performSearch]);
 
   const handleSelectDictionary = useCallback((dict: Dictionary) => {
     setSelectedDictionary(dict);
     setSelectedWord(null);
+    setIsSearching(false);
+    setSearchKeyword('');
     setWordPage(1);
-    setTotalWords(dict.wordCount || 0);
+    // Don't set totalWords here - it will be set by performSearch
     lastLoadedRef.current = null;
+    // The useEffect will trigger performSearch with dictionaryId
   }, []);
 
-  const handleSearchResults = useCallback((words: MetaWord[]) => {
-    setMetaWords(words);
-    setIsSearching(true);
-    setWordPage(1);
-    prevWordPageRef.current = 0;
-    lastLoadedRef.current = null;
-  }, []);
+
 
   const handleSearchClear = useCallback(() => {
     setIsSearching(false);
+    setSearchKeyword('');
     setWordPage(1);
     prevWordPageRef.current = 0;
     lastLoadedRef.current = null;
+  }, []);
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setSearchKeyword(query);
+    // Clear dictionary selection when user starts typing (if query is not empty)
+    if (query.trim()) {
+      setSelectedDictionary(null);
+      setIsSearching(true); // Set searching mode when user types
+    } else {
+      setIsSearching(false); // Clear searching mode when query is empty
+    }
   }, []);
 
   const handleSelectWord = useCallback((word: MetaWord) => {
@@ -120,9 +143,12 @@ function App() {
             <span className="app__title-icon">📖</span>
             <div className="app__search">
               <SearchBox
-                onSearchResults={handleSearchResults}
                 onLoading={setLoading}
                 onClear={handleSearchClear}
+                onSearchQueryChange={handleSearchQueryChange}
+                dictionaryId={selectedDictionary?.id}
+                currentPage={wordPage}
+                value={searchKeyword}
               />
             </div>
           </div>
