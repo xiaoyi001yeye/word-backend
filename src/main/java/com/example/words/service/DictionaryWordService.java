@@ -12,8 +12,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class DictionaryWordService {
@@ -79,5 +82,89 @@ public class DictionaryWordService {
                 .map(metaWordId -> new DictionaryWord(dictionaryId, metaWordId))
                 .toList();
         dictionaryWordRepository.saveAll(associations);
+    }
+
+    @Transactional
+    public WordListProcessResult processWordList(Long dictionaryId, List<String> words) {
+        Set<String> uniqueWords = new HashSet<>(words);
+        int total = uniqueWords.size();
+        int existed = 0;
+        int created = 0;
+        int added = 0;
+        int failed = 0;
+        
+        List<Long> metaWordIds = new ArrayList<>();
+        
+        for (String word : uniqueWords) {
+            if (word == null || word.trim().isEmpty()) {
+                failed++;
+                continue;
+            }
+            
+            String trimmedWord = word.trim();
+            try {
+                MetaWord metaWord = metaWordRepository.findByWord(trimmedWord)
+                        .orElseGet(() -> {
+                            MetaWord newMetaWord = new MetaWord();
+                            newMetaWord.setWord(trimmedWord);
+                            newMetaWord.setDifficulty(2);
+                            return metaWordRepository.save(newMetaWord);
+                        });
+                
+                if (metaWordRepository.findByWord(trimmedWord).isPresent()) {
+                    existed++;
+                } else {
+                    created++;
+                }
+                
+                metaWordIds.add(metaWord.getId());
+            } catch (Exception e) {
+                log.error("Failed to process word: {}", trimmedWord, e);
+                failed++;
+            }
+        }
+        
+        if (!metaWordIds.isEmpty()) {
+            List<DictionaryWord> existingAssociations = dictionaryWordRepository.findByDictionaryId(dictionaryId);
+            Set<Long> existingMetaWordIds = existingAssociations.stream()
+                    .map(DictionaryWord::getMetaWordId)
+                    .collect(java.util.stream.Collectors.toSet());
+            
+            List<DictionaryWord> newAssociations = new ArrayList<>();
+            for (Long metaWordId : metaWordIds) {
+                if (!existingMetaWordIds.contains(metaWordId)) {
+                    newAssociations.add(new DictionaryWord(dictionaryId, metaWordId));
+                    added++;
+                }
+            }
+            
+            if (!newAssociations.isEmpty()) {
+                dictionaryWordRepository.saveAll(newAssociations);
+            }
+        }
+        
+        return new WordListProcessResult(total, existed, created, added, failed);
+    }
+    
+    public static class WordListProcessResult {
+        private final int total;
+        private final int existed;
+        private final int created;
+        private final int added;
+        private final int failed;
+        
+        public WordListProcessResult(int total, int existed, int created, int added, int failed) {
+            this.total = total;
+            this.existed = existed;
+            this.created = created;
+            this.added = added;
+            this.failed = failed;
+        }
+        
+        public int getTotal() { return total; }
+        public int getExisted() { return existed; }
+        public int getCreated() { return created; }
+        public int getAdded() { return added; }
+        public int getFailed() { return failed; }
     }
 }

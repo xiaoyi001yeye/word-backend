@@ -5,6 +5,8 @@ import { DictionaryCard } from './components/DictionaryCard';
 import { WordList } from './components/WordList';
 import { WordDetail } from './components/WordDetail';
 import { SearchBox } from './components/SearchBox';
+import { CreateDictionaryModal } from './components/CreateDictionaryModal';
+import { AddWordListModal } from './components/AddWordListModal';
 import './App.css';
 
 function App() {
@@ -22,6 +24,9 @@ function App() {
   const [wordPage, setWordPage] = useState(1);
   const WORD_PAGE_SIZE = 10;
   const [totalWords, setTotalWords] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAddWordListModal, setShowAddWordListModal] = useState(false);
+  const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const isLoadingRef = useRef(false);
   const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
   const prevWordPageRef = useRef<number>(1);
@@ -37,6 +42,55 @@ function App() {
       setLoading(false);
     }
   }, []);
+
+  const handleDictionaryCreated = useCallback((newDictionary: Dictionary) => {
+    setDictionaries(prev => [newDictionary, ...prev]);
+    setSelectedDictionary(newDictionary);
+    setSelectedWord(null);
+    setIsSearching(false);
+    setSearchKeyword('');
+    setWordPage(1);
+  }, []);
+
+  const handleDeleteDictionary = useCallback(async (id: number) => {
+    if (!window.confirm('确定要删除这个辞书吗？此操作无法撤销。')) {
+      return;
+    }
+    try {
+      await dictionaryApi.deleteById(id);
+      setDictionaries(prev => prev.filter(d => d.id !== id));
+      if (selectedDictionary?.id === id) {
+        setSelectedDictionary(null);
+        setSelectedWord(null);
+        setIsSearching(false);
+        setSearchKeyword('');
+        setWordPage(1);
+      }
+    } catch (error) {
+      console.error('Failed to delete dictionary:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('400')) {
+        alert('无法删除导入的辞书，只能删除用户创建的辞书。');
+      } else {
+        alert('删除辞书失败，请重试。');
+      }
+    }
+  }, [selectedDictionary]);
+
+  const handleAddWords = useCallback((dict: Dictionary) => {
+    setDictionaryForAdd(dict);
+    setShowAddWordListModal(true);
+  }, []);
+
+  const handleWordListAdded = useCallback(() => {
+    if (dictionaryForAdd?.id === selectedDictionary?.id) {
+      setWordPage(1);
+      prevWordPageRef.current = 0;
+      lastLoadedRef.current = null;
+    }
+  }, [dictionaryForAdd, selectedDictionary]);
+
+
 
   const performSearch = useCallback(async (keyword: string, page: number = 1, dictionaryId?: number) => {
     setLoading(true);
@@ -59,7 +113,7 @@ function App() {
     if (dictionaries.length === 0) {
       loadDictionaries();
     }
-  }, []);
+  }, [dictionaries.length, loadDictionaries]);
 
   useEffect(() => {
     if (isLoadingRef.current) return;
@@ -146,8 +200,6 @@ function App() {
                 onLoading={setLoading}
                 onClear={handleSearchClear}
                 onSearchQueryChange={handleSearchQueryChange}
-                dictionaryId={selectedDictionary?.id}
-                currentPage={wordPage}
                 value={searchKeyword}
               />
             </div>
@@ -166,22 +218,34 @@ function App() {
           </button>
           {!sidebarCollapsed && (
             <div className="sidebar__section">
-              <div className="sidebar__search">
-                <input
-                  type="text"
-                  className="sidebar__search-input"
-                  placeholder="搜索词典..."
-                  value={dictSearchQuery}
-                  onChange={(e) => setDictSearchQuery(e.target.value)}
-                />
-                {dictSearchQuery && (
+              <div className="sidebar__header">
+                <div className="sidebar__search">
+                  <input
+                    type="text"
+                    className="sidebar__search-input"
+                    placeholder="搜索词典..."
+                    value={dictSearchQuery}
+                    onChange={(e) => setDictSearchQuery(e.target.value)}
+                  />
+                  {dictSearchQuery && (
+                    <button
+                      className="sidebar__search-clear"
+                      onClick={() => setDictSearchQuery('')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="sidebar__actions">
                   <button
-                    className="sidebar__search-clear"
-                    onClick={() => setDictSearchQuery('')}
+                    className="add-dictionary-btn"
+                    onClick={() => setShowCreateModal(true)}
+                    title="创建新辞书"
                   >
-                    ×
+                    <span>+</span>
+                    <span>添加辞书</span>
                   </button>
-                )}
+                </div>
               </div>
               {loading && dictionaries.length === 0 ? (
                 <div className="sidebar__loading">
@@ -202,6 +266,8 @@ function App() {
                         dictionary={dict}
                         isSelected={selectedDictionary?.id === dict.id}
                         onClick={() => handleSelectDictionary(dict)}
+                        onDelete={() => handleDeleteDictionary(dict.id)}
+                        onAdd={() => handleAddWords(dict)}
                       />
                     </div>
                   ))}
@@ -277,6 +343,21 @@ function App() {
           </div>
         </section>
       </main>
+
+      <CreateDictionaryModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onDictionaryCreated={handleDictionaryCreated}
+      />
+      
+      {dictionaryForAdd && (
+        <AddWordListModal
+          isOpen={showAddWordListModal}
+          onClose={() => setShowAddWordListModal(false)}
+          dictionary={dictionaryForAdd}
+          onSuccess={handleWordListAdded}
+        />
+      )}
     </div>
   );
 }

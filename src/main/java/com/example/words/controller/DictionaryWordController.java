@@ -1,5 +1,7 @@
 package com.example.words.controller;
 
+import com.example.words.dto.AddWordsToDictionaryRequest;
+import com.example.words.dto.AddWordListRequest;
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.service.DictionaryWordService;
@@ -9,11 +11,13 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/dictionary-words")
@@ -51,6 +55,34 @@ public class DictionaryWordController {
         return dictionaryWordService.findByDictionaryIdAndMetaWordId(dictionaryId, metaWordId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{dictionaryId}/batch")
+    public ResponseEntity<Map<String, Object>> addWordsToDictionary(
+            @PathVariable Long dictionaryId,
+            @RequestBody AddWordsToDictionaryRequest request) {
+        dictionaryWordService.saveAllBatch(dictionaryId, request.getMetaWordIds());
+        return ResponseEntity.ok(Map.of(
+                "message", "Words added to dictionary successfully",
+                "dictionaryId", dictionaryId,
+                "wordCount", request.getMetaWordIds().size()
+        ));
+    }
+
+    @PostMapping("/{dictionaryId}/word-list")
+    public ResponseEntity<Map<String, Object>> addWordListToDictionary(
+            @PathVariable Long dictionaryId,
+            @RequestBody AddWordListRequest request) {
+        DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordList(dictionaryId, request.getWords());
+        return ResponseEntity.ok(Map.of(
+                "message", "Word list processed successfully",
+                "dictionaryId", dictionaryId,
+                "total", result.getTotal(),
+                "existed", result.getExisted(),
+                "created", result.getCreated(),
+                "added", result.getAdded(),
+                "failed", result.getFailed()
+        ));
     }
 
     @DeleteMapping("/dictionary/{dictionaryId}")

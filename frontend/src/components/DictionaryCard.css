@@ -68,6 +68,65 @@
   letter-spacing: 0.02em;
 }
 
+.dictionary-card__delete-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dictionary-card__delete-btn:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.dictionary-card__header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dictionary-card__actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.dictionary-card:hover .dictionary-card__actions {
+  opacity: 1;
+}
+
+.dictionary-card__add-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dictionary-card__add-btn:hover {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
 .dictionary-card__stats {
   display: flex;
   gap: 1rem;

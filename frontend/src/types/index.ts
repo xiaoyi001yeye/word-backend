@@ -18,6 +18,7 @@ export interface Dictionary {
   fileSize?: number;
   category?: string;
   wordCount?: number;
+  creationType?: 'USER_CREATED' | 'IMPORTED';
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1,5 +1,15 @@
 import type { Dictionary, DictionaryWord, MetaWord, Page } from '../types';
 
+export interface WordListProcessResult {
+  message: string;
+  dictionaryId: number;
+  total: number;
+  existed: number;
+  created: number;
+  added: number;
+  failed: number;
+}
+
 const API_BASE = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -19,8 +29,14 @@ export const dictionaryApi = {
   getAll: () => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries`),
   getById: (id: number) => fetchJson<Dictionary>(`${API_BASE}/dictionaries/${id}`),
   getByCategory: (category: string) => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries/category/${category}`),
+  create: (dictionary: Omit<Dictionary, 'id'>) => fetchJson<Dictionary>(`${API_BASE}/dictionaries`, {
+    method: 'POST',
+    body: JSON.stringify(dictionary),
+  }),
   importDictionaries: () => fetchJson<{ message: string; count: number }>(`${API_BASE}/dictionaries/import`, { method: 'POST' }),
   deleteAll: () => fetch(`${API_BASE}/dictionaries`, { method: 'DELETE' }),
+  deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/dictionaries/${id}`, { method: 'DELETE' }),
+  deleteUserCreated: () => fetchJson<{ message: string; deletedCount: number }>(`${API_BASE}/dictionaries/user-created`, { method: 'DELETE' }),
 };
 
 export const metaWordApi = {
@@ -55,4 +71,8 @@ export const dictionaryWordApi = {
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
+  addWordList: (dictionaryId: number, words: string[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/word-list`, {
+    method: 'POST',
+    body: JSON.stringify({ words }),
+  }),
 };

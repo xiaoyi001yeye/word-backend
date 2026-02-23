@@ -73,6 +73,18 @@ public class MetaWordService {
     }
 
     @Transactional
+    public MetaWord saveWordIfNotExists(String word) {
+        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        MetaWord metaWord = new MetaWord();
+        metaWord.setWord(word);
+        metaWord.setDifficulty(2);
+        return metaWordRepository.save(metaWord);
+    }
+
+    @Transactional
     public void deleteAll() {
         dictionaryWordService.deleteAll();
         dictionaryService.deleteAll();

@@ -3,6 +3,8 @@ package com.example.words.model;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -44,6 +46,10 @@ public class Dictionary {
     @Column(name = "word_count")
     private Integer wordCount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "creation_type", nullable = false)
+    private DictionaryCreationType creationType = DictionaryCreationType.USER_CREATED;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -58,5 +64,15 @@ public class Dictionary {
         this.fileSize = fileSize;
         this.category = category;
         this.wordCount = 0;
+        this.creationType = DictionaryCreationType.USER_CREATED;
+    }
+
+    public Dictionary(String name, String filePath, Long fileSize, String category, DictionaryCreationType creationType) {
+        this.name = name;
+        this.filePath = filePath;
+        this.fileSize = fileSize;
+        this.category = category;
+        this.wordCount = 0;
+        this.creationType = creationType;
     }
 }

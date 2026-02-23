@@ -1,6 +1,7 @@
 package com.example.words.service;
 
 import com.example.words.model.Dictionary;
+import com.example.words.model.DictionaryCreationType;
 import com.example.words.repository.DictionaryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +67,8 @@ public class DictionaryService {
                             file.getName(),
                             file.getAbsolutePath(),
                             file.length(),
-                            category
+                            category,
+                            DictionaryCreationType.IMPORTED
                     );
                     dictionaryRepository.save(dictionary);
                     count++;
@@ -90,6 +92,29 @@ public class DictionaryService {
     @Transactional
     public void deleteAll() {
         dictionaryRepository.deleteAll();
+    }
+
+    @Transactional
+    public int deleteUserCreatedDictionaries() {
+        int deletedCount = dictionaryRepository.deleteByCreationType(DictionaryCreationType.USER_CREATED);
+        log.info("Deleted {} user-created dictionaries", deletedCount);
+        return deletedCount;
+    }
+
+    @Transactional
+    public boolean deleteById(Long id) {
+        return dictionaryRepository.findById(id)
+                .map(dictionary -> {
+                    if (dictionary.getCreationType() == DictionaryCreationType.USER_CREATED) {
+                        dictionaryRepository.delete(dictionary);
+                        log.info("Deleted user-created dictionary: {} (ID: {})", dictionary.getName(), id);
+                        return true;
+                    } else {
+                        log.warn("Cannot delete imported dictionary: {} (ID: {})", dictionary.getName(), id);
+                        return false;
+                    }
+                })
+                .orElse(false);
     }
 
     public String extractCategory(String fileName) {

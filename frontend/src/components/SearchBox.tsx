@@ -5,12 +5,10 @@ interface SearchBoxProps {
   onLoading: (loading: boolean) => void;
   onClear: () => void;
   onSearchQueryChange?: (query: string) => void;
-  dictionaryId?: number;
-  currentPage?: number;
   value?: string;
 }
 
-export function SearchBox({ onLoading, onClear, onSearchQueryChange, dictionaryId: _dictionaryId, currentPage: _currentPage, value = '' }: SearchBoxProps) {
+export function SearchBox({ onLoading, onClear, onSearchQueryChange, value = '' }: SearchBoxProps) {
   const [query, setQuery] = useState(value);
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

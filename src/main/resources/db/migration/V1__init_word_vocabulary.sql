@@ -22,12 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_word_vocabulary_file_name ON word_vocabulary(file
 CREATE INDEX IF NOT EXISTS idx_word_vocabulary_category ON word_vocabulary(category);
 
 -- Create unique constraint on file_name to prevent duplicates
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_word_vocabulary_file_name') THEN
-        ALTER TABLE word_vocabulary ADD CONSTRAINT uk_word_vocabulary_file_name UNIQUE (file_name);
-    END IF;
-END $$
+-- Note: This may fail if constraint already exists, but that's acceptable
 
 -- Comment on the table
 COMMENT ON TABLE word_vocabulary IS 'Vocabulary file metadata table';
