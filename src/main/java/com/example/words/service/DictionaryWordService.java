@@ -2,6 +2,7 @@ package com.example.words.service;
 
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
+import com.example.words.dto.MetaWordEntryDto;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
 import org.slf4j.Logger;
@@ -14,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -85,8 +88,18 @@ public class DictionaryWordService {
     }
 
     @Transactional
-    public WordListProcessResult processWordList(Long dictionaryId, List<String> words) {
-        Set<String> uniqueWords = new HashSet<>(words);
+    public WordListProcessResult processWordList(Long dictionaryId, List<MetaWordEntryDto> words) {
+        log.debug("Processing word list for dictionary {}, input size: {}", dictionaryId, words.size());
+        Map<String, MetaWordEntryDto> uniqueWords = new LinkedHashMap<>();
+        for (MetaWordEntryDto dto : words) {
+            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
+                continue;
+            }
+            String wordKey = dto.getWord().trim().toLowerCase();
+            uniqueWords.put(wordKey, dto);
+        }
+        
+        log.debug("Unique words count: {}", uniqueWords.size());
         int total = uniqueWords.size();
         int existed = 0;
         int created = 0;
@@ -95,31 +108,32 @@ public class DictionaryWordService {
         
         List<Long> metaWordIds = new ArrayList<>();
         
-        for (String word : uniqueWords) {
-            if (word == null || word.trim().isEmpty()) {
-                failed++;
-                continue;
-            }
-            
-            String trimmedWord = word.trim();
+        for (MetaWordEntryDto dto : uniqueWords.values()) {
+            String word = dto.getWord().trim();
             try {
-                MetaWord metaWord = metaWordRepository.findByWord(trimmedWord)
-                        .orElseGet(() -> {
-                            MetaWord newMetaWord = new MetaWord();
-                            newMetaWord.setWord(trimmedWord);
-                            newMetaWord.setDifficulty(2);
-                            return metaWordRepository.save(newMetaWord);
-                        });
+                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
+                MetaWord metaWord;
                 
-                if (metaWordRepository.findByWord(trimmedWord).isPresent()) {
+                if (existingMetaWordOpt.isPresent()) {
+                    metaWord = existingMetaWordOpt.get();
                     existed++;
+                    log.debug("Word already exists: {} (id: {})", word, metaWord.getId());
+                    
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
                 } else {
+                    metaWord = new MetaWord();
+                    metaWord.setWord(word);
                     created++;
+                    log.debug("Creating new meta word: {}", word);
+                    
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
                 }
                 
                 metaWordIds.add(metaWord.getId());
             } catch (Exception e) {
-                log.error("Failed to process word: {}", trimmedWord, e);
+                log.error("Failed to process word: {}", word, e);
                 failed++;
             }
         }
@@ -140,10 +154,35 @@ public class DictionaryWordService {
             
             if (!newAssociations.isEmpty()) {
                 dictionaryWordRepository.saveAll(newAssociations);
+                log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
             }
         }
         
+        log.debug("Word list processing completed: total={}, existed={}, created={}, added={}, failed={}", total, existed, created, added, failed);
         return new WordListProcessResult(total, existed, created, added, failed);
+    }
+    
+    private void updateMetaWordFields(MetaWord metaWord, MetaWordEntryDto dto) {
+        if (dto.getPhonetic() != null && !dto.getPhonetic().trim().isEmpty()) {
+            metaWord.setPhonetic(dto.getPhonetic().trim());
+        }
+        if (dto.getDefinition() != null && !dto.getDefinition().trim().isEmpty()) {
+            metaWord.setDefinition(dto.getDefinition().trim());
+        }
+        if (dto.getPartOfSpeech() != null && !dto.getPartOfSpeech().trim().isEmpty()) {
+            metaWord.setPartOfSpeech(dto.getPartOfSpeech().trim());
+        }
+        if (dto.getExampleSentence() != null && !dto.getExampleSentence().trim().isEmpty()) {
+            metaWord.setExampleSentence(dto.getExampleSentence().trim());
+        }
+        if (dto.getTranslation() != null && !dto.getTranslation().trim().isEmpty()) {
+            metaWord.setTranslation(dto.getTranslation().trim());
+        }
+        if (dto.getDifficulty() != null) {
+            metaWord.setDifficulty(dto.getDifficulty());
+        } else {
+            metaWord.setDifficulty(2);
+        }
     }
     
     public static class WordListProcessResult {

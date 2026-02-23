@@ -2,6 +2,8 @@ package com.example.words.controller;
 
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
+import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.service.DictionaryWordService;
@@ -21,6 +23,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/dictionary-words")
+@Validated
 public class DictionaryWordController {
 
     private final DictionaryWordService dictionaryWordService;
@@ -69,10 +72,10 @@ public class DictionaryWordController {
         ));
     }
 
-    @PostMapping("/{dictionaryId}/word-list")
+    @PostMapping("/{dictionaryId}/words/list")
     public ResponseEntity<Map<String, Object>> addWordListToDictionary(
             @PathVariable Long dictionaryId,
-            @RequestBody AddWordListRequest request) {
+            @Valid @RequestBody AddWordListRequest request) {
         DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordList(dictionaryId, request.getWords());
         return ResponseEntity.ok(Map.of(
                 "message", "Word list processed successfully",

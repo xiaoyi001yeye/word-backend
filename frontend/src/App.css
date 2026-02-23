@@ -726,4 +726,16 @@
 .form__result-stat:nth-child(4) .form__result-value { color: #f59e0b; } /* 成功添加 - 黄色 */
 .form__result-stat:nth-child(5) .form__result-value { color: #ef4444; } /* 失败 - 红色 */
 
+/* 表单操作按钮容器 */
+.form__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.form__actions .btn {
+  font-size: 0.9em;
+  padding: 4px 12px;
+}
+
 
