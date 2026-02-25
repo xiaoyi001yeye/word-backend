@@ -7,6 +7,7 @@ import { WordDetail } from './components/WordDetail';
 import { SearchBox } from './components/SearchBox';
 import { CreateDictionaryModal } from './components/CreateDictionaryModal';
 import { AddWordListModal } from './components/AddWordListModal';
+import { CsvImportModal } from './components/CsvImportModal';
 import './App.css';
 
 function App() {
@@ -26,7 +27,9 @@ function App() {
   const [totalWords, setTotalWords] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddWordListModal, setShowAddWordListModal] = useState(false);
+  const [showCsvImportModal, setShowCsvImportModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
+  const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
   const isLoadingRef = useRef(false);
   const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
   const prevWordPageRef = useRef<number>(1);
@@ -82,6 +85,11 @@ function App() {
     setShowAddWordListModal(true);
   }, []);
 
+  const handleImportCsv = useCallback((dict: Dictionary) => {
+    setDictionaryForCsvImport(dict);
+    setShowCsvImportModal(true);
+  }, []);
+
   const handleWordListAdded = useCallback(() => {
     if (dictionaryForAdd?.id === selectedDictionary?.id) {
       setWordPage(1);
@@ -89,6 +97,14 @@ function App() {
       lastLoadedRef.current = null;
     }
   }, [dictionaryForAdd, selectedDictionary]);
+
+  const handleCsvImported = useCallback(() => {
+    if (dictionaryForCsvImport?.id === selectedDictionary?.id) {
+      setWordPage(1);
+      prevWordPageRef.current = 0;
+      lastLoadedRef.current = null;
+    }
+  }, [dictionaryForCsvImport, selectedDictionary]);
 
 
 
@@ -356,6 +372,15 @@ function App() {
           onClose={() => setShowAddWordListModal(false)}
           dictionary={dictionaryForAdd}
           onSuccess={handleWordListAdded}
+        />
+      )}
+      
+      {dictionaryForCsvImport && (
+        <CsvImportModal
+          isOpen={showCsvImportModal}
+          onClose={() => setShowCsvImportModal(false)}
+          dictionary={dictionaryForCsvImport}
+          onSuccess={handleCsvImported}
         />
       )}
     </div>
