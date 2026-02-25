@@ -2,8 +2,13 @@ package com.example.words.service;
 
 import com.example.words.model.Dictionary;
 import com.example.words.model.MetaWord;
+import com.example.words.model.Phonetic;
+import com.example.words.model.PartOfSpeech;
+import com.example.words.model.Definition;
+import com.example.words.model.ExampleSentence;
 import com.example.words.repository.MetaWordRepository;
 import com.example.words.dto.MetaWordSearchRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import org.slf4j.Logger;
@@ -24,6 +29,7 @@ public class MetaWordService {
 
     private static final Logger log = LoggerFactory.getLogger(MetaWordService.class);
     private static final String BOOKS_DIR = "/app/books";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final MetaWordRepository metaWordRepository;
     private final DictionaryService dictionaryService;
@@ -69,6 +75,24 @@ public class MetaWordService {
             return existing.get();
         }
         MetaWord metaWord = new MetaWord(word, phonetic, definition, partOfSpeech);
+        return metaWordRepository.save(metaWord);
+    }
+    
+    @Transactional
+    public MetaWord saveIfNotExists(String word, Phonetic phoneticDetail, java.util.List<PartOfSpeech> partOfSpeechDetail) {
+        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        if (existing.isPresent()) {
+            MetaWord metaWord = existing.get();
+            // Update with new detailed information
+            if (phoneticDetail != null) {
+                metaWord.setPhoneticDetail(phoneticDetail);
+            }
+            if (partOfSpeechDetail != null && !partOfSpeechDetail.isEmpty()) {
+                metaWord.setPartOfSpeechDetail(partOfSpeechDetail);
+            }
+            return metaWordRepository.save(metaWord);
+        }
+        MetaWord metaWord = new MetaWord(word, phoneticDetail, partOfSpeechDetail);
         return metaWordRepository.save(metaWord);
     }
 
@@ -129,6 +153,22 @@ public class MetaWordService {
     public int importFromFile(java.io.File file, java.util.HashMap<String, MetaWord> wordCache) {
         int wordCount = 0;
 
+        try {
+            if (file.getName().endsWith(".json")) {
+                return importFromJsonFile(file, wordCache);
+            } else {
+                return importFromCsvFile(file, wordCache);
+            }
+        } catch (Exception e) {
+            log.error("Error importing file: {}", file.getName(), e);
+            return 0;
+        }
+    }
+    
+    @Transactional
+    private int importFromCsvFile(java.io.File file, java.util.HashMap<String, MetaWord> wordCache) throws IOException, CsvException {
+        int wordCount = 0;
+
         try (CSVReader reader = new CSVReader(new FileReader(file))) {
             List<String[]> lines = reader.readAll();
 
@@ -183,14 +223,122 @@ public class MetaWordService {
             }
 
             dictionaryService.updateWordCount(dictionaryId, wordCount);
-            log.info("Imported {} words from {}", wordCount, file.getName());
-
-        } catch (IOException | CsvException e) {
-            log.error("Error importing file: {}", file.getName(), e);
-            return 0;
+            log.info("Imported {} words from CSV file {}", wordCount, file.getName());
         }
 
         return wordCount;
+    }
+    
+    @Transactional
+    private int importFromJsonFile(java.io.File file, java.util.HashMap<String, MetaWord> wordCache) throws IOException {
+        int wordCount = 0;
+        
+        String dictionaryName = file.getName().replace(".json", "");
+        String category = dictionaryService.extractCategory(dictionaryName);
+
+        Dictionary dictionary = new Dictionary(
+                dictionaryName,
+                file.getAbsolutePath(),
+                file.length(),
+                category
+        );
+        dictionary = dictionaryService.save(dictionary);
+        Long dictionaryId = dictionary.getId();
+
+        java.util.List<Long> metaWordIds = new java.util.ArrayList<>();
+        
+        // Read JSON file
+        String jsonContent = new String(java.nio.file.Files.readAllBytes(file.toPath()));
+        java.util.List<com.example.words.dto.MetaWordEntryDtoV2> wordEntries = 
+            objectMapper.readValue(jsonContent, 
+                objectMapper.getTypeFactory().constructCollectionType(java.util.List.class, com.example.words.dto.MetaWordEntryDtoV2.class));
+        
+        for (com.example.words.dto.MetaWordEntryDtoV2 entry : wordEntries) {
+            if (entry.getWord() == null || entry.getWord().trim().isEmpty()) {
+                continue;
+            }
+            
+            String word = entry.getWord().trim();
+            MetaWord metaWord = wordCache.get(word.toLowerCase());
+            
+            if (metaWord == null) {
+                // Convert DTO to entity
+                Phonetic phoneticDetail = convertPhoneticDto(entry.getPhonetic());
+                java.util.List<PartOfSpeech> partOfSpeechDetail = convertPartOfSpeechDtos(entry.getPartOfSpeech());
+                
+                metaWord = new MetaWord(word, phoneticDetail, partOfSpeechDetail);
+                metaWord.setDifficulty(entry.getDifficulty() != null ? entry.getDifficulty() : estimateDifficulty(category));
+                metaWord = metaWordRepository.save(metaWord);
+                wordCache.put(word.toLowerCase(), metaWord);
+            } else {
+                // Update existing word with detailed information
+                if (entry.getPhonetic() != null) {
+                    metaWord.setPhoneticDetail(convertPhoneticDto(entry.getPhonetic()));
+                }
+                if (entry.getPartOfSpeech() != null && !entry.getPartOfSpeech().isEmpty()) {
+                    metaWord.setPartOfSpeechDetail(convertPartOfSpeechDtos(entry.getPartOfSpeech()));
+                }
+                if (entry.getDifficulty() != null) {
+                    metaWord.setDifficulty(entry.getDifficulty());
+                }
+                metaWord = metaWordRepository.save(metaWord);
+            }
+            
+            metaWordIds.add(metaWord.getId());
+            wordCount++;
+        }
+        
+        if (!metaWordIds.isEmpty()) {
+            dictionaryWordService.saveAllBatch(dictionaryId, metaWordIds);
+        }
+        
+        dictionaryService.updateWordCount(dictionaryId, wordCount);
+        log.info("Imported {} words from JSON file {}", wordCount, file.getName());
+        
+        return wordCount;
+    }
+    
+    private Phonetic convertPhoneticDto(com.example.words.dto.PhoneticDto dto) {
+        if (dto == null) return null;
+        return new Phonetic(
+            dto.getUk() != null ? dto.getUk().trim() : null,
+            dto.getUs() != null ? dto.getUs().trim() : null
+        );
+    }
+    
+    private java.util.List<PartOfSpeech> convertPartOfSpeechDtos(java.util.List<com.example.words.dto.PartOfSpeechDto> dtos) {
+        if (dtos == null || dtos.isEmpty()) return null;
+        
+        return dtos.stream().map(dto -> {
+            PartOfSpeech pos = new PartOfSpeech();
+            pos.setPos(dto.getPos() != null ? dto.getPos().trim() : null);
+            
+            if (dto.getDefinitions() != null) {
+                pos.setDefinitions(dto.getDefinitions().stream().map(defDto -> {
+                    Definition def = new Definition();
+                    def.setDefinition(defDto.getDefinition() != null ? defDto.getDefinition().trim() : null);
+                    def.setTranslation(defDto.getTranslation() != null ? defDto.getTranslation().trim() : null);
+                    
+                    if (defDto.getExampleSentences() != null) {
+                        def.setExampleSentences(defDto.getExampleSentences().stream().map(exDto -> {
+                            ExampleSentence ex = new ExampleSentence();
+                            ex.setSentence(exDto.getSentence() != null ? exDto.getSentence().trim() : null);
+                            ex.setTranslation(exDto.getTranslation() != null ? exDto.getTranslation().trim() : null);
+                            return ex;
+                        }).toList());
+                    }
+                    
+                    return def;
+                }).toList());
+            }
+            
+            // Handle inflection, synonyms, antonyms similarly...
+            pos.setInflection(null); // Simplified for now
+            pos.setSynonyms(dto.getSynonyms());
+            pos.setAntonyms(dto.getAntonyms());
+            
+            return pos;
+        }).toList();
     }
 
     private int estimateDifficulty(String category) {

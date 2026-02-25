@@ -2,7 +2,18 @@ package com.example.words.service;
 
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
+import com.example.words.model.Phonetic;
+import com.example.words.model.PartOfSpeech;
+import com.example.words.model.Definition;
+import com.example.words.model.ExampleSentence;
+import com.example.words.model.Inflection;
 import com.example.words.dto.MetaWordEntryDto;
+import com.example.words.dto.MetaWordEntryDtoV2;
+import com.example.words.dto.PhoneticDto;
+import com.example.words.dto.PartOfSpeechDto;
+import com.example.words.dto.DefinitionDto;
+import com.example.words.dto.ExampleSentenceDto;
+import com.example.words.dto.InflectionDto;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
 import org.slf4j.Logger;
@@ -183,6 +194,174 @@ public class DictionaryWordService {
         } else {
             metaWord.setDifficulty(2);
         }
+    }
+    
+    private void updateMetaWordFields(MetaWord metaWord, MetaWordEntryDtoV2 dto) {
+        // Update phonetic detail
+        if (dto.getPhonetic() != null) {
+            Phonetic phonetic = metaWord.getPhoneticDetail();
+            if (phonetic == null) {
+                phonetic = new Phonetic();
+            }
+            if (dto.getPhonetic().getUk() != null) {
+                phonetic.setUk(dto.getPhonetic().getUk().trim());
+            }
+            if (dto.getPhonetic().getUs() != null) {
+                phonetic.setUs(dto.getPhonetic().getUs().trim());
+            }
+            metaWord.setPhoneticDetail(phonetic);
+        }
+        
+        // Update part of speech detail
+        if (dto.getPartOfSpeech() != null && !dto.getPartOfSpeech().isEmpty()) {
+            metaWord.setPartOfSpeechDetail(convertPartOfSpeechDtos(dto.getPartOfSpeech()));
+        }
+        
+        // Update difficulty
+        if (dto.getDifficulty() != null) {
+            metaWord.setDifficulty(dto.getDifficulty());
+        } else {
+            metaWord.setDifficulty(2);
+        }
+    }
+    
+    private List<PartOfSpeech> convertPartOfSpeechDtos(List<PartOfSpeechDto> dtos) {
+        if (dtos == null) return null;
+        
+        return dtos.stream().map(dto -> {
+            PartOfSpeech pos = new PartOfSpeech();
+            pos.setPos(dto.getPos() != null ? dto.getPos().trim() : null);
+            
+            if (dto.getDefinitions() != null) {
+                pos.setDefinitions(convertDefinitionDtos(dto.getDefinitions()));
+            }
+            
+            if (dto.getInflection() != null) {
+                pos.setInflection(convertInflectionDto(dto.getInflection()));
+            }
+            
+            pos.setSynonyms(dto.getSynonyms());
+            pos.setAntonyms(dto.getAntonyms());
+            
+            return pos;
+        }).toList();
+    }
+    
+    private List<Definition> convertDefinitionDtos(List<DefinitionDto> dtos) {
+        if (dtos == null) return null;
+        
+        return dtos.stream().map(dto -> {
+            Definition def = new Definition();
+            def.setDefinition(dto.getDefinition() != null ? dto.getDefinition().trim() : null);
+            def.setTranslation(dto.getTranslation() != null ? dto.getTranslation().trim() : null);
+            
+            if (dto.getExampleSentences() != null) {
+                def.setExampleSentences(convertExampleSentenceDtos(dto.getExampleSentences()));
+            }
+            
+            return def;
+        }).toList();
+    }
+    
+    private List<ExampleSentence> convertExampleSentenceDtos(List<ExampleSentenceDto> dtos) {
+        if (dtos == null) return null;
+        
+        return dtos.stream().map(dto -> {
+            ExampleSentence ex = new ExampleSentence();
+            ex.setSentence(dto.getSentence() != null ? dto.getSentence().trim() : null);
+            ex.setTranslation(dto.getTranslation() != null ? dto.getTranslation().trim() : null);
+            return ex;
+        }).toList();
+    }
+    
+    private Inflection convertInflectionDto(InflectionDto dto) {
+        if (dto == null) return null;
+        
+        Inflection inflection = new Inflection();
+        inflection.setPlural(dto.getPlural() != null ? dto.getPlural().trim() : null);
+        inflection.setPast(dto.getPast() != null ? dto.getPast().trim() : null);
+        inflection.setPastParticiple(dto.getPastParticiple() != null ? dto.getPastParticiple().trim() : null);
+        inflection.setPresentParticiple(dto.getPresentParticiple() != null ? dto.getPresentParticiple().trim() : null);
+        inflection.setThirdPersonSingular(dto.getThirdPersonSingular() != null ? dto.getThirdPersonSingular().trim() : null);
+        inflection.setComparative(dto.getComparative() != null ? dto.getComparative().trim() : null);
+        inflection.setSuperlative(dto.getSuperlative() != null ? dto.getSuperlative().trim() : null);
+        
+        return inflection;
+    }
+    
+    @Transactional
+    public WordListProcessResult processWordListV2(Long dictionaryId, List<MetaWordEntryDtoV2> words) {
+        log.debug("Processing word list V2 for dictionary {}, input size: {}", dictionaryId, words.size());
+        Map<String, MetaWordEntryDtoV2> uniqueWords = new LinkedHashMap<>();
+        for (MetaWordEntryDtoV2 dto : words) {
+            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
+                continue;
+            }
+            String wordKey = dto.getWord().trim().toLowerCase();
+            uniqueWords.put(wordKey, dto);
+        }
+        
+        log.debug("Unique words count: {}", uniqueWords.size());
+        int total = uniqueWords.size();
+        int existed = 0;
+        int created = 0;
+        int added = 0;
+        int failed = 0;
+        
+        List<Long> metaWordIds = new ArrayList<>();
+        
+        for (MetaWordEntryDtoV2 dto : uniqueWords.values()) {
+            String word = dto.getWord().trim();
+            try {
+                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
+                MetaWord metaWord;
+                
+                if (existingMetaWordOpt.isPresent()) {
+                    metaWord = existingMetaWordOpt.get();
+                    existed++;
+                    log.debug("Word already exists: {} (id: {})", word, metaWord.getId());
+                    
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
+                } else {
+                    metaWord = new MetaWord();
+                    metaWord.setWord(word);
+                    created++;
+                    log.debug("Creating new meta word: {}", word);
+                    
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
+                }
+                
+                metaWordIds.add(metaWord.getId());
+            } catch (Exception e) {
+                log.error("Failed to process word: {}", word, e);
+                failed++;
+            }
+        }
+        
+        if (!metaWordIds.isEmpty()) {
+            List<DictionaryWord> existingAssociations = dictionaryWordRepository.findByDictionaryId(dictionaryId);
+            Set<Long> existingMetaWordIds = existingAssociations.stream()
+                    .map(DictionaryWord::getMetaWordId)
+                    .collect(java.util.stream.Collectors.toSet());
+            
+            List<DictionaryWord> newAssociations = new ArrayList<>();
+            for (Long metaWordId : metaWordIds) {
+                if (!existingMetaWordIds.contains(metaWordId)) {
+                    newAssociations.add(new DictionaryWord(dictionaryId, metaWordId));
+                    added++;
+                }
+            }
+            
+            if (!newAssociations.isEmpty()) {
+                dictionaryWordRepository.saveAll(newAssociations);
+                log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
+            }
+        }
+        
+        log.debug("Word list V2 processing completed: total={}, existed={}, created={}, added={}, failed={}", total, existed, created, added, failed);
+        return new WordListProcessResult(total, existed, created, added, failed);
     }
     
     public static class WordListProcessResult {

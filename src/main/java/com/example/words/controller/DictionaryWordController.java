@@ -2,6 +2,7 @@ package com.example.words.controller;
 
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
+import com.example.words.dto.MetaWordEntryDtoV2;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import com.example.words.model.DictionaryWord;
@@ -87,6 +88,24 @@ public class DictionaryWordController {
                 "failed", result.getFailed()
         ));
     }
+    
+    @PostMapping("/{dictionaryId}/words/list/v2")
+    public ResponseEntity<Map<String, Object>> addWordListToDictionaryV2(
+            @PathVariable Long dictionaryId,
+            @Valid @RequestBody List<MetaWordEntryDtoV2> wordList) {
+        DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordListV2(dictionaryId, wordList);
+        return ResponseEntity.ok(Map.of(
+                "message", "Word list processed successfully (V2)",
+                "dictionaryId", dictionaryId,
+                "total", result.getTotal(),
+                "existed", result.getExisted(),
+                "created", result.getCreated(),
+                "added", result.getAdded(),
+                "failed", result.getFailed()
+        ));
+    }
+    
+
 
     @DeleteMapping("/dictionary/{dictionaryId}")
     public ResponseEntity<Void> deleteByDictionary(@PathVariable Long dictionaryId) {

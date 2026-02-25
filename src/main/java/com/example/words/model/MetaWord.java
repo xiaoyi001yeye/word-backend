@@ -8,6 +8,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -23,6 +28,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class MetaWord {
 
     @Id
@@ -35,11 +41,19 @@ public class MetaWord {
     @Column(name = "phonetic", columnDefinition = "TEXT")
     private String phonetic;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "phonetic_detail", columnDefinition = "jsonb")
+    private Phonetic phoneticDetail;
+
     @Column(name = "definition", columnDefinition = "TEXT")
     private String definition;
 
     @Column(name = "part_of_speech", columnDefinition = "TEXT")
     private String partOfSpeech;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "part_of_speech_detail", columnDefinition = "jsonb")
+    private List<PartOfSpeech> partOfSpeechDetail;
 
     @Column(name = "example_sentence", columnDefinition = "TEXT")
     private String exampleSentence;
@@ -63,5 +77,12 @@ public class MetaWord {
         this.phonetic = phonetic;
         this.definition = definition;
         this.partOfSpeech = partOfSpeech;
+    }
+
+    // Constructor for new format
+    public MetaWord(String word, Phonetic phoneticDetail, List<PartOfSpeech> partOfSpeechDetail) {
+        this.word = word;
+        this.phoneticDetail = phoneticDetail;
+        this.partOfSpeechDetail = partOfSpeechDetail;
     }
 }
