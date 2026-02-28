@@ -41,7 +41,7 @@ services:
       dockerfile: Dockerfile
     container_name: words-frontend
     ports:
-      - "3000:80"
+      - "80:80"
     depends_on:
       - app
     healthcheck:
