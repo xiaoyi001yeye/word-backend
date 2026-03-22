@@ -2,6 +2,10 @@ spring:
   application:
     name: words
 
+  output:
+    ansi:
+      enabled: always
+
   datasource:
     url: jdbc:postgresql://localhost:5432/words?serverTimezone=Asia/Shanghai
     username: postgres
@@ -23,7 +27,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql
+      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql,classpath:db/migration/V4__add_jsonb_fields_to_meta_words.sql,classpath:db/migration/V5__migrate_data_to_jsonb.sql,classpath:db/migration/V7__ensure_dictionary_words_unique_constraint.sql
       continue-on-error: true
 
 
@@ -32,12 +36,18 @@ server:
 
 logging:
   level:
+    root: INFO
     com.example.words: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: TRACE
-    org.springframework.web.servlet.handler.SimpleUrlHandlerMapping: TRACE
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: WARN
+    org.springframework.web.servlet.handler.SimpleUrlHandlerMapping: WARN
   file:
     name: logs/app.log
-    max-size: 10MB
-    max-history: 7
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 7

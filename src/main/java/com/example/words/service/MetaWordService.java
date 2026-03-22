@@ -1,19 +1,40 @@
 package com.example.words.service;
 
+import java.io.BufferedReader;
 import com.example.words.model.Dictionary;
+import com.example.words.model.DictionaryCreationType;
 import com.example.words.model.MetaWord;
-import com.example.words.repository.MetaWordRepository;
+import com.example.words.model.Phonetic;
+import com.example.words.model.PartOfSpeech;
+import com.example.words.model.Definition;
+import com.example.words.model.ExampleSentence;
 import com.example.words.dto.MetaWordSearchRequest;
+import com.example.words.dto.MetaWordEntryDtoV2;
+import com.example.words.dto.PartOfSpeechDto;
+import com.example.words.dto.PhoneticDto;
+import com.example.words.repository.MetaWordRepository;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opencsv.CSVReader;
-import com.opencsv.exceptions.CsvException;
+import com.opencsv.exceptions.CsvValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -24,17 +45,25 @@ public class MetaWordService {
 
     private static final Logger log = LoggerFactory.getLogger(MetaWordService.class);
     private static final String BOOKS_DIR = "/app/books";
+    private static final int IMPORT_BATCH_SIZE = 500;
+    private static final int WORD_CACHE_LIMIT = 10_000;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final MetaWordRepository metaWordRepository;
     private final DictionaryService dictionaryService;
     private final DictionaryWordService dictionaryWordService;
+    private final TransactionTemplate transactionTemplate;
 
-    public MetaWordService(MetaWordRepository metaWordRepository,
-                          DictionaryService dictionaryService,
-                          DictionaryWordService dictionaryWordService) {
+    public MetaWordService(
+            MetaWordRepository metaWordRepository,
+            DictionaryService dictionaryService,
+            DictionaryWordService dictionaryWordService,
+            PlatformTransactionManager transactionManager) {
         this.metaWordRepository = metaWordRepository;
         this.dictionaryService = dictionaryService;
         this.dictionaryWordService = dictionaryWordService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     public List<MetaWord> findAll() {
@@ -71,6 +100,24 @@ public class MetaWordService {
         MetaWord metaWord = new MetaWord(word, phonetic, definition, partOfSpeech);
         return metaWordRepository.save(metaWord);
     }
+    
+    @Transactional
+    public MetaWord saveIfNotExists(String word, Phonetic phoneticDetail, java.util.List<PartOfSpeech> partOfSpeechDetail) {
+        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        if (existing.isPresent()) {
+            MetaWord metaWord = existing.get();
+            // Update with new detailed information
+            if (phoneticDetail != null) {
+                metaWord.setPhoneticDetail(phoneticDetail);
+            }
+            if (partOfSpeechDetail != null && !partOfSpeechDetail.isEmpty()) {
+                metaWord.setPartOfSpeechDetail(partOfSpeechDetail);
+            }
+            return metaWordRepository.save(metaWord);
+        }
+        MetaWord metaWord = new MetaWord(word, phoneticDetail, partOfSpeechDetail);
+        return metaWordRepository.save(metaWord);
+    }
 
     @Transactional
     public MetaWord saveWordIfNotExists(String word) {
@@ -91,64 +138,78 @@ public class MetaWordService {
         metaWordRepository.deleteAll();
     }
 
-    @Transactional
     public int importFromBooksDirectory() {
-        dictionaryWordService.deleteAll();
-        dictionaryService.deleteAll();
-        metaWordRepository.deleteAll();
+        return importBooksData().getWordCount();
+    }
+
+    public BooksImportResult importBooksData() {
+        resetImportData();
 
         java.io.File dir = new java.io.File(BOOKS_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
             log.error("Directory not found: {}", BOOKS_DIR);
-            return 0;
+            return new BooksImportResult(0, 0);
         }
 
-        java.io.File[] files = dir.listFiles((d, name) -> name.endsWith(".csv"));
+        java.io.File[] files = dir.listFiles((d, name) -> {
+            String lowerName = name.toLowerCase();
+            return lowerName.endsWith(".csv") || lowerName.endsWith(".json");
+        });
         if (files == null || files.length == 0) {
-            log.warn("No CSV files found in directory: {}", BOOKS_DIR);
-            return 0;
+            log.warn("No importable files found in directory: {}", BOOKS_DIR);
+            return new BooksImportResult(0, 0);
         }
+
+        Arrays.sort(files, Comparator.comparing(java.io.File::getName));
 
         long startTime = System.currentTimeMillis();
         log.info("Starting import from {} files", files.length);
 
-        java.util.HashMap<String, MetaWord> wordCache = new java.util.HashMap<>();
+        Map<String, Long> wordCache = createWordCache();
         int totalWordCount = 0;
+        int importedDictionaryCount = 0;
         for (java.io.File file : files) {
-            int count = importFromFile(file, wordCache);
-            totalWordCount += count;
+            ImportFileResult result = importFromFile(file, wordCache);
+            if (result.success()) {
+                importedDictionaryCount++;
+                totalWordCount += result.wordCount();
+            }
         }
 
         long elapsedTime = System.currentTimeMillis() - startTime;
         log.info("Import completed: {} words, {} dictionaries, time: {}ms ({}s)",
-                totalWordCount, files.length, elapsedTime, elapsedTime / 1000);
-        return totalWordCount;
+                totalWordCount, importedDictionaryCount, elapsedTime, elapsedTime / 1000);
+        return new BooksImportResult(importedDictionaryCount, totalWordCount);
     }
 
-    @Transactional
-    public int importFromFile(java.io.File file, java.util.HashMap<String, MetaWord> wordCache) {
+    public ImportFileResult importFromFile(java.io.File file, Map<String, Long> wordCache) {
+        try {
+            if (isJsonFile(file.getName())) {
+                return importFromJsonFile(file, wordCache);
+            } else {
+                return importFromCsvFile(file, wordCache);
+            }
+        } catch (Exception e) {
+            log.error("Error importing file: {}", file.getName(), e);
+            return ImportFileResult.failure();
+        }
+    }
+
+    private ImportFileResult importFromCsvFile(java.io.File file, Map<String, Long> wordCache)
+            throws IOException, CsvValidationException {
+        String dictionaryName = stripExtension(file.getName());
+        String category = dictionaryService.extractCategory(dictionaryName);
+        Long dictionaryId = createImportedDictionary(file, dictionaryName, category);
+
         int wordCount = 0;
+        List<CsvImportRow> batch = new ArrayList<>(IMPORT_BATCH_SIZE);
 
-        try (CSVReader reader = new CSVReader(new FileReader(file))) {
-            List<String[]> lines = reader.readAll();
-
-            String dictionaryName = file.getName().replace(".csv", "");
-            String category = dictionaryService.extractCategory(dictionaryName);
-
-            Dictionary dictionary = new Dictionary(
-                    dictionaryName,
-                    file.getAbsolutePath(),
-                    file.length(),
-                    category
-            );
-            dictionary = dictionaryService.save(dictionary);
-            Long dictionaryId = dictionary.getId();
-
-            java.util.List<Long> metaWordIds = new java.util.ArrayList<>();
-
-            for (String[] line : lines) {
+        try (BufferedReader fileReader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8);
+             CSVReader reader = new CSVReader(fileReader)) {
+            String[] line;
+            while ((line = reader.readNext()) != null) {
                 if (line.length < 2) {
-                    log.warn("Invalid line (less than 2 columns) in {}: {}", file.getName(), java.util.Arrays.toString(line));
+                    log.warn("Invalid line (less than 2 columns) in {}: {}", file.getName(), Arrays.toString(line));
                     continue;
                 }
 
@@ -156,41 +217,272 @@ public class MetaWordService {
                 String definition = line[1].trim();
 
                 if (word.isEmpty()) {
-                    log.warn("Empty word in {}: {}", file.getName(), java.util.Arrays.toString(line));
+                    log.warn("Empty word in {}: {}", file.getName(), Arrays.toString(line));
                     continue;
                 }
 
                 if (definition.isEmpty()) {
-                    log.warn("Empty definition in {}: word='{}', raw line: {}", file.getName(), word, java.util.Arrays.toString(line));
+                    log.warn("Empty definition in {}: word='{}', raw line: {}", file.getName(), word, Arrays.toString(line));
                 }
 
-                MetaWord metaWord = wordCache.get(word.toLowerCase());
-                if (metaWord == null) {
-                    metaWord = new MetaWord();
-                    metaWord.setWord(word);
-                    metaWord.setDefinition(definition);
-                    metaWord.setDifficulty(estimateDifficulty(category));
-                    metaWord = metaWordRepository.save(metaWord);
-                    wordCache.put(word.toLowerCase(), metaWord);
+                batch.add(new CsvImportRow(word, definition));
+                if (batch.size() >= IMPORT_BATCH_SIZE) {
+                    wordCount += persistCsvBatch(dictionaryId, category, batch, wordCache);
+                    batch.clear();
                 }
-
-                metaWordIds.add(metaWord.getId());
-                wordCount++;
             }
-
-            if (!metaWordIds.isEmpty()) {
-                dictionaryWordService.saveAllBatch(dictionaryId, metaWordIds);
-            }
-
-            dictionaryService.updateWordCount(dictionaryId, wordCount);
-            log.info("Imported {} words from {}", wordCount, file.getName());
-
-        } catch (IOException | CsvException e) {
-            log.error("Error importing file: {}", file.getName(), e);
-            return 0;
+        } catch (Exception e) {
+            log.error("Error importing CSV file: {}", file.getName(), e);
+            return ImportFileResult.failure();
         }
 
-        return wordCount;
+        if (!batch.isEmpty()) {
+            wordCount += persistCsvBatch(dictionaryId, category, batch, wordCache);
+        }
+
+        log.info("Imported {} words from CSV file {}", wordCount, file.getName());
+        return ImportFileResult.success(wordCount);
+    }
+
+    private ImportFileResult importFromJsonFile(java.io.File file, Map<String, Long> wordCache) throws IOException {
+        int wordCount = 0;
+        String dictionaryName = stripExtension(file.getName());
+        String category = dictionaryService.extractCategory(dictionaryName);
+        Long dictionaryId = createImportedDictionary(file, dictionaryName, category);
+        List<MetaWordEntryDtoV2> batch = new ArrayList<>(IMPORT_BATCH_SIZE);
+
+        try (JsonParser parser = objectMapper.getFactory().createParser(file)) {
+            if (parser.nextToken() != JsonToken.START_ARRAY) {
+                throw new IOException("JSON import file must contain an array: " + file.getName());
+            }
+
+            while (parser.nextToken() != JsonToken.END_ARRAY) {
+                MetaWordEntryDtoV2 entry = objectMapper.readValue(parser, MetaWordEntryDtoV2.class);
+                if (entry == null || entry.getWord() == null || entry.getWord().trim().isEmpty()) {
+                    continue;
+                }
+
+                batch.add(entry);
+                if (batch.size() >= IMPORT_BATCH_SIZE) {
+                    wordCount += persistJsonBatch(dictionaryId, category, batch, wordCache);
+                    batch.clear();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error importing JSON file: {}", file.getName(), e);
+            return ImportFileResult.failure();
+        }
+
+        if (!batch.isEmpty()) {
+            wordCount += persistJsonBatch(dictionaryId, category, batch, wordCache);
+        }
+
+        log.info("Imported {} words from JSON file {}", wordCount, file.getName());
+        return ImportFileResult.success(wordCount);
+    }
+
+    private void resetImportData() {
+        transactionTemplate.executeWithoutResult(status -> {
+            dictionaryWordService.deleteAll();
+            dictionaryService.deleteAll();
+            metaWordRepository.deleteAll();
+        });
+    }
+
+    private Long createImportedDictionary(java.io.File file, String dictionaryName, String category) {
+        return transactionTemplate.execute(status -> {
+            Dictionary dictionary = new Dictionary(
+                    dictionaryName,
+                    file.getAbsolutePath(),
+                    file.length(),
+                    category,
+                    DictionaryCreationType.IMPORTED
+            );
+            return dictionaryService.save(dictionary).getId();
+        });
+    }
+
+    private int persistCsvBatch(
+            Long dictionaryId,
+            String category,
+            List<CsvImportRow> rows,
+            Map<String, Long> wordCache) {
+        Integer insertedCount = transactionTemplate.execute(status -> {
+            List<Long> metaWordIds = new ArrayList<>(rows.size());
+            for (CsvImportRow row : rows) {
+                try {
+                    Long metaWordId = resolveCsvMetaWordId(row, category, wordCache);
+                    if (metaWordId != null) {
+                        metaWordIds.add(metaWordId);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to persist word '{}' for dictionary {}", row.word(), dictionaryId, e);
+                }
+            }
+
+            int inserted = dictionaryWordService.saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
+            dictionaryService.incrementWordCount(dictionaryId, inserted);
+            return inserted;
+        });
+        return insertedCount != null ? insertedCount : 0;
+    }
+
+    private int persistJsonBatch(
+            Long dictionaryId,
+            String category,
+            List<MetaWordEntryDtoV2> rows,
+            Map<String, Long> wordCache) {
+        Integer insertedCount = transactionTemplate.execute(status -> {
+            List<Long> metaWordIds = new ArrayList<>(rows.size());
+            for (MetaWordEntryDtoV2 row : rows) {
+                try {
+                    Long metaWordId = resolveJsonMetaWordId(row, category, wordCache);
+                    if (metaWordId != null) {
+                        metaWordIds.add(metaWordId);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to persist word '{}' for dictionary {}", row.getWord(), dictionaryId, e);
+                }
+            }
+
+            int inserted = dictionaryWordService.saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
+            dictionaryService.incrementWordCount(dictionaryId, inserted);
+            return inserted;
+        });
+        return insertedCount != null ? insertedCount : 0;
+    }
+
+    private Long resolveCsvMetaWordId(CsvImportRow row, String category, Map<String, Long> wordCache) {
+        String cacheKey = normalizeWordKey(row.word());
+        Long cachedId = wordCache.get(cacheKey);
+        if (cachedId != null) {
+            return cachedId;
+        }
+
+        MetaWord metaWord = metaWordRepository.findByWord(row.word())
+                .orElseGet(() -> {
+                    MetaWord newMetaWord = new MetaWord();
+                    newMetaWord.setWord(row.word());
+                    newMetaWord.setDefinition(row.definition());
+                    newMetaWord.setDifficulty(estimateDifficulty(category));
+                    return metaWordRepository.save(newMetaWord);
+                });
+
+        wordCache.put(cacheKey, metaWord.getId());
+        return metaWord.getId();
+    }
+
+    private Long resolveJsonMetaWordId(MetaWordEntryDtoV2 entry, String category, Map<String, Long> wordCache) {
+        String word = entry.getWord().trim();
+        String cacheKey = normalizeWordKey(word);
+        Long cachedId = wordCache.get(cacheKey);
+
+        MetaWord metaWord = null;
+        if (cachedId != null) {
+            metaWord = metaWordRepository.findById(cachedId).orElse(null);
+        }
+        if (metaWord == null) {
+            metaWord = metaWordRepository.findByWord(word).orElse(null);
+        }
+
+        boolean shouldSave = false;
+        if (metaWord == null) {
+            metaWord = new MetaWord(
+                    word,
+                    convertPhoneticDto(entry.getPhonetic()),
+                    convertPartOfSpeechDtos(entry.getPartOfSpeech())
+            );
+            metaWord.setDifficulty(entry.getDifficulty() != null ? entry.getDifficulty() : estimateDifficulty(category));
+            shouldSave = true;
+        } else {
+            if (entry.getPhonetic() != null) {
+                metaWord.setPhoneticDetail(convertPhoneticDto(entry.getPhonetic()));
+                shouldSave = true;
+            }
+            if (entry.getPartOfSpeech() != null && !entry.getPartOfSpeech().isEmpty()) {
+                metaWord.setPartOfSpeechDetail(convertPartOfSpeechDtos(entry.getPartOfSpeech()));
+                shouldSave = true;
+            }
+            if (entry.getDifficulty() != null) {
+                metaWord.setDifficulty(entry.getDifficulty());
+                shouldSave = true;
+            }
+        }
+
+        if (shouldSave) {
+            metaWord = metaWordRepository.save(metaWord);
+        }
+
+        wordCache.put(cacheKey, metaWord.getId());
+        return metaWord.getId();
+    }
+
+    private Map<String, Long> createWordCache() {
+        return new LinkedHashMap<>(WORD_CACHE_LIMIT, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return size() > WORD_CACHE_LIMIT;
+            }
+        };
+    }
+
+    private boolean isJsonFile(String fileName) {
+        return fileName.toLowerCase(Locale.ROOT).endsWith(".json");
+    }
+
+    private String stripExtension(String fileName) {
+        int index = fileName.lastIndexOf('.');
+        if (index < 0) {
+            return fileName;
+        }
+        return fileName.substring(0, index);
+    }
+
+    private String normalizeWordKey(String word) {
+        return word.toLowerCase(Locale.ROOT);
+    }
+
+    private Phonetic convertPhoneticDto(PhoneticDto dto) {
+        if (dto == null) return null;
+        return new Phonetic(
+            dto.getUk() != null ? dto.getUk().trim() : null,
+            dto.getUs() != null ? dto.getUs().trim() : null
+        );
+    }
+
+    private java.util.List<PartOfSpeech> convertPartOfSpeechDtos(java.util.List<PartOfSpeechDto> dtos) {
+        if (dtos == null || dtos.isEmpty()) return null;
+        
+        return dtos.stream().map(dto -> {
+            PartOfSpeech pos = new PartOfSpeech();
+            pos.setPos(dto.getPos() != null ? dto.getPos().trim() : null);
+            
+            if (dto.getDefinitions() != null) {
+                pos.setDefinitions(dto.getDefinitions().stream().map(defDto -> {
+                    Definition def = new Definition();
+                    def.setDefinition(defDto.getDefinition() != null ? defDto.getDefinition().trim() : null);
+                    def.setTranslation(defDto.getTranslation() != null ? defDto.getTranslation().trim() : null);
+                    
+                    if (defDto.getExampleSentences() != null) {
+                        def.setExampleSentences(defDto.getExampleSentences().stream().map(exDto -> {
+                            ExampleSentence ex = new ExampleSentence();
+                            ex.setSentence(exDto.getSentence() != null ? exDto.getSentence().trim() : null);
+                            ex.setTranslation(exDto.getTranslation() != null ? exDto.getTranslation().trim() : null);
+                            return ex;
+                        }).toList());
+                    }
+                    
+                    return def;
+                }).toList());
+            }
+            
+            // Handle inflection, synonyms, antonyms similarly...
+            pos.setInflection(null); // Simplified for now
+            pos.setSynonyms(dto.getSynonyms());
+            pos.setAntonyms(dto.getAntonyms());
+            
+            return pos;
+        }).toList();
     }
 
     private int estimateDifficulty(String category) {
@@ -231,5 +523,52 @@ public class MetaWordService {
                 return metaWordRepository.findAll(pageable);
             }
         }
+    }
+
+    public static class BooksImportResult {
+        private final int dictionaryCount;
+        private final int wordCount;
+
+        public BooksImportResult(int dictionaryCount, int wordCount) {
+            this.dictionaryCount = dictionaryCount;
+            this.wordCount = wordCount;
+        }
+
+        public int getDictionaryCount() {
+            return dictionaryCount;
+        }
+
+        public int getWordCount() {
+            return wordCount;
+        }
+    }
+
+    public static class ImportFileResult {
+        private final boolean success;
+        private final int wordCount;
+
+        private ImportFileResult(boolean success, int wordCount) {
+            this.success = success;
+            this.wordCount = wordCount;
+        }
+
+        public static ImportFileResult success(int wordCount) {
+            return new ImportFileResult(true, wordCount);
+        }
+
+        public static ImportFileResult failure() {
+            return new ImportFileResult(false, 0);
+        }
+
+        public boolean success() {
+            return success;
+        }
+
+        public int wordCount() {
+            return wordCount;
+        }
+    }
+
+    private record CsvImportRow(String word, String definition) {
     }
 }

@@ -75,4 +75,15 @@ export const dictionaryWordApi = {
     method: 'POST',
     body: JSON.stringify({ words }),
   }),
+  importCsv: (dictionaryId: number, formData: FormData) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/import-csv`, {
+    method: 'POST',
+    body: formData,
+  }),
+  importJson: (dictionaryId: number, jsonData: string) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/import-json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: jsonData,
+  }),
 };

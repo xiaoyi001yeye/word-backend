@@ -3,6 +3,7 @@ package com.example.words.controller;
 import com.example.words.model.MetaWord;
 import com.example.words.service.MetaWordService;
 import com.example.words.dto.MetaWordSearchRequest;
+import com.example.words.dto.MetaWordEntryDtoV2;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,6 +60,30 @@ public class MetaWordController {
 
     @PostMapping
     public ResponseEntity<MetaWord> create(@RequestBody MetaWord metaWord) {
+        MetaWord saved = metaWordService.save(metaWord);
+        return ResponseEntity.ok(saved);
+    }
+    
+    @PostMapping("/v2")
+    public ResponseEntity<MetaWord> createV2(@RequestBody MetaWordEntryDtoV2 metaWordDto) {
+        // Convert DTO to entity and save
+        MetaWord metaWord = new MetaWord(
+            metaWordDto.getWord(),
+            metaWordDto.getPhonetic() != null ? 
+                new com.example.words.model.Phonetic(
+                    metaWordDto.getPhonetic().getUk(),
+                    metaWordDto.getPhonetic().getUs()
+                ) : null,
+            metaWordDto.getPartOfSpeech() != null ? 
+                metaWordDto.getPartOfSpeech().stream().map(posDto -> {
+                    com.example.words.model.PartOfSpeech pos = new com.example.words.model.PartOfSpeech();
+                    pos.setPos(posDto.getPos());
+                    // Convert other fields as needed
+                    return pos;
+                }).toList() : null
+        );
+        metaWord.setDifficulty(metaWordDto.getDifficulty());
+        
         MetaWord saved = metaWordService.save(metaWord);
         return ResponseEntity.ok(saved);
     }

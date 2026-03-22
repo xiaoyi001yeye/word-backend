@@ -2,6 +2,8 @@ package com.example.words.controller;
 
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
+import com.example.words.dto.MetaWordEntryDtoV2;
+import com.example.words.service.CsvImportService;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import com.example.words.model.DictionaryWord;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -27,9 +30,12 @@ import java.util.Map;
 public class DictionaryWordController {
 
     private final DictionaryWordService dictionaryWordService;
+    private final CsvImportService csvImportService;
 
-    public DictionaryWordController(DictionaryWordService dictionaryWordService) {
+    public DictionaryWordController(DictionaryWordService dictionaryWordService,
+                                  CsvImportService csvImportService) {
         this.dictionaryWordService = dictionaryWordService;
+        this.csvImportService = csvImportService;
     }
 
     @GetMapping("/dictionary/{dictionaryId}/words")
@@ -87,6 +93,84 @@ public class DictionaryWordController {
                 "failed", result.getFailed()
         ));
     }
+    
+    @PostMapping("/{dictionaryId}/words/list/v2")
+    public ResponseEntity<Map<String, Object>> addWordListToDictionaryV2(
+            @PathVariable Long dictionaryId,
+            @Valid @RequestBody List<MetaWordEntryDtoV2> wordList) {
+        DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordListV2(dictionaryId, wordList);
+        return ResponseEntity.ok(Map.of(
+                "message", "Word list processed successfully (V2)",
+                "dictionaryId", dictionaryId,
+                "total", result.getTotal(),
+                "existed", result.getExisted(),
+                "created", result.getCreated(),
+                "added", result.getAdded(),
+                "failed", result.getFailed()
+        ));
+    }
+    
+    /**
+     * CSV文件导入端点
+     */
+    @PostMapping("/{dictionaryId}/words/import-csv")
+    public ResponseEntity<Map<String, Object>> importWordsFromCsv(
+            @PathVariable Long dictionaryId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "hasHeader", defaultValue = "true") boolean hasHeader) {
+        
+        try {
+            DictionaryWordService.WordListProcessResult result = 
+                csvImportService.processCsvImport(file, dictionaryId, hasHeader);
+            
+            return ResponseEntity.ok(Map.of(
+                    "message", "CSV文件导入成功",
+                    "dictionaryId", dictionaryId,
+                    "fileName", file.getOriginalFilename(),
+                    "total", result.getTotal(),
+                    "existed", result.getExisted(),
+                    "created", result.getCreated(),
+                    "added", result.getAdded(),
+                    "failed", result.getFailed()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "CSV文件导入失败: " + e.getMessage(),
+                    "dictionaryId", dictionaryId,
+                    "fileName", file.getOriginalFilename()
+            ));
+        }
+    }
+    
+    /**
+     * JSON数据导入端点
+     */
+    @PostMapping("/{dictionaryId}/words/import-json")
+    public ResponseEntity<Map<String, Object>> importWordsFromJson(
+            @PathVariable Long dictionaryId,
+            @RequestBody String jsonData) {
+        
+        try {
+            DictionaryWordService.WordListProcessResult result = 
+                csvImportService.processJsonImport(jsonData, dictionaryId);
+            
+            return ResponseEntity.ok(Map.of(
+                    "message", "JSON数据导入成功",
+                    "dictionaryId", dictionaryId,
+                    "total", result.getTotal(),
+                    "existed", result.getExisted(),
+                    "created", result.getCreated(),
+                    "added", result.getAdded(),
+                    "failed", result.getFailed()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "JSON数据导入失败: " + e.getMessage(),
+                    "dictionaryId", dictionaryId
+            ));
+        }
+    }
+    
 
     @DeleteMapping("/dictionary/{dictionaryId}")
     public ResponseEntity<Void> deleteByDictionary(@PathVariable Long dictionaryId) {

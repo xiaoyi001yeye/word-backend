@@ -1,0 +1,87 @@
+[
+  {
+    "word": "book",
+    "phonetic": {
+      "uk": "/bʊk/",
+      "us": "/bʊk/"
+    },
+    "partOfSpeech": [
+      {
+        "pos": "noun",
+        "definitions": [
+          {
+            "definition": "A written or printed work consisting of pages glued or sewn together along one side and bound in covers",
+            "translation": "书籍，著作",
+            "exampleSentences": [
+              {
+                "sentence": "I'm reading an interesting book about ancient history.",
+                "translation": "我正在读一本关于古代历史的有趣的书。"
+              }
+            ]
+          }
+        ],
+        "inflection": {
+          "plural": "books"
+        },
+        "synonyms": ["volume", "publication"],
+        "antonyms": []
+      },
+      {
+        "pos": "verb",
+        "definitions": [
+          {
+            "definition": "Reserve (something) for future use",
+            "translation": "预订，预约",
+            "exampleSentences": [
+              {
+                "sentence": "I booked a table at the restaurant for tonight.",
+                "translation": "我在餐厅预订了今晚的桌子。"
+              }
+            ]
+          }
+        ],
+        "inflection": {
+          "past": "booked",
+          "pastParticiple": "booked",
+          "presentParticiple": "booking",
+          "thirdPersonSingular": "books"
+        },
+        "synonyms": ["reserve", "schedule"],
+        "antonyms": []
+      }
+    ],
+    "difficulty": 2
+  },
+  {
+    "word": "beautiful",
+    "phonetic": {
+      "uk": "/ˈbjuː.tɪ.fəl/",
+      "us": "/ˈbjuː.t̬ə.fəl/"
+    },
+    "partOfSpeech": [
+      {
+        "pos": "adjective",
+        "definitions": [
+          {
+            "definition": "Pleasing the senses or mind aesthetically",
+            "translation": "美丽的，漂亮的",
+            "exampleSentences": [
+              {
+                "sentence": "She wore a beautiful dress to the party.",
+                "translation": "她穿了一件漂亮的裙子去参加聚会。"
+              },
+              {
+                "sentence": "The sunset painted a beautiful picture across the sky.",
+                "translation": "日落把天空染成了一幅美丽的画面。"
+              }
+            ]
+          }
+        ],
+        "inflection": {},
+        "synonyms": ["attractive", "gorgeous", "lovely"],
+        "antonyms": ["ugly", "unattractive"]
+      }
+    ],
+    "difficulty": 3
+  }
+]
