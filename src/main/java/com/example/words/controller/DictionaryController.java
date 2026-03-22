@@ -2,6 +2,7 @@ package com.example.words.controller;
 
 import com.example.words.model.Dictionary;
 import com.example.words.service.DictionaryService;
+import com.example.words.service.MetaWordService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,9 +20,11 @@ import java.util.Map;
 public class DictionaryController {
 
     private final DictionaryService dictionaryService;
+    private final MetaWordService metaWordService;
 
-    public DictionaryController(DictionaryService dictionaryService) {
+    public DictionaryController(DictionaryService dictionaryService, MetaWordService metaWordService) {
         this.dictionaryService = dictionaryService;
+        this.metaWordService = metaWordService;
     }
 
     @GetMapping
@@ -49,10 +52,11 @@ public class DictionaryController {
 
     @PostMapping("/import")
     public ResponseEntity<Map<String, Object>> importDictionaries() {
-        int count = dictionaryService.importFromDirectory();
+        MetaWordService.BooksImportResult result = metaWordService.importBooksData();
         return ResponseEntity.ok(Map.of(
-                "message", "Dictionaries imported successfully",
-                "count", count
+                "message", "Books imported successfully",
+                "count", result.getDictionaryCount(),
+                "wordCount", result.getWordCount()
         ));
     }
 

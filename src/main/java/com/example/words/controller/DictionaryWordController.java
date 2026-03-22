@@ -142,6 +142,35 @@ public class DictionaryWordController {
         }
     }
     
+    /**
+     * JSON数据导入端点
+     */
+    @PostMapping("/{dictionaryId}/words/import-json")
+    public ResponseEntity<Map<String, Object>> importWordsFromJson(
+            @PathVariable Long dictionaryId,
+            @RequestBody String jsonData) {
+        
+        try {
+            DictionaryWordService.WordListProcessResult result = 
+                csvImportService.processJsonImport(jsonData, dictionaryId);
+            
+            return ResponseEntity.ok(Map.of(
+                    "message", "JSON数据导入成功",
+                    "dictionaryId", dictionaryId,
+                    "total", result.getTotal(),
+                    "existed", result.getExisted(),
+                    "created", result.getCreated(),
+                    "added", result.getAdded(),
+                    "failed", result.getFailed()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "JSON数据导入失败: " + e.getMessage(),
+                    "dictionaryId", dictionaryId
+            ));
+        }
+    }
+    
 
     @DeleteMapping("/dictionary/{dictionaryId}")
     public ResponseEntity<Void> deleteByDictionary(@PathVariable Long dictionaryId) {

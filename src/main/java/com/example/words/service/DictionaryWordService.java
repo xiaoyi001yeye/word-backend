@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,10 +41,15 @@ public class DictionaryWordService {
 
     private final DictionaryWordRepository dictionaryWordRepository;
     private final MetaWordRepository metaWordRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public DictionaryWordService(DictionaryWordRepository dictionaryWordRepository, MetaWordRepository metaWordRepository) {
+    public DictionaryWordService(
+            DictionaryWordRepository dictionaryWordRepository,
+            MetaWordRepository metaWordRepository,
+            JdbcTemplate jdbcTemplate) {
         this.dictionaryWordRepository = dictionaryWordRepository;
         this.metaWordRepository = metaWordRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public List<DictionaryWord> findByDictionaryId(Long dictionaryId) {
@@ -96,6 +103,38 @@ public class DictionaryWordService {
                 .map(metaWordId -> new DictionaryWord(dictionaryId, metaWordId))
                 .toList();
         dictionaryWordRepository.saveAll(associations);
+    }
+
+    @Transactional
+    public int saveAllBatchIgnoringDuplicates(Long dictionaryId, List<Long> metaWordIds) {
+        if (metaWordIds == null || metaWordIds.isEmpty()) {
+            return 0;
+        }
+
+        int[] results = jdbcTemplate.batchUpdate(
+                "INSERT INTO dictionary_words (dictionary_id, meta_word_id) VALUES (?, ?) " +
+                        "ON CONFLICT (dictionary_id, meta_word_id) DO NOTHING",
+                new BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
+                        ps.setLong(1, dictionaryId);
+                        ps.setLong(2, metaWordIds.get(i));
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return metaWordIds.size();
+                    }
+                }
+        );
+
+        int insertedCount = 0;
+        for (int result : results) {
+            if (result != 0) {
+                insertedCount++;
+            }
+        }
+        return insertedCount;
     }
 
     @Transactional
