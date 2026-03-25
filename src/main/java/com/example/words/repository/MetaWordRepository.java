@@ -25,6 +25,9 @@ public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
     @Query(value = "SELECT m.* FROM meta_words m WHERE m.id IN (SELECT dw.meta_word_id FROM dictionary_words dw WHERE dw.dictionary_id = :dictionaryId) LIMIT :limit OFFSET :offset", nativeQuery = true)
     List<MetaWord> findByDictionaryIdWithPagination(@Param("dictionaryId") Long dictionaryId, @Param("limit") int limit, @Param("offset") int offset);
 
+    @Query(value = "SELECT m.* FROM meta_words m WHERE m.id IN (SELECT dw.meta_word_id FROM dictionary_words dw WHERE dw.dictionary_id = :dictionaryId)", nativeQuery = true)
+    List<MetaWord> findAllByDictionaryId(@Param("dictionaryId") Long dictionaryId);
+
     Page<MetaWord> findByWordStartingWith(String prefix, Pageable pageable);
 
     @Query(value = "SELECT m.* FROM meta_words m WHERE m.id IN (SELECT dw.meta_word_id FROM dictionary_words dw WHERE dw.dictionary_id = :dictionaryId) AND m.word LIKE CONCAT(:keyword, '%')",

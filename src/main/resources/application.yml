@@ -23,7 +23,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql
+      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql,classpath:db/migration/V7__create_exam_tables.sql,classpath:db/migration/V8__add_selected_option_to_exam_questions.sql
       continue-on-error: true
 
 

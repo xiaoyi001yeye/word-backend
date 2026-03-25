@@ -1,4 +1,14 @@
-import type { Dictionary, DictionaryWord, MetaWord, Page } from '../types';
+import type {
+  Dictionary,
+  DictionaryWord,
+  Exam,
+  ExamAnswer,
+  ExamHistoryItem,
+  ExamSubmissionResult,
+  MetaWord,
+  MetaWordEntry,
+  Page,
+} from '../types';
 
 export interface WordListProcessResult {
   message: string;
@@ -71,12 +81,29 @@ export const dictionaryWordApi = {
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
-  addWordList: (dictionaryId: number, words: any[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/list`, {
+  addWordList: (dictionaryId: number, words: MetaWordEntry[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/list`, {
     method: 'POST',
     body: JSON.stringify({ words }),
   }),
   importCsv: (dictionaryId: number, formData: FormData) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/import-csv`, {
     method: 'POST',
     body: formData,
+  }),
+};
+
+export const examApi = {
+  create: (dictionaryId: number, questionCount: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
+    method: 'POST',
+    body: JSON.stringify({ dictionaryId, questionCount }),
+  }),
+  getHistory: (dictionaryId?: number) => {
+    const query = dictionaryId ? `?dictionaryId=${dictionaryId}` : '';
+    return fetchJson<ExamHistoryItem[]>(`${API_BASE}/exams/history${query}`);
+  },
+  getById: (examId: number) => fetchJson<Exam>(`${API_BASE}/exams/${examId}`),
+  getResult: (examId: number) => fetchJson<ExamSubmissionResult>(`${API_BASE}/exams/${examId}/result`),
+  submit: (examId: number, answers: ExamAnswer[]) => fetchJson<ExamSubmissionResult>(`${API_BASE}/exams/${examId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
   }),
 };

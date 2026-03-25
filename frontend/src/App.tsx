@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { dictionaryApi, metaWordApi } from './api';
-import type { Dictionary, MetaWord } from './types';
+import { dictionaryApi, examApi, metaWordApi } from './api';
+import type { Dictionary, Exam, ExamHistoryItem, ExamSubmissionResult, MetaWord } from './types';
 import { DictionaryCard } from './components/DictionaryCard';
 import { WordList } from './components/WordList';
 import { WordDetail } from './components/WordDetail';
@@ -8,6 +8,9 @@ import { SearchBox } from './components/SearchBox';
 import { CreateDictionaryModal } from './components/CreateDictionaryModal';
 import { AddWordListModal } from './components/AddWordListModal';
 import { CsvImportModal } from './components/CsvImportModal';
+import { CreateExamModal } from './components/CreateExamModal';
+import { ExamHistoryModal } from './components/ExamHistoryModal';
+import { ExamSessionModal } from './components/ExamSessionModal';
 import './App.css';
 
 function App() {
@@ -28,8 +31,16 @@ function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddWordListModal, setShowAddWordListModal] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
+  const [showExamSetupModal, setShowExamSetupModal] = useState(false);
+  const [showExamHistoryModal, setShowExamHistoryModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
+  const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  const [examResult, setExamResult] = useState<ExamSubmissionResult | null>(null);
+  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
+  const [examLoading, setExamLoading] = useState(false);
+  const [examError, setExamError] = useState<string | null>(null);
+  const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
   const isLoadingRef = useRef(false);
   const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
   const prevWordPageRef = useRef<number>(1);
@@ -195,6 +206,110 @@ function App() {
     setSelectedWord(word);
   }, []);
 
+  const handleOpenExamSetup = useCallback(() => {
+    if (!selectedDictionary) {
+      return;
+    }
+    setExamError(null);
+    setShowExamSetupModal(true);
+  }, [selectedDictionary]);
+
+  const handleOpenExamHistory = useCallback(async () => {
+    if (!selectedDictionary) {
+      return;
+    }
+
+    setExamLoading(true);
+    setExamError(null);
+    setShowExamHistoryModal(true);
+    try {
+      const historyItems = await examApi.getHistory(selectedDictionary.id);
+      setExamHistory(historyItems);
+    } catch (error) {
+      setExamError(error instanceof Error ? error.message : '加载考试历史失败');
+    } finally {
+      setExamLoading(false);
+    }
+  }, [selectedDictionary]);
+
+  const handleStartExam = useCallback(async (questionCount: number) => {
+    if (!selectedDictionary) {
+      return;
+    }
+
+    setExamLoading(true);
+    setExamError(null);
+    try {
+      const exam = await examApi.create(selectedDictionary.id, questionCount);
+      setActiveExam(exam);
+      setExamAnswers({});
+      setExamResult(null);
+      setShowExamSetupModal(false);
+    } catch (error) {
+      setExamError(error instanceof Error ? error.message : '生成考试失败');
+    } finally {
+      setExamLoading(false);
+    }
+  }, [selectedDictionary]);
+
+  const handleSelectExamOption = useCallback((questionId: number, optionKey: string) => {
+    setExamAnswers(prev => ({
+      ...prev,
+      [questionId]: optionKey,
+    }));
+  }, []);
+
+  const handleSubmitExam = useCallback(async () => {
+    if (!activeExam) {
+      return;
+    }
+
+    setExamLoading(true);
+    setExamError(null);
+    try {
+      const answers = Object.entries(examAnswers).map(([questionId, selectedOption]) => ({
+        questionId: Number(questionId),
+        selectedOption,
+      }));
+      const result = await examApi.submit(activeExam.examId, answers);
+      setExamResult(result);
+      if (selectedDictionary) {
+        const historyItems = await examApi.getHistory(selectedDictionary.id);
+        setExamHistory(historyItems);
+      }
+    } catch (error) {
+      setExamError(error instanceof Error ? error.message : '提交考试失败');
+    } finally {
+      setExamLoading(false);
+    }
+  }, [activeExam, examAnswers, selectedDictionary]);
+
+  const handleViewHistoryResult = useCallback(async (examId: number) => {
+    setExamLoading(true);
+    setExamError(null);
+    try {
+      const [exam, result] = await Promise.all([
+        examApi.getById(examId),
+        examApi.getResult(examId),
+      ]);
+      setActiveExam(exam);
+      setExamResult(result);
+      setExamAnswers({});
+      setShowExamHistoryModal(false);
+    } catch (error) {
+      setExamError(error instanceof Error ? error.message : '加载考试详情失败');
+    } finally {
+      setExamLoading(false);
+    }
+  }, []);
+
+  const handleCloseExam = useCallback(() => {
+    setActiveExam(null);
+    setExamAnswers({});
+    setExamResult(null);
+    setExamError(null);
+  }, []);
+
   const filteredDictionaries = dictionaries
     .filter(d => d.name.toLowerCase().includes(dictSearchQuery.toLowerCase()));
 
@@ -283,7 +398,8 @@ function App() {
                         isSelected={selectedDictionary?.id === dict.id}
                         onClick={() => handleSelectDictionary(dict)}
                         onDelete={() => handleDeleteDictionary(dict.id)}
-                        onAdd={() => handleAddWords(dict)}
+                        onAddJson={() => handleAddWords(dict)}
+                        onImportCsv={() => handleImportCsv(dict)}
                       />
                     </div>
                   ))}
@@ -315,11 +431,23 @@ function App() {
         <section className="app__content">
           <div className="content__panel content__panel--list">
             <div className="panel__header">
-              <h2 className="panel__title">
-                {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
-              </h2>
-              {metaWords.length > 0 && (
-                <span className="panel__count">{metaWords.length} 个单词</span>
+              <div className="panel__header-main">
+                <h2 className="panel__title">
+                  {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
+                </h2>
+                {metaWords.length > 0 && (
+                  <span className="panel__count">{metaWords.length} 个单词</span>
+                )}
+              </div>
+              {selectedDictionary && !isSearching && (
+                <div className="panel__header-actions">
+                  <button className="exam-history-btn" onClick={handleOpenExamHistory}>
+                    考试历史
+                  </button>
+                  <button className="exam-trigger-btn" onClick={handleOpenExamSetup}>
+                    开始考试
+                  </button>
+                </div>
               )}
             </div>
             <div className="panel__list-wrapper">
@@ -383,6 +511,44 @@ function App() {
           onSuccess={handleCsvImported}
         />
       )}
+
+      <CreateExamModal
+        isOpen={showExamSetupModal}
+        dictionary={selectedDictionary}
+        loading={examLoading}
+        error={examError}
+        onClose={() => {
+          setShowExamSetupModal(false);
+          setExamError(null);
+        }}
+        onStart={handleStartExam}
+      />
+
+      <ExamHistoryModal
+        isOpen={showExamHistoryModal}
+        dictionary={selectedDictionary}
+        historyItems={examHistory}
+        loading={examLoading}
+        error={examError}
+        onClose={() => {
+          setShowExamHistoryModal(false);
+          setExamError(null);
+        }}
+        onViewResult={handleViewHistoryResult}
+      />
+
+      <ExamSessionModal
+        isOpen={activeExam !== null}
+        dictionary={selectedDictionary}
+        exam={activeExam}
+        selectedAnswers={examAnswers}
+        result={examResult}
+        loading={examLoading}
+        error={examError}
+        onClose={handleCloseExam}
+        onSelectOption={handleSelectExamOption}
+        onSubmit={handleSubmitExam}
+      />
     </div>
   );
 }
