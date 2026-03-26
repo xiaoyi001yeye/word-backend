@@ -1,43 +1,47 @@
 .search-box {
-  position: relative;
   display: flex;
   align-items: center;
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  gap: 0.75rem;
+  min-height: 3.4rem;
   padding: 0 1rem;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(64, 53, 38, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .search-box:focus-within {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.1);
+  border-color: rgba(182, 117, 44, 0.34);
+  box-shadow: 0 0 0 4px rgba(182, 117, 44, 0.1);
 }
 
 .search-box__icon {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 1.25rem;
+  color: var(--color-ink-accent);
   font-size: 1rem;
+  flex-shrink: 0;
 }
 
 .search-box__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-border);
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(64, 53, 38, 0.15);
   border-top-color: var(--color-accent);
-  border-radius: 50%;
+  border-radius: 999px;
   animation: spin 0.6s linear infinite;
 }
 
 .search-box__input {
   flex: 1;
-  border: none;
+  min-width: 0;
+  border: 0;
   background: transparent;
-  padding: 0.875rem 0.75rem;
-  font-family: var(--font-body);
-  font-size: 0.9375rem;
   color: var(--color-text-primary);
+  font-size: 0.98rem;
   outline: none;
 }
 
@@ -46,21 +50,21 @@
 }
 
 .search-box__clear {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: var(--color-border);
-  border-radius: 50%;
-  font-size: 14px;
-  color: var(--color-text-muted);
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(34, 55, 69, 0.08);
+  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .search-box__clear:hover {
-  background: var(--color-text-muted);
-  color: var(--color-card);
+  background: rgba(34, 55, 69, 0.14);
+  color: var(--color-text-primary);
+  transform: scale(1.02);
 }

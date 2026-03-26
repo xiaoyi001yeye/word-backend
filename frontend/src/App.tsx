@@ -319,26 +319,69 @@ function App() {
   const totalDictPages = Math.ceil(filteredDictionaries.length / DICT_PAGE_SIZE);
 
   const totalWordPages = Math.ceil(totalWords / WORD_PAGE_SIZE);
+  const workspaceLabel = isSearching
+    ? '全库搜索'
+    : selectedDictionary?.name || '词汇总览';
+  const workspaceMeta = isSearching
+    ? searchKeyword
+      ? `关键词「${searchKeyword}」`
+      : '输入关键词开始搜索'
+    : selectedDictionary?.category || '选择一本辞书开始浏览';
+  const activeWordCount = isSearching
+    ? totalWords
+    : selectedDictionary?.wordCount || totalWords;
 
   return (
     <div className="app">
       <header className="app__header">
         <div className="app__header-content">
-          <div className="app__title-row">
-            <span className="app__title-icon">📖</span>
-            <div className="app__search">
-              <SearchBox
-                onLoading={setLoading}
-                onClear={handleSearchClear}
-                onSearchQueryChange={handleSearchQueryChange}
-                value={searchKeyword}
-              />
+          <div className="app__hero">
+            <div className="app__hero-copy">
+              <p className="app__eyebrow">Vocabulary Studio</p>
+              <h1 className="app__title">把词汇库做成一块真正能学习、检索和练习的工作台</h1>
+              <p className="app__subtitle">
+                在辞书、搜索、详情和考试之间自然切换，让每次查词都更专注，也更有沉浸感。
+              </p>
+              <div className="app__hero-stats">
+                <div className="app__hero-stat">
+                  <span className="app__hero-stat-label">辞书总数</span>
+                  <strong className="app__hero-stat-value">{dictionaries.length}</strong>
+                </div>
+                <div className="app__hero-stat">
+                  <span className="app__hero-stat-label">当前工作区</span>
+                  <strong className="app__hero-stat-value">{workspaceLabel}</strong>
+                </div>
+                <div className="app__hero-stat">
+                  <span className="app__hero-stat-label">词条规模</span>
+                  <strong className="app__hero-stat-value">{activeWordCount}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="app__hero-search">
+              <div className="app__search-card">
+                <div className="app__search-card-header">
+                  <p className="app__search-label">快速搜索</p>
+                  <span className="app__search-mode">{workspaceMeta}</span>
+                </div>
+                <div className="app__search">
+                  <SearchBox
+                    onLoading={setLoading}
+                    onClear={handleSearchClear}
+                    onSearchQueryChange={handleSearchQueryChange}
+                    value={searchKeyword}
+                  />
+                </div>
+                <p className="app__search-help">
+                  支持按关键词横跨全部单词检索，也可以切回左侧辞书做定向学习。
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="app__main">
+      <main className={`app__main ${sidebarCollapsed ? 'app__main--sidebar-collapsed' : ''}`}>
         <aside className={`app__sidebar ${sidebarCollapsed ? 'app__sidebar--collapsed' : ''}`}>
           <button 
             className="sidebar__toggle"
@@ -350,11 +393,31 @@ function App() {
           {!sidebarCollapsed && (
             <div className="sidebar__section">
               <div className="sidebar__header">
+                <div className="sidebar__header-copy">
+                  <p className="sidebar__eyebrow">Library</p>
+                  <h2 className="sidebar__title">辞书书架</h2>
+                  <p className="sidebar__summary">
+                    {filteredDictionaries.length} / {dictionaries.length} 本可用辞书
+                  </p>
+                </div>
+
+                <div className="sidebar__actions">
+                  <button
+                    className="add-dictionary-btn"
+                    onClick={() => setShowCreateModal(true)}
+                    title="创建新辞书"
+                  >
+                    <span>新建辞书</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="sidebar__toolbar">
                 <div className="sidebar__search">
                   <input
                     type="text"
                     className="sidebar__search-input"
-                    placeholder="搜索词典..."
+                    placeholder="筛选辞书名称"
                     value={dictSearchQuery}
                     onChange={(e) => setDictSearchQuery(e.target.value)}
                   />
@@ -367,24 +430,16 @@ function App() {
                     </button>
                   )}
                 </div>
-                <div className="sidebar__actions">
-                  <button
-                    className="add-dictionary-btn"
-                    onClick={() => setShowCreateModal(true)}
-                    title="创建新辞书"
-                  >
-                    <span>+</span>
-                    <span>添加辞书</span>
-                  </button>
-                </div>
+                <p className="sidebar__hint">导入、创建或选择一本辞书，右侧会立即同步单词工作区。</p>
               </div>
+
               {loading && dictionaries.length === 0 ? (
                 <div className="sidebar__loading">
                   <span className="sidebar__spinner"></span>
                 </div>
               ) : filteredDictionaries.length === 0 ? (
                 <div className="sidebar__empty">
-                  <p>暂无词典</p>
+                  <p>还没有匹配的辞书</p>
                 </div>
               ) : (
                 <div className="sidebar__list">
@@ -432,11 +487,14 @@ function App() {
           <div className="content__panel content__panel--list">
             <div className="panel__header">
               <div className="panel__header-main">
-                <h2 className="panel__title">
-                  {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
-                </h2>
-                {metaWords.length > 0 && (
-                  <span className="panel__count">{metaWords.length} 个单词</span>
+                <div>
+                  <p className="panel__eyebrow">{isSearching ? 'Search Results' : 'Word Shelf'}</p>
+                  <h2 className="panel__title">
+                    {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
+                  </h2>
+                </div>
+                {activeWordCount > 0 && (
+                  <span className="panel__count">{activeWordCount} 个词条</span>
                 )}
               </div>
               {selectedDictionary && !isSearching && (
@@ -481,7 +539,13 @@ function App() {
 
           <div className="content__panel content__panel--detail">
             <div className="panel__header">
-              <h2 className="panel__title">单词详情</h2>
+              <div>
+                <p className="panel__eyebrow">Word Detail</p>
+                <h2 className="panel__title">单词详情</h2>
+              </div>
+              <span className="panel__count">
+                {selectedWord ? '已选词条' : '等待选择'}
+              </span>
             </div>
             <WordDetail word={selectedWord} />
           </div>

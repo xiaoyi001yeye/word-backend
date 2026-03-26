@@ -44,10 +44,15 @@ export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAd
     }
   };
 
+  const sourceLabel = dictionary.creationType === 'USER_CREATED' ? '自建' : '导入';
+
   return (
     <div className={`dictionary-card ${isSelected ? 'selected' : ''}`} onClick={onClick}>
       <div className="dictionary-card__header">
-        <h3 className="dictionary-card__title">{dictionary.name}</h3>
+        <div className="dictionary-card__title-group">
+          <span className="dictionary-card__source">{sourceLabel}</span>
+          <h3 className="dictionary-card__title">{dictionary.name}</h3>
+        </div>
         <div className="dictionary-card__header-right">
           <div className="dictionary-card__actions">
             {onAddJson && (
@@ -81,11 +86,13 @@ export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAd
               </button>
             )}
           </div>
-          {dictionary.category && (
-            <span className="dictionary-card__category">{dictionary.category}</span>
-          )}
         </div>
       </div>
+      {dictionary.category && (
+        <div className="dictionary-card__meta">
+          <span className="dictionary-card__category">{dictionary.category}</span>
+        </div>
+      )}
       <div className="dictionary-card__stats">
         <div className="dictionary-card__stat">
           <span className="dictionary-card__stat-value">{dictionary.wordCount || 0}</span>
