@@ -7,6 +7,7 @@ import com.example.words.dto.UserResponse;
 import com.example.words.exception.BadRequestException;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
+import com.example.words.model.UserRole;
 import com.example.words.model.UserStatus;
 import com.example.words.repository.AppUserRepository;
 import java.util.List;
@@ -47,6 +48,13 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponse> findAll() {
         return appUserRepository.findAll().stream()
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> findByRole(UserRole role) {
+        return appUserRepository.findByRole(role).stream()
                 .map(UserResponse::from)
                 .toList();
     }

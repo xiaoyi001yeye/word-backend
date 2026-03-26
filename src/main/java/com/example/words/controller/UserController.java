@@ -5,6 +5,7 @@ import com.example.words.dto.UpdateUserRoleRequest;
 import com.example.words.dto.UpdateUserStatusRequest;
 import com.example.words.dto.UserResponse;
 import com.example.words.model.AppUser;
+import com.example.words.model.UserRole;
 import com.example.words.service.AccessControlService;
 import com.example.words.service.CurrentUserService;
 import com.example.words.service.UserService;
@@ -47,6 +48,12 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<UserResponse>> listUsers() {
         return ResponseEntity.ok(userService.findAll());
+    }
+
+    @GetMapping("/students")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<List<UserResponse>> listStudents() {
+        return ResponseEntity.ok(userService.findByRole(UserRole.STUDENT));
     }
 
     @GetMapping("/{id}")

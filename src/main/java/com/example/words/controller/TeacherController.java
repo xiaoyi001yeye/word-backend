@@ -33,7 +33,7 @@ public class TeacherController {
             @PathVariable Long teacherId,
             @PathVariable Long studentId) {
         teacherStudentService.assignStudent(teacherId, studentId);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{teacherId}/students/{studentId}")
@@ -49,5 +49,11 @@ public class TeacherController {
     @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<List<UserResponse>> getMyStudents() {
         return ResponseEntity.ok(teacherStudentService.getStudentsForTeacher(currentUserService.getCurrentUser().getId()));
+    }
+
+    @GetMapping("/{teacherId}/students")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponse>> getStudentsForTeacher(@PathVariable Long teacherId) {
+        return ResponseEntity.ok(teacherStudentService.getStudentsForTeacher(teacherId));
     }
 }

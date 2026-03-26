@@ -3,8 +3,12 @@ package com.example.words.service;
 import com.example.words.dto.UserResponse;
 import com.example.words.exception.BadRequestException;
 import com.example.words.model.AppUser;
+import com.example.words.model.Classroom;
+import com.example.words.model.ClassroomMember;
 import com.example.words.model.TeacherStudentRelation;
 import com.example.words.model.UserRole;
+import com.example.words.repository.ClassroomMemberRepository;
+import com.example.words.repository.ClassroomRepository;
 import com.example.words.repository.TeacherStudentRelationRepository;
 import java.util.List;
 import java.util.Set;
@@ -16,12 +20,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class TeacherStudentService {
 
     private final TeacherStudentRelationRepository teacherStudentRelationRepository;
+    private final ClassroomRepository classroomRepository;
+    private final ClassroomMemberRepository classroomMemberRepository;
     private final UserService userService;
 
     public TeacherStudentService(
             TeacherStudentRelationRepository teacherStudentRelationRepository,
+            ClassroomRepository classroomRepository,
+            ClassroomMemberRepository classroomMemberRepository,
             UserService userService) {
         this.teacherStudentRelationRepository = teacherStudentRelationRepository;
+        this.classroomRepository = classroomRepository;
+        this.classroomMemberRepository = classroomMemberRepository;
         this.userService = userService;
     }
 
@@ -49,6 +59,16 @@ public class TeacherStudentService {
                 .map(TeacherStudentRelation::getStudentId)
                 .collect(Collectors.toSet());
 
+        List<Long> classroomIds = classroomRepository.findByTeacherId(teacherId).stream()
+                .map(Classroom::getId)
+                .toList();
+
+        if (!classroomIds.isEmpty()) {
+            classroomMemberRepository.findByClassroomIdIn(classroomIds).stream()
+                    .map(ClassroomMember::getStudentId)
+                    .forEach(studentIds::add);
+        }
+
         return studentIds.stream()
                 .map(userService::findById)
                 .toList();
@@ -56,7 +76,16 @@ public class TeacherStudentService {
 
     @Transactional(readOnly = true)
     public boolean isTeacherResponsibleForStudent(Long teacherId, Long studentId) {
-        return teacherStudentRelationRepository.existsByTeacherIdAndStudentId(teacherId, studentId);
+        if (teacherStudentRelationRepository.existsByTeacherIdAndStudentId(teacherId, studentId)) {
+            return true;
+        }
+
+        List<Long> classroomIds = classroomRepository.findByTeacherId(teacherId).stream()
+                .map(Classroom::getId)
+                .toList();
+
+        return !classroomIds.isEmpty()
+                && classroomMemberRepository.existsByClassroomIdInAndStudentId(classroomIds, studentId);
     }
 
     private void validateTeacherAndStudent(AppUser teacher, AppUser student) {

@@ -1,11 +1,13 @@
 package com.example.words.controller;
 
 import com.example.words.dto.AssignStudentsRequest;
+import com.example.words.dto.AssignClassroomsRequest;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
 import com.example.words.service.AccessControlService;
 import com.example.words.service.CurrentUserService;
+import com.example.words.service.ClassroomService;
 import com.example.words.service.DictionaryAssignmentService;
 import com.example.words.service.DictionaryService;
 import com.example.words.service.MetaWordService;
@@ -30,18 +32,21 @@ public class DictionaryController {
     private final CurrentUserService currentUserService;
     private final DictionaryAssignmentService dictionaryAssignmentService;
     private final AccessControlService accessControlService;
+    private final ClassroomService classroomService;
 
     public DictionaryController(
             DictionaryService dictionaryService,
             MetaWordService metaWordService,
             CurrentUserService currentUserService,
             DictionaryAssignmentService dictionaryAssignmentService,
-            AccessControlService accessControlService) {
+            AccessControlService accessControlService,
+            ClassroomService classroomService) {
         this.dictionaryService = dictionaryService;
         this.metaWordService = metaWordService;
         this.currentUserService = currentUserService;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
         this.accessControlService = accessControlService;
+        this.classroomService = classroomService;
     }
 
     @GetMapping
@@ -95,6 +100,28 @@ public class DictionaryController {
         int assignedCount = dictionaryAssignmentService.assignDictionaryToStudents(dictionary, actor, request.getStudentIds());
         return ResponseEntity.ok(Map.of(
                 "message", "Dictionary assigned successfully",
+                "dictionaryId", id,
+                "assignedCount", assignedCount
+        ));
+    }
+
+    @PostMapping("/{id}/assign/classrooms")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Map<String, Object>> assignToClassrooms(
+            @PathVariable Long id,
+            @RequestBody AssignClassroomsRequest request) {
+        AppUser actor = currentUserService.getCurrentUser();
+        Dictionary dictionary = dictionaryService.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + id));
+
+        List<Long> studentIds = classroomService.getStudentIdsForClassrooms(request.getClassroomIds(), actor).stream().toList();
+        for (Long studentId : studentIds) {
+            accessControlService.ensureCanAssignDictionaryToStudent(actor, dictionary, studentId);
+        }
+
+        int assignedCount = dictionaryAssignmentService.assignDictionaryToStudents(dictionary, actor, studentIds);
+        return ResponseEntity.ok(Map.of(
+                "message", "Dictionary assigned to classrooms successfully",
                 "dictionaryId", id,
                 "assignedCount", assignedCount
         ));

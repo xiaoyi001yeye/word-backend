@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   authApi,
+  classroomApi,
   clearStoredToken,
   dictionaryApi,
   dictionaryWordApi,
@@ -13,6 +14,7 @@ import {
   userApi,
 } from './api';
 import type {
+  Classroom,
   Dictionary,
   Exam,
   ExamHistoryItem,
@@ -24,11 +26,14 @@ import { AddWordListModal } from './components/AddWordListModal';
 import { CreateDictionaryModal } from './components/CreateDictionaryModal';
 import { CreateExamModal } from './components/CreateExamModal';
 import { CsvImportModal } from './components/CsvImportModal';
+import { AssignDictionaryModal } from './components/AssignDictionaryModal';
+import { ClassManagementModal } from './components/ClassManagementModal';
 import { DictionaryCard } from './components/DictionaryCard';
 import { ExamHistoryModal } from './components/ExamHistoryModal';
 import { ExamSessionModal } from './components/ExamSessionModal';
 import { LoginScreen } from './components/LoginScreen';
 import { SearchBox } from './components/SearchBox';
+import { UserManagementModal } from './components/UserManagementModal';
 import { WordDetail } from './components/WordDetail';
 import { WordList } from './components/WordList';
 import './App.css';
@@ -43,6 +48,7 @@ function App() {
 
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [availableStudents, setAvailableStudents] = useState<User[]>([]);
+  const [availableClassrooms, setAvailableClassrooms] = useState<Classroom[]>([]);
   const [selectedDictionary, setSelectedDictionary] = useState<Dictionary | null>(null);
   const [metaWords, setMetaWords] = useState<MetaWord[]>([]);
   const [selectedWord, setSelectedWord] = useState<MetaWord | null>(null);
@@ -63,8 +69,12 @@ function App() {
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
   const [showExamSetupModal, setShowExamSetupModal] = useState(false);
   const [showExamHistoryModal, setShowExamHistoryModal] = useState(false);
+  const [showUserManagementModal, setShowUserManagementModal] = useState(false);
+  const [showClassManagementModal, setShowClassManagementModal] = useState(false);
+  const [showAssignDictionaryModal, setShowAssignDictionaryModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
+  const [dictionaryForAssignment, setDictionaryForAssignment] = useState<Dictionary | null>(null);
   const [isImportingDictionaries, setIsImportingDictionaries] = useState(false);
   const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -88,6 +98,7 @@ function App() {
   const resetWorkspace = useCallback(() => {
     setDictionaries([]);
     setAvailableStudents([]);
+    setAvailableClassrooms([]);
     setSelectedDictionary(null);
     setMetaWords([]);
     setSelectedWord(null);
@@ -105,8 +116,12 @@ function App() {
     setShowCsvImportModal(false);
     setShowExamSetupModal(false);
     setShowExamHistoryModal(false);
+    setShowUserManagementModal(false);
+    setShowClassManagementModal(false);
+    setShowAssignDictionaryModal(false);
     setDictionaryForAdd(null);
     setDictionaryForCsvImport(null);
+    setDictionaryForAssignment(null);
     setImportFeedback(null);
     setExamLoading(false);
     setExamError(null);
@@ -176,37 +191,45 @@ function App() {
     return () => mediaQuery.removeEventListener('change', updateCompactState);
   }, []);
 
+  const loadAvailableStudents = useCallback(async () => {
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      const students = isAdmin
+        ? await userApi.getStudents()
+        : isTeacher
+          ? await teacherApi.getMyStudents()
+          : [];
+      setAvailableStudents(students);
+    } catch (error) {
+      console.error('Failed to load students:', error);
+    }
+  }, [currentUser, isAdmin, isTeacher]);
+
+  const loadAvailableClassrooms = useCallback(async () => {
+    if (!currentUser || !canManageWorkspace) {
+      setAvailableClassrooms([]);
+      return;
+    }
+
+    try {
+      const classrooms = await classroomApi.getAll();
+      setAvailableClassrooms(classrooms);
+    } catch (error) {
+      console.error('Failed to load classrooms:', error);
+    }
+  }, [canManageWorkspace, currentUser]);
+
   useEffect(() => {
     if (!currentUser) {
       return;
     }
 
-    let mounted = true;
-
-    const loadAvailableStudents = async () => {
-      try {
-        const students = isAdmin
-          ? (await userApi.getAll()).filter((user) => user.role === 'STUDENT')
-          : isTeacher
-            ? await teacherApi.getMyStudents()
-            : [];
-
-        if (mounted) {
-          setAvailableStudents(students);
-        }
-      } catch (error) {
-        if (mounted) {
-          console.error('Failed to load students:', error);
-        }
-      }
-    };
-
     loadAvailableStudents();
-
-    return () => {
-      mounted = false;
-    };
-  }, [currentUser, isAdmin, isTeacher]);
+    loadAvailableClassrooms();
+  }, [currentUser, loadAvailableClassrooms, loadAvailableStudents]);
 
   const loadDictionaries = useCallback(async () => {
     if (!currentUser) {
@@ -477,6 +500,15 @@ function App() {
     setShowExamSetupModal(true);
   }, [canCreateExam, selectedDictionary]);
 
+  const handleOpenAssignDictionary = useCallback(() => {
+    if (!selectedDictionary || !canManageWorkspace) {
+      return;
+    }
+
+    setDictionaryForAssignment(selectedDictionary);
+    setShowAssignDictionaryModal(true);
+  }, [canManageWorkspace, selectedDictionary]);
+
   const handleStartExam = useCallback(async (questionCount: number, targetUserId: number) => {
     if (!selectedDictionary) {
       return;
@@ -555,6 +587,14 @@ function App() {
     setExamAnswers({});
     setExamResult(null);
     setExamError(null);
+  }, []);
+
+  const handleAdminUsersChanged = useCallback((users: User[]) => {
+    setAvailableStudents(users.filter((user) => user.role === 'STUDENT'));
+  }, []);
+
+  const handleClassroomsChanged = useCallback((classrooms: Classroom[]) => {
+    setAvailableClassrooms(classrooms);
   }, []);
 
   if (authChecking) {
@@ -696,6 +736,11 @@ function App() {
           )}
           {selectedDictionary && (
             <>
+              {canManageWorkspace && (
+                <button className="exam-history-btn" onClick={handleOpenAssignDictionary}>
+                  分配班级/学生
+                </button>
+              )}
               <button className="exam-history-btn" onClick={handleOpenExamHistory}>
                 考试历史
               </button>
@@ -765,6 +810,22 @@ function App() {
             <div className="app__masthead-meta">
               <span className="app__masthead-chip">{workspaceLabel}</span>
               <span className="app__masthead-chip">{currentUser.displayName} · {currentUser.role}</span>
+              {canManageWorkspace && (
+                <button
+                  className="exam-history-btn"
+                  onClick={() => setShowClassManagementModal(true)}
+                >
+                  班级管理
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  className="exam-history-btn"
+                  onClick={() => setShowUserManagementModal(true)}
+                >
+                  用户管理
+                </button>
+              )}
               <button className="app__logout" onClick={handleSignOut}>
                 退出登录
               </button>
@@ -972,6 +1033,40 @@ function App() {
         onClose={handleCloseExam}
         onSelectOption={handleSelectExamOption}
         onSubmit={handleSubmitExam}
+      />
+
+      {currentUser && isAdmin && (
+        <UserManagementModal
+          isOpen={showUserManagementModal}
+          currentUser={currentUser}
+          onClose={() => setShowUserManagementModal(false)}
+          onUsersChanged={handleAdminUsersChanged}
+        />
+      )}
+
+      {currentUser && canManageWorkspace && (
+        <ClassManagementModal
+          isOpen={showClassManagementModal}
+          currentUser={currentUser}
+          onClose={() => setShowClassManagementModal(false)}
+          onClassroomsChanged={handleClassroomsChanged}
+          onMembershipChanged={async () => {
+            await loadAvailableStudents();
+            await loadAvailableClassrooms();
+          }}
+        />
+      )}
+
+      <AssignDictionaryModal
+        isOpen={showAssignDictionaryModal}
+        dictionary={dictionaryForAssignment}
+        availableStudents={availableStudents}
+        availableClassrooms={availableClassrooms}
+        actorRole={currentUser.role}
+        onClose={() => {
+          setShowAssignDictionaryModal(false);
+          setDictionaryForAssignment(null);
+        }}
       />
     </div>
   );

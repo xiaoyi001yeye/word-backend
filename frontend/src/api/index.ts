@@ -1,4 +1,5 @@
 import type {
+  Classroom,
   Dictionary,
   DictionaryWord,
   Exam,
@@ -112,6 +113,13 @@ export const dictionaryApi = {
       body: JSON.stringify({ studentIds }),
     },
   ),
+  assignClassrooms: (id: number, classroomIds: number[]) => fetchJson<{ message: string; dictionaryId: number; assignedCount: number }>(
+    `${API_BASE}/dictionaries/${id}/assign/classrooms`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ classroomIds }),
+    },
+  ),
 };
 
 export const metaWordApi = {
@@ -182,10 +190,59 @@ export const examApi = {
 
 export const userApi = {
   getAll: () => fetchJson<User[]>(`${API_BASE}/users`),
+  getStudents: () => fetchJson<User[]>(`${API_BASE}/users/students`),
+  create: (payload: {
+    username: string;
+    password: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+    role: User['role'];
+  }) => fetchJson<User>(`${API_BASE}/users`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  updateRole: (id: number, role: User['role']) => fetchJson<User>(`${API_BASE}/users/${id}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  }),
+  updateStatus: (id: number, status: User['status']) => fetchJson<User>(`${API_BASE}/users/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  }),
+};
+
+export const classroomApi = {
+  getAll: () => fetchJson<Classroom[]>(`${API_BASE}/classrooms`),
+  create: (payload: {
+    name: string;
+    description?: string;
+    teacherId?: number;
+  }) => fetchJson<Classroom>(`${API_BASE}/classrooms`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/classrooms/${id}`, {
+    method: 'DELETE',
+  }),
+  getStudents: (id: number) => fetchJson<User[]>(`${API_BASE}/classrooms/${id}/students`),
+  addStudent: (id: number, studentId: number) => fetchJson<void>(`${API_BASE}/classrooms/${id}/students/${studentId}`, {
+    method: 'POST',
+  }),
+  removeStudent: (id: number, studentId: number) => fetchJson<void>(`${API_BASE}/classrooms/${id}/students/${studentId}`, {
+    method: 'DELETE',
+  }),
 };
 
 export const teacherApi = {
   getMyStudents: () => fetchJson<User[]>(`${API_BASE}/teachers/me/students`),
+  getStudents: (teacherId: number) => fetchJson<User[]>(`${API_BASE}/teachers/${teacherId}/students`),
+  assignStudent: (teacherId: number, studentId: number) => fetchJson<void>(`${API_BASE}/teachers/${teacherId}/students/${studentId}`, {
+    method: 'POST',
+  }),
+  removeStudent: (teacherId: number, studentId: number) => fetchJson<void>(`${API_BASE}/teachers/${teacherId}/students/${studentId}`, {
+    method: 'DELETE',
+  }),
 };
 
 export const studentApi = {

@@ -36,6 +36,17 @@ export interface Dictionary {
   updatedAt?: string;
 }
 
+export interface Classroom {
+  id: number;
+  name: string;
+  description?: string | null;
+  teacherId: number;
+  teacherName?: string | null;
+  studentCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
 
 export type UserStatus = 'ACTIVE' | 'DISABLED' | 'LOCKED';
