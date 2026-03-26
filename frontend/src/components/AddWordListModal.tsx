@@ -68,7 +68,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
       let wordEntries;
       try {
         wordEntries = JSON.parse(wordList);
-      } catch (parseError) {
+      } catch {
         throw new Error('JSON格式错误，请检查语法');
       }
 
