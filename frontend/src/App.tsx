@@ -1,157 +1,166 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { dictionaryApi, examApi, metaWordApi } from './api';
-import type { Dictionary, Exam, ExamHistoryItem, ExamSubmissionResult, MetaWord } from './types';
-import { DictionaryCard } from './components/DictionaryCard';
-import { WordList } from './components/WordList';
-import { WordDetail } from './components/WordDetail';
-import { SearchBox } from './components/SearchBox';
-import { CreateDictionaryModal } from './components/CreateDictionaryModal';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  authApi,
+  clearStoredToken,
+  dictionaryApi,
+  dictionaryWordApi,
+  examApi,
+  metaWordApi,
+  setUnauthorizedHandler,
+  storeToken,
+  studentApi,
+  teacherApi,
+  userApi,
+} from './api';
+import type {
+  Dictionary,
+  Exam,
+  ExamHistoryItem,
+  ExamSubmissionResult,
+  MetaWord,
+  User,
+} from './types';
 import { AddWordListModal } from './components/AddWordListModal';
-import { CsvImportModal } from './components/CsvImportModal';
+import { CreateDictionaryModal } from './components/CreateDictionaryModal';
 import { CreateExamModal } from './components/CreateExamModal';
+import { CsvImportModal } from './components/CsvImportModal';
+import { DictionaryCard } from './components/DictionaryCard';
 import { ExamHistoryModal } from './components/ExamHistoryModal';
 import { ExamSessionModal } from './components/ExamSessionModal';
+import { LoginScreen } from './components/LoginScreen';
+import { SearchBox } from './components/SearchBox';
+import { WordDetail } from './components/WordDetail';
+import { WordList } from './components/WordList';
 import './App.css';
 
 type MobilePanel = 'library' | 'words';
 
 function App() {
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<User[]>([]);
   const [selectedDictionary, setSelectedDictionary] = useState<Dictionary | null>(null);
   const [metaWords, setMetaWords] = useState<MetaWord[]>([]);
   const [selectedWord, setSelectedWord] = useState<MetaWord | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dictSearchQuery, setDictSearchQuery] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dictPage, setDictPage] = useState(1);
-  const DICT_PAGE_SIZE = 5;
   const [wordPage, setWordPage] = useState(1);
-  const WORD_PAGE_SIZE = 10;
   const [totalWords, setTotalWords] = useState(0);
+  const [isCompact, setIsCompact] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('library');
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddWordListModal, setShowAddWordListModal] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
   const [showExamSetupModal, setShowExamSetupModal] = useState(false);
   const [showExamHistoryModal, setShowExamHistoryModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
-  const [dictionaryForCsvImport] = useState<Dictionary | null>(null);
+  const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
   const [isImportingDictionaries, setIsImportingDictionaries] = useState(false);
   const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const isLoadingRef = useRef(false);
-  const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
-  const prevWordPageRef = useRef<number>(1);
 
-  const loadDictionaries = useCallback(async () => {
-    setLoading(true);
-    try {
-      const dicts = await dictionaryApi.getAll();
-      setDictionaries(dicts);
-    } catch (error) {
-      console.error('Failed to load dictionaries:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [examLoading, setExamLoading] = useState(false);
+  const [examError, setExamError] = useState<string | null>(null);
+  const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
+  const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
+  const [examResult, setExamResult] = useState<ExamSubmissionResult | null>(null);
 
-  const handleDictionaryCreated = useCallback((newDictionary: Dictionary) => {
-    setDictionaries(prev => [newDictionary, ...prev]);
-    setSelectedDictionary(newDictionary);
+  const DICT_PAGE_SIZE = 6;
+  const WORD_PAGE_SIZE = 10;
+
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const isTeacher = currentUser?.role === 'TEACHER';
+  const isStudent = currentUser?.role === 'STUDENT';
+  const canManageWorkspace = isAdmin || isTeacher;
+  const canImportSystemDictionaries = isAdmin;
+  const canCreateExam = (isAdmin || isTeacher) && availableStudents.length > 0;
+
+  const resetWorkspace = useCallback(() => {
+    setDictionaries([]);
+    setAvailableStudents([]);
+    setSelectedDictionary(null);
+    setMetaWords([]);
     setSelectedWord(null);
-    setIsSearching(false);
     setSearchKeyword('');
+    setIsSearching(false);
+    setDictSearchQuery('');
+    setDictPage(1);
     setWordPage(1);
-    setMobilePanel('words');
+    setTotalWords(0);
+    setSidebarCollapsed(false);
+    setMobilePanel('library');
     setShowMobileDetail(false);
-  }, []);
-
-  const handleDeleteDictionary = useCallback(async (id: number) => {
-    if (!window.confirm('确定要删除这个辞书吗？此操作无法撤销。')) {
-      return;
-    }
-    try {
-      await dictionaryApi.deleteById(id);
-      setDictionaries(prev => prev.filter(d => d.id !== id));
-      if (selectedDictionary?.id === id) {
-        setSelectedDictionary(null);
-        setSelectedWord(null);
-        setIsSearching(false);
-        setSearchKeyword('');
-        setWordPage(1);
-        setShowMobileDetail(false);
-      }
-    } catch (error) {
-      console.error('Failed to delete dictionary:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('400')) {
-        alert('无法删除导入的辞书，只能删除用户创建的辞书。');
-      } else {
-        alert('删除辞书失败，请重试。');
-      }
-    }
-  }, [selectedDictionary]);
-
-  const handleAddWords = useCallback((dict: Dictionary) => {
-    setDictionaryForAdd(dict);
-    setShowAddWordListModal(true);
-  }, []);
-
-  const handleImportDictionaries = useCallback(async () => {
-    if (isImportingDictionaries) {
-      return;
-    }
-    setIsImportingDictionaries(true);
+    setShowCreateModal(false);
+    setShowAddWordListModal(false);
+    setShowCsvImportModal(false);
+    setShowExamSetupModal(false);
+    setShowExamHistoryModal(false);
+    setDictionaryForAdd(null);
+    setDictionaryForCsvImport(null);
     setImportFeedback(null);
-    try {
-      const result = await dictionaryApi.importDictionaries();
-      await loadDictionaries();
-      setImportFeedback({
-        type: 'success',
-        message: `导入完成，本次新增 ${result.count} 本辞书。`,
-      });
-    } catch (error) {
-      console.error('Failed to import dictionaries:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setImportFeedback({
-        type: 'error',
-        message: `导入失败：${errorMessage}`,
-      });
-    } finally {
-      setIsImportingDictionaries(false);
-    }
-  }, [isImportingDictionaries, loadDictionaries]);
+    setExamLoading(false);
+    setExamError(null);
+    setExamHistory([]);
+    setActiveExam(null);
+    setExamAnswers({});
+    setExamResult(null);
+  }, []);
 
-  const handleWordListAdded = useCallback(() => {
-    if (dictionaryForAdd?.id === selectedDictionary?.id) {
-      setWordPage(1);
-      prevWordPageRef.current = 0;
-      lastLoadedRef.current = null;
-    }
-  }, [dictionaryForAdd, selectedDictionary]);
+  const handleSignOut = useCallback(() => {
+    clearStoredToken();
+    setCurrentUser(null);
+    setAuthError(null);
+    resetWorkspace();
+  }, [resetWorkspace]);
 
-  const handleCsvImported = useCallback(() => {
-    if (dictionaryForCsvImport?.id === selectedDictionary?.id) {
-      setWordPage(1);
-      prevWordPageRef.current = 0;
-      lastLoadedRef.current = null;
-    }
-  }, [dictionaryForCsvImport, selectedDictionary]);
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      handleSignOut();
+      setAuthError('登录状态已失效，请重新登录。');
+    });
 
-  const performSearch = useCallback(async (keyword: string, page: number = 1, dictionaryId?: number) => {
-    setLoading(true);
-    try {
-      const pageResult = await metaWordApi.search(keyword.trim(), dictionaryId, page - 1);
-      setMetaWords(pageResult.content);
-      setTotalWords(pageResult.totalElements);
-      setWordPage(page);
-      prevWordPageRef.current = 0;
-      lastLoadedRef.current = dictionaryId ? { dictId: dictionaryId, page } : null;
-    } catch (error) {
-      console.error('Search failed:', error);
-    } finally {
-      setLoading(false);
-    }
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [handleSignOut]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const user = await authApi.me();
+        if (mounted) {
+          setCurrentUser(user);
+          setAuthError(null);
+        }
+      } catch {
+        if (mounted) {
+          clearStoredToken();
+          setCurrentUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setAuthChecking(false);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -160,46 +169,135 @@ function App() {
     }
 
     const mediaQuery = window.matchMedia('(max-width: 900px)');
-    const updateCompactState = () => {
-      setIsCompact(mediaQuery.matches);
-    };
-
+    const updateCompactState = () => setIsCompact(mediaQuery.matches);
     updateCompactState();
     mediaQuery.addEventListener('change', updateCompactState);
 
-    return () => {
-      mediaQuery.removeEventListener('change', updateCompactState);
-    };
+    return () => mediaQuery.removeEventListener('change', updateCompactState);
   }, []);
 
   useEffect(() => {
-    if (dictionaries.length === 0) {
-      loadDictionaries();
-    }
-  }, [dictionaries.length, loadDictionaries]);
-
-  useEffect(() => {
-    if (isLoadingRef.current) {
+    if (!currentUser) {
       return;
     }
 
-    if (isSearching && searchKeyword.trim()) {
-      if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === -1) {
-        return;
-      }
-      prevWordPageRef.current = wordPage;
-      lastLoadedRef.current = { dictId: -1, page: wordPage };
+    let mounted = true;
 
-      performSearch(searchKeyword, wordPage);
-    } else if (selectedDictionary && !isSearching) {
-      if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === selectedDictionary.id) {
-        return;
-      }
-      prevWordPageRef.current = wordPage;
+    const loadAvailableStudents = async () => {
+      try {
+        const students = isAdmin
+          ? (await userApi.getAll()).filter((user) => user.role === 'STUDENT')
+          : isTeacher
+            ? await teacherApi.getMyStudents()
+            : [];
 
-      performSearch('', wordPage, selectedDictionary.id);
+        if (mounted) {
+          setAvailableStudents(students);
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error('Failed to load students:', error);
+        }
+      }
+    };
+
+    loadAvailableStudents();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser, isAdmin, isTeacher]);
+
+  const loadDictionaries = useCallback(async () => {
+    if (!currentUser) {
+      return;
     }
-  }, [wordPage, selectedDictionary, isSearching, searchKeyword, performSearch]);
+
+    setLoading(true);
+    try {
+      const nextDictionaries = isStudent
+        ? await studentApi.getMyDictionaries()
+        : await dictionaryApi.getAll();
+      setDictionaries(nextDictionaries);
+      setImportFeedback(null);
+    } catch (error) {
+      console.error('Failed to load dictionaries:', error);
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '加载辞书失败',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, isStudent]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+    loadDictionaries();
+  }, [currentUser, loadDictionaries]);
+
+  useEffect(() => {
+    if (!selectedDictionary && dictionaries.length > 0 && !isSearching) {
+      setSelectedDictionary(dictionaries[0]);
+    }
+  }, [dictionaries, selectedDictionary, isSearching]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    let mounted = true;
+
+    const loadWords = async () => {
+      if (!selectedDictionary && !isSearching) {
+        setMetaWords([]);
+        setTotalWords(0);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        if (isSearching && searchKeyword.trim()) {
+          const pageResult = await metaWordApi.search(searchKeyword.trim(), undefined, wordPage - 1, WORD_PAGE_SIZE);
+          if (!mounted) {
+            return;
+          }
+          setMetaWords(pageResult.content);
+          setTotalWords(pageResult.totalElements);
+          return;
+        }
+
+        if (!selectedDictionary) {
+          return;
+        }
+
+        const pageResult = await dictionaryWordApi.getWordsByDictionary(selectedDictionary.id, wordPage, WORD_PAGE_SIZE);
+        if (!mounted) {
+          return;
+        }
+
+        setMetaWords(pageResult.content);
+        setTotalWords(pageResult.totalElements);
+      } catch (error) {
+        if (mounted) {
+          console.error('Failed to load words:', error);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadWords();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser, isSearching, searchKeyword, selectedDictionary, wordPage]);
 
   useEffect(() => {
     if (!isCompact) {
@@ -210,38 +308,140 @@ function App() {
     if (selectedWord) {
       setShowMobileDetail(true);
     }
-  }, [selectedWord, isCompact]);
+  }, [isCompact, selectedWord]);
 
-  const handleSelectDictionary = useCallback((dict: Dictionary) => {
-    setSelectedDictionary(dict);
+  const filteredDictionaries = useMemo(
+    () => dictionaries.filter((dictionary) =>
+      dictionary.name.toLowerCase().includes(dictSearchQuery.toLowerCase()),
+    ),
+    [dictSearchQuery, dictionaries],
+  );
+
+  const paginatedDictionaries = useMemo(
+    () => filteredDictionaries.slice((dictPage - 1) * DICT_PAGE_SIZE, dictPage * DICT_PAGE_SIZE),
+    [dictPage, filteredDictionaries],
+  );
+
+  const totalDictPages = Math.max(1, Math.ceil(filteredDictionaries.length / DICT_PAGE_SIZE));
+  const totalWordPages = Math.max(1, Math.ceil(totalWords / WORD_PAGE_SIZE));
+  const workspaceLabel = isSearching
+    ? '全库搜索'
+    : selectedDictionary?.name || '词汇总览';
+  const workspaceMeta = isSearching
+    ? searchKeyword
+      ? `关键词「${searchKeyword}」`
+      : '输入关键词开始搜索'
+    : selectedDictionary?.category || '选择一本辞书开始浏览';
+  const activeWordCount = isSearching ? totalWords : selectedDictionary?.wordCount || totalWords;
+
+  const canManageDictionary = useCallback((dictionary: Dictionary) => {
+    if (!currentUser) {
+      return false;
+    }
+    if (isAdmin) {
+      return true;
+    }
+    if (isTeacher) {
+      return dictionary.creationType === 'USER_CREATED';
+    }
+    return false;
+  }, [currentUser, isAdmin, isTeacher]);
+
+  const handleLogin = useCallback(async (username: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const response = await authApi.login(username, password);
+      storeToken(response.token);
+      setCurrentUser(response.user);
+      resetWorkspace();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : '登录失败');
+    } finally {
+      setAuthLoading(false);
+      setAuthChecking(false);
+    }
+  }, [resetWorkspace]);
+
+  const handleDictionaryCreated = useCallback((newDictionary: Dictionary) => {
+    setDictionaries((prev) => [newDictionary, ...prev]);
+    setSelectedDictionary(newDictionary);
     setSelectedWord(null);
     setIsSearching(false);
     setSearchKeyword('');
     setWordPage(1);
     setMobilePanel('words');
     setShowMobileDetail(false);
-    lastLoadedRef.current = null;
+    setShowCreateModal(false);
   }, []);
+
+  const handleDeleteDictionary = useCallback(async (id: number) => {
+    if (!window.confirm('确定要删除这个辞书吗？此操作无法撤销。')) {
+      return;
+    }
+
+    try {
+      await dictionaryApi.deleteById(id);
+      setDictionaries((prev) => prev.filter((dictionary) => dictionary.id !== id));
+      if (selectedDictionary?.id === id) {
+        setSelectedDictionary(null);
+        setSelectedWord(null);
+        setMetaWords([]);
+      }
+    } catch (error) {
+      console.error('Failed to delete dictionary:', error);
+      alert(error instanceof Error ? error.message : '删除辞书失败，请重试。');
+    }
+  }, [selectedDictionary]);
+
+  const handleImportDictionaries = useCallback(async () => {
+    if (!canImportSystemDictionaries || isImportingDictionaries) {
+      return;
+    }
+
+    setIsImportingDictionaries(true);
+    setImportFeedback(null);
+    try {
+      const result = await dictionaryApi.importDictionaries();
+      await loadDictionaries();
+      setImportFeedback({
+        type: 'success',
+        message: `导入完成，本次新增 ${result.count} 本辞书。`,
+      });
+    } catch (error) {
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '导入失败',
+      });
+    } finally {
+      setIsImportingDictionaries(false);
+    }
+  }, [canImportSystemDictionaries, isImportingDictionaries, loadDictionaries]);
 
   const handleSearchClear = useCallback(() => {
     setIsSearching(false);
     setSearchKeyword('');
     setWordPage(1);
+    setSelectedWord(null);
     setMobilePanel('words');
-    prevWordPageRef.current = 0;
-    lastLoadedRef.current = null;
   }, []);
 
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchKeyword(query);
+    setWordPage(1);
+    setSelectedWord(null);
     setMobilePanel('words');
-    if (query.trim()) {
-      setSelectedDictionary(null);
-      setSelectedWord(null);
-      setIsSearching(true);
-    } else {
-      setIsSearching(false);
-    }
+    setIsSearching(Boolean(query.trim()));
+  }, []);
+
+  const handleSelectDictionary = useCallback((dictionary: Dictionary) => {
+    setSelectedDictionary(dictionary);
+    setSelectedWord(null);
+    setWordPage(1);
+    setMobilePanel('words');
+    setShowMobileDetail(false);
+    setIsSearching(false);
+    setSearchKeyword('');
   }, []);
 
   const handleSelectWord = useCallback((word: MetaWord) => {
@@ -250,14 +450,6 @@ function App() {
       setShowMobileDetail(true);
     }
   }, [isCompact]);
-
-  const handleOpenExamSetup = useCallback(() => {
-    if (!selectedDictionary) {
-      return;
-    }
-    setExamError(null);
-    setShowExamSetupModal(true);
-  }, [selectedDictionary]);
 
   const handleOpenExamHistory = useCallback(async () => {
     if (!selectedDictionary) {
@@ -277,7 +469,15 @@ function App() {
     }
   }, [selectedDictionary]);
 
-  const handleStartExam = useCallback(async (questionCount: number) => {
+  const handleOpenExamSetup = useCallback(() => {
+    if (!canCreateExam || !selectedDictionary) {
+      return;
+    }
+    setExamError(null);
+    setShowExamSetupModal(true);
+  }, [canCreateExam, selectedDictionary]);
+
+  const handleStartExam = useCallback(async (questionCount: number, targetUserId: number) => {
     if (!selectedDictionary) {
       return;
     }
@@ -285,7 +485,7 @@ function App() {
     setExamLoading(true);
     setExamError(null);
     try {
-      const exam = await examApi.create(selectedDictionary.id, questionCount);
+      const exam = await examApi.create(selectedDictionary.id, questionCount, targetUserId);
       setActiveExam(exam);
       setExamAnswers({});
       setExamResult(null);
@@ -298,7 +498,7 @@ function App() {
   }, [selectedDictionary]);
 
   const handleSelectExamOption = useCallback((questionId: number, optionKey: string) => {
-    setExamAnswers(prev => ({
+    setExamAnswers((prev) => ({
       ...prev,
       [questionId]: optionKey,
     }));
@@ -316,8 +516,10 @@ function App() {
         questionId: Number(questionId),
         selectedOption,
       }));
+
       const result = await examApi.submit(activeExam.examId, answers);
       setExamResult(result);
+
       if (selectedDictionary) {
         const historyItems = await examApi.getHistory(selectedDictionary.id);
         setExamHistory(historyItems);
@@ -355,25 +557,18 @@ function App() {
     setExamError(null);
   }, []);
 
-  const filteredDictionaries = dictionaries
-    .filter(d => d.name.toLowerCase().includes(dictSearchQuery.toLowerCase()));
+  if (authChecking) {
+    return (
+      <div className="auth-loading">
+        <span className="sidebar__spinner"></span>
+        <p>正在恢复登录状态...</p>
+      </div>
+    );
+  }
 
-  const paginatedDictionaries = filteredDictionaries
-    .slice((dictPage - 1) * DICT_PAGE_SIZE, dictPage * DICT_PAGE_SIZE);
-
-  const totalDictPages = Math.ceil(filteredDictionaries.length / DICT_PAGE_SIZE);
-  const totalWordPages = Math.ceil(totalWords / WORD_PAGE_SIZE);
-  const workspaceLabel = isSearching
-    ? '全库搜索'
-    : selectedDictionary?.name || '词汇总览';
-  const workspaceMeta = isSearching
-    ? searchKeyword
-      ? `关键词「${searchKeyword}」`
-      : '输入关键词开始搜索'
-    : selectedDictionary?.category || '选择一本辞书开始浏览';
-  const activeWordCount = isSearching
-    ? totalWords
-    : selectedDictionary?.wordCount || totalWords;
+  if (!currentUser) {
+    return <LoginScreen loading={authLoading} error={authError} onSubmit={handleLogin} />;
+  }
 
   const sidebarContent = (
     <div className="sidebar__section">
@@ -386,15 +581,22 @@ function App() {
           </p>
         </div>
 
-        <div className="sidebar__actions">
-          <button
-            className="add-dictionary-btn"
-            onClick={() => setShowCreateModal(true)}
-            title="创建新辞书"
-          >
-            <span>新建辞书</span>
-          </button>
-        </div>
+        {canManageWorkspace && (
+          <div className="sidebar__actions sidebar__actions--stacked">
+            {canImportSystemDictionaries && (
+              <button
+                className="exam-history-btn"
+                onClick={handleImportDictionaries}
+                disabled={isImportingDictionaries}
+              >
+                {isImportingDictionaries ? '导入中...' : '导入 books'}
+              </button>
+            )}
+            <button className="add-dictionary-btn" onClick={() => setShowCreateModal(true)}>
+              新建辞书
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="sidebar__toolbar">
@@ -404,18 +606,22 @@ function App() {
             className="sidebar__search-input"
             placeholder="筛选辞书名称"
             value={dictSearchQuery}
-            onChange={(e) => setDictSearchQuery(e.target.value)}
+            onChange={(event) => {
+              setDictSearchQuery(event.target.value);
+              setDictPage(1);
+            }}
           />
           {dictSearchQuery && (
-            <button
-              className="sidebar__search-clear"
-              onClick={() => setDictSearchQuery('')}
-            >
+            <button className="sidebar__search-clear" onClick={() => setDictSearchQuery('')}>
               ×
             </button>
           )}
         </div>
-        <p className="sidebar__hint">导入、创建或选择一本辞书，右侧会立即同步单词工作区。</p>
+        <p className="sidebar__hint">
+          {isStudent
+            ? '这里展示分配给你的学习资源。'
+            : '选择一本辞书后，右侧会同步单词、考试与详情工作区。'}
+        </p>
       </div>
 
       {loading && dictionaries.length === 0 ? (
@@ -428,18 +634,21 @@ function App() {
         </div>
       ) : (
         <div className="sidebar__list">
-          {paginatedDictionaries.map((dict, index) => (
-            <div
-              key={dict.id}
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
+          {paginatedDictionaries.map((dictionary, index) => (
+            <div key={dictionary.id} style={{ animationDelay: `${index * 40}ms` }}>
               <DictionaryCard
-                dictionary={dict}
-                isSelected={selectedDictionary?.id === dict.id}
-                onClick={() => handleSelectDictionary(dict)}
-                onDelete={() => handleDeleteDictionary(dict.id)}
-                onAddJson={() => handleAddWords(dict)}
-                onImportCsv={() => handleImportCsv(dict)}
+                dictionary={dictionary}
+                isSelected={selectedDictionary?.id === dictionary.id}
+                onClick={() => handleSelectDictionary(dictionary)}
+                onDelete={canManageDictionary(dictionary) ? () => handleDeleteDictionary(dictionary.id) : undefined}
+                onAddJson={canManageDictionary(dictionary) ? () => {
+                  setDictionaryForAdd(dictionary);
+                  setShowAddWordListModal(true);
+                } : undefined}
+                onImportCsv={canManageDictionary(dictionary) ? () => {
+                  setDictionaryForCsvImport(dictionary);
+                  setShowCsvImportModal(true);
+                } : undefined}
               />
             </div>
           ))}
@@ -450,16 +659,16 @@ function App() {
         <div className="sidebar__pagination">
           <button
             className="sidebar__page-btn"
-            disabled={dictPage === 1 || loading}
-            onClick={() => setDictPage(p => p - 1)}
+            disabled={dictPage === 1}
+            onClick={() => setDictPage((prev) => prev - 1)}
           >
             ‹
           </button>
           <span className="sidebar__page-info">{dictPage} / {totalDictPages}</span>
           <button
             className="sidebar__page-btn"
-            disabled={dictPage === totalDictPages || loading}
-            onClick={() => setDictPage(p => p + 1)}
+            disabled={dictPage === totalDictPages}
+            onClick={() => setDictPage((prev) => prev + 1)}
           >
             ›
           </button>
@@ -474,35 +683,32 @@ function App() {
         <div className="panel__header-main">
           <div>
             <p className="panel__eyebrow">{isSearching ? 'Search Results' : 'Word Shelf'}</p>
-            <h2 className="panel__title">
-              {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
-            </h2>
+            <h2 className="panel__title">{isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}</h2>
           </div>
-          {activeWordCount > 0 && (
-            <span className="panel__count">{activeWordCount} 个词条</span>
-          )}
+          {activeWordCount > 0 && <span className="panel__count">{activeWordCount} 个词条</span>}
         </div>
+
         <div className="panel__header-actions">
           {isCompact && selectedWord && (
-            <button
-              className="exam-history-btn"
-              onClick={() => setShowMobileDetail(true)}
-            >
+            <button className="exam-history-btn" onClick={() => setShowMobileDetail(true)}>
               查看详情
             </button>
           )}
-          {selectedDictionary && !isSearching && (
+          {selectedDictionary && (
             <>
               <button className="exam-history-btn" onClick={handleOpenExamHistory}>
                 考试历史
               </button>
-              <button className="exam-trigger-btn" onClick={handleOpenExamSetup}>
-                开始考试
-              </button>
+              {canCreateExam && (
+                <button className="exam-trigger-btn" onClick={handleOpenExamSetup}>
+                  开始考试
+                </button>
+              )}
             </>
           )}
         </div>
       </div>
+
       <div className="panel__list-wrapper">
         <WordList
           words={metaWords}
@@ -511,12 +717,13 @@ function App() {
           loading={loading && metaWords.length === 0}
         />
       </div>
+
       {totalWordPages > 1 && (
         <div className="content__pagination">
           <button
             className="content__page-btn"
             disabled={wordPage === 1 || loading}
-            onClick={() => setWordPage(p => p - 1)}
+            onClick={() => setWordPage((prev) => prev - 1)}
           >
             ‹
           </button>
@@ -524,7 +731,7 @@ function App() {
           <button
             className="content__page-btn"
             disabled={wordPage === totalWordPages || loading}
-            onClick={() => setWordPage(p => p + 1)}
+            onClick={() => setWordPage((prev) => prev + 1)}
           >
             ›
           </button>
@@ -540,9 +747,7 @@ function App() {
           <p className="panel__eyebrow">Word Detail</p>
           <h2 className="panel__title">单词详情</h2>
         </div>
-        <span className="panel__count">
-          {selectedWord ? '已选词条' : '等待选择'}
-        </span>
+        <span className="panel__count">{selectedWord ? '已选词条' : '等待选择'}</span>
       </div>
       <WordDetail word={selectedWord} />
     </div>
@@ -555,11 +760,14 @@ function App() {
           <div className="app__masthead">
             <div>
               <p className="app__eyebrow">Word Atelier</p>
-              <h1 className="app__title">"Words are, of course, the most powerful drug used by mankind."</h1>
+              <h1 className="app__title">Roles, dictionaries, and exams now meet inside one learning workspace.</h1>
             </div>
             <div className="app__masthead-meta">
               <span className="app__masthead-chip">{workspaceLabel}</span>
-              <span className="app__masthead-chip">{activeWordCount} 个词条</span>
+              <span className="app__masthead-chip">{currentUser.displayName} · {currentUser.role}</span>
+              <button className="app__logout" onClick={handleSignOut}>
+                退出登录
+              </button>
             </div>
           </div>
 
@@ -567,37 +775,20 @@ function App() {
             <div className="app__hero-copy">
               <p className="app__eyebrow">Workspace</p>
               <p className="app__subtitle">
-                在手机上专注单条任务，在平板上维持双栏阅读，在桌面端继续保留完整学习台面。
+                管理员统筹资源，教师分配学习内容，学生只处理自己的词书与考试。所有请求都带着登录态进入后端。
               </p>
               <div className="app__hero-stats">
                 <div className="app__hero-stat">
-                  <span className="app__hero-stat-label">辞书总数</span>
+                  <span className="app__hero-stat-label">当前角色</span>
+                  <strong className="app__hero-stat-value">{currentUser.role}</strong>
+                </div>
+                <div className="app__hero-stat">
+                  <span className="app__hero-stat-label">辞书数量</span>
                   <strong className="app__hero-stat-value">{dictionaries.length}</strong>
                 </div>
-                <div className="sidebar__actions">
-                  <button
-                    className="import-dictionaries-btn"
-                    onClick={handleImportDictionaries}
-                    disabled={isImportingDictionaries}
-                    title="导入 books 目录下所有辞书"
-                  >
-                    {isImportingDictionaries ? (
-                      <>
-                        <span className="btn-spinner"></span>
-                        <span>导入中...</span>
-                      </>
-                    ) : (
-                      <span>导入books辞书</span>
-                    )}
-                  </button>
-                  <button
-                    className="add-dictionary-btn"
-                    onClick={() => setShowCreateModal(true)}
-                    title="创建新辞书"
-                  >
-                    <span>+</span>
-                    <span>添加辞书</span>
-                  </button>
+                <div className="app__hero-stat">
+                  <span className="app__hero-stat-label">工作区状态</span>
+                  <strong className="app__hero-stat-value">{workspaceMeta}</strong>
                 </div>
               </div>
               {importFeedback && (
@@ -605,15 +796,6 @@ function App() {
                   {importFeedback.message}
                 </div>
               )}
-              {loading && dictionaries.length === 0 ? (
-                <div className="sidebar__loading">
-                  <span className="sidebar__spinner"></span>
-                </div>
-                <div className="app__hero-stat">
-                  <span className="app__hero-stat-label">当前状态</span>
-                  <strong className="app__hero-stat-value">{workspaceMeta}</strong>
-                </div>
-              </div>
             </div>
 
             <div className="app__hero-search">
@@ -631,7 +813,7 @@ function App() {
                   />
                 </div>
                 <p className="app__search-help">
-                  搜索会自动切到词条工作区，选词后在手机端以抽屉展开详情，在更大屏幕里保持并排阅读。
+                  搜索会切到词条工作区。移动端使用抽屉查看详情，桌面端保持双栏阅读。
                 </p>
               </div>
             </div>
@@ -668,8 +850,8 @@ function App() {
           <aside className={`app__sidebar ${sidebarCollapsed ? 'app__sidebar--collapsed' : ''}`}>
             <button
               className="sidebar__toggle"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              title={sidebarCollapsed ? '展开词典列表' : '收起词典列表'}
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              title={sidebarCollapsed ? '展开辞书列表' : '收起辞书列表'}
             >
               {sidebarCollapsed ? '▶' : '◀'}
             </button>
@@ -684,13 +866,9 @@ function App() {
       ) : (
         <main className="app__main app__main--compact">
           {mobilePanel === 'library' ? (
-            <section className="app__mobile-stage app__mobile-stage--library">
-              {sidebarContent}
-            </section>
+            <section className="app__mobile-stage app__mobile-stage--library">{sidebarContent}</section>
           ) : (
-            <section className="app__mobile-stage app__mobile-stage--words">
-              {listPanel}
-            </section>
+            <section className="app__mobile-stage app__mobile-stage--words">{listPanel}</section>
           )}
         </main>
       )}
@@ -708,10 +886,7 @@ function App() {
                 <p className="panel__eyebrow">Focused Entry</p>
                 <h2 className="panel__title">{selectedWord.word}</h2>
               </div>
-              <button
-                className="modal__close"
-                onClick={() => setShowMobileDetail(false)}
-              >
+              <button className="modal__close" onClick={() => setShowMobileDetail(false)}>
                 ×
               </button>
             </div>
@@ -731,24 +906,39 @@ function App() {
       {dictionaryForAdd && (
         <AddWordListModal
           isOpen={showAddWordListModal}
-          onClose={() => setShowAddWordListModal(false)}
+          onClose={() => {
+            setShowAddWordListModal(false);
+            setDictionaryForAdd(null);
+            loadDictionaries();
+          }}
           dictionary={dictionaryForAdd}
-          onSuccess={handleWordListAdded}
+          onSuccess={() => {
+            loadDictionaries();
+            setWordPage(1);
+          }}
         />
       )}
 
       {dictionaryForCsvImport && (
         <CsvImportModal
           isOpen={showCsvImportModal}
-          onClose={() => setShowCsvImportModal(false)}
+          onClose={() => {
+            setShowCsvImportModal(false);
+            setDictionaryForCsvImport(null);
+            loadDictionaries();
+          }}
           dictionary={dictionaryForCsvImport}
-          onSuccess={handleCsvImported}
+          onSuccess={() => {
+            loadDictionaries();
+            setWordPage(1);
+          }}
         />
       )}
 
       <CreateExamModal
         isOpen={showExamSetupModal}
         dictionary={selectedDictionary}
+        availableStudents={availableStudents}
         loading={examLoading}
         error={examError}
         onClose={() => {

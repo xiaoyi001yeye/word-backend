@@ -29,8 +29,33 @@ export interface Dictionary {
   category?: string;
   wordCount?: number;
   creationType?: 'USER_CREATED' | 'IMPORTED';
+  createdBy?: number;
+  ownerUserId?: number;
+  scopeType?: 'SYSTEM' | 'TEACHER' | 'PERSONAL';
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
+
+export type UserStatus = 'ACTIVE' | 'DISABLED' | 'LOCKED';
+
+export interface User {
+  id: number;
+  username: string;
+  displayName: string;
+  email?: string | null;
+  phone?: string | null;
+  role: UserRole;
+  status: UserStatus;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  lastLoginAt?: string | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
 }
 
 export interface DictionaryWord {

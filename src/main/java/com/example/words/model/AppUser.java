@@ -1,5 +1,6 @@
 package com.example.words.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -10,60 +11,57 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "exams")
+@Table(name = "users")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
-public class Exam {
+public class AppUser {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "dictionary_id", nullable = false)
-    private Long dictionaryId;
+    @Column(name = "username", nullable = false, unique = true)
+    private String username;
 
-    @Column(name = "question_count", nullable = false)
-    private Integer questionCount;
+    @JsonIgnore
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 
-    @Column(name = "answered_count")
-    private Integer answeredCount;
+    @Column(name = "display_name", nullable = false)
+    private String displayName;
 
-    @Column(name = "correct_count")
-    private Integer correctCount;
+    @Column(name = "email")
+    private String email;
 
-    @Column(name = "score")
-    private Integer score;
+    @Column(name = "phone")
+    private String phone;
 
-    @Column(name = "created_by_user_id")
-    private Long createdByUserId;
-
-    @Column(name = "target_user_id")
-    private Long targetUserId;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false)
+    private UserRole role;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ExamStatus status = ExamStatus.GENERATED;
-
-    @Column(name = "assigned_at")
-    private LocalDateTime assignedAt;
-
-    @Column(name = "started_at")
-    private LocalDateTime startedAt;
+    private UserStatus status = UserStatus.ACTIVE;
 
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "submitted_at")
-    private LocalDateTime submittedAt;
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 }

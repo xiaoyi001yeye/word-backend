@@ -1,18 +1,8 @@
-FROM maven:3.9-eclipse-temurin-17 AS builder
-
-WORKDIR /app
-COPY pom.xml .
-COPY settings.xml /root/.m2/settings.xml
-COPY maven-repo /root/.m2/repository
-COPY src ./src
-
-RUN mvn -s /root/.m2/settings.xml -o -Paliyun clean package -DskipTests
-
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
-COPY --from=builder /app/target/*.jar app.jar
+COPY target/words-1.0.0.jar app.jar
 
 RUN mkdir -p /app/books /app/logs
 

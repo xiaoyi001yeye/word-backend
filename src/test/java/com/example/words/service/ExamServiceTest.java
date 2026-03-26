@@ -57,8 +57,15 @@ class ExamServiceTest {
 
     @BeforeEach
     void setUp() {
-        dictionaryService = new DictionaryService(dictionaryRepository);
-        examService = new ExamService(examRepository, examQuestionRepository, dictionaryService, metaWordRepository);
+        dictionaryService = new DictionaryService(dictionaryRepository, null, null);
+        examService = new ExamService(
+                examRepository,
+                examQuestionRepository,
+                dictionaryService,
+                metaWordRepository,
+                null,
+                null
+        );
     }
 
     @Test
@@ -101,7 +108,7 @@ class ExamServiceTest {
             return savedQuestions;
         });
 
-        ExamResponse response = examService.createExam(new CreateExamRequest(10L, 2));
+        ExamResponse response = examService.createExam(new CreateExamRequest(10L, 2, 1000L));
 
         assertEquals(99L, response.getExamId());
         assertEquals("考研词汇", response.getDictionaryName());

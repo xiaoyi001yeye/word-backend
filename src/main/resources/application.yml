@@ -27,7 +27,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql,classpath:db/migration/V4__add_jsonb_fields_to_meta_words.sql,classpath:db/migration/V5__migrate_data_to_jsonb.sql,classpath:db/migration/V7__ensure_dictionary_words_unique_constraint.sql
+      schema-locations: classpath:db/migration/V1__init_word_vocabulary.sql,classpath:db/migration/V2__create_dictionary_tables.sql,classpath:db/migration/V3__add_dictionary_creation_type.sql,classpath:db/migration/V4__add_jsonb_fields_to_meta_words.sql,classpath:db/migration/V5__migrate_data_to_jsonb.sql,classpath:db/migration/V7__ensure_dictionary_words_unique_constraint.sql,classpath:db/migration/V7__create_exam_tables.sql,classpath:db/migration/V8__add_selected_option_to_exam_questions.sql,classpath:db/migration/V9__add_user_role_support.sql
       continue-on-error: true
 
 
@@ -51,3 +51,8 @@ logging:
     rollingpolicy:
       max-file-size: 100MB
       max-history: 7
+
+security:
+  jwt:
+    secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    expiration-hours: 24

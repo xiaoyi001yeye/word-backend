@@ -5,9 +5,11 @@ import type {
   ExamAnswer,
   ExamHistoryItem,
   ExamSubmissionResult,
+  LoginResponse,
   MetaWord,
   MetaWordEntry,
   Page,
+  User,
 } from '../types';
 
 export interface WordListProcessResult {
@@ -21,13 +23,37 @@ export interface WordListProcessResult {
 }
 
 const API_BASE = '/api';
+const TOKEN_STORAGE_KEY = 'word_atelier_token';
+
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+export function getStoredToken() {
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+export function storeToken(token: string) {
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredToken() {
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const headers = new Headers(options?.headers ?? {});
+  const token = getStoredToken();
 
   if (!isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(url, {
@@ -35,10 +61,37 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     headers,
   });
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    let message = `API Error: ${response.status}`;
+
+    try {
+      const errorBody = await response.json();
+      message = errorBody.message || errorBody.error || message;
+    } catch {
+      // Ignore non-JSON error bodies.
+    }
+
+    if (response.status === 401) {
+      clearStoredToken();
+      unauthorizedHandler?.();
+    }
+
+    throw new Error(message);
   }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json();
 }
+
+export const authApi = {
+  login: (username: string, password: string) => fetchJson<LoginResponse>(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  }),
+  me: () => fetchJson<User>(`${API_BASE}/auth/me`),
+};
 
 export const dictionaryApi = {
   getAll: () => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries`),
@@ -52,6 +105,13 @@ export const dictionaryApi = {
   deleteAll: () => fetch(`${API_BASE}/dictionaries`, { method: 'DELETE' }),
   deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/dictionaries/${id}`, { method: 'DELETE' }),
   deleteUserCreated: () => fetchJson<{ message: string; deletedCount: number }>(`${API_BASE}/dictionaries/user-created`, { method: 'DELETE' }),
+  assignStudents: (id: number, studentIds: number[]) => fetchJson<{ message: string; dictionaryId: number; assignedCount: number }>(
+    `${API_BASE}/dictionaries/${id}/assign/students`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ studentIds }),
+    },
+  ),
 };
 
 export const metaWordApi = {
@@ -104,9 +164,9 @@ export const dictionaryWordApi = {
 };
 
 export const examApi = {
-  create: (dictionaryId: number, questionCount: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
+  create: (dictionaryId: number, questionCount: number, targetUserId: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
     method: 'POST',
-    body: JSON.stringify({ dictionaryId, questionCount }),
+    body: JSON.stringify({ dictionaryId, questionCount, targetUserId }),
   }),
   getHistory: (dictionaryId?: number) => {
     const query = dictionaryId ? `?dictionaryId=${dictionaryId}` : '';
@@ -118,4 +178,16 @@ export const examApi = {
     method: 'POST',
     body: JSON.stringify({ answers }),
   }),
+};
+
+export const userApi = {
+  getAll: () => fetchJson<User[]>(`${API_BASE}/users`),
+};
+
+export const teacherApi = {
+  getMyStudents: () => fetchJson<User[]>(`${API_BASE}/teachers/me/students`),
+};
+
+export const studentApi = {
+  getMyDictionaries: () => fetchJson<Dictionary[]>(`${API_BASE}/students/me/dictionaries`),
 };

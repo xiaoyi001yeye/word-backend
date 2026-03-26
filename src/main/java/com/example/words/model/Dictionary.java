@@ -50,6 +50,16 @@ public class Dictionary {
     @Column(name = "creation_type", nullable = false)
     private DictionaryCreationType creationType = DictionaryCreationType.USER_CREATED;
 
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    @Column(name = "owner_user_id")
+    private Long ownerUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "scope_type", nullable = false)
+    private ResourceScopeType scopeType = ResourceScopeType.SYSTEM;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -65,6 +75,7 @@ public class Dictionary {
         this.category = category;
         this.wordCount = 0;
         this.creationType = DictionaryCreationType.USER_CREATED;
+        this.scopeType = ResourceScopeType.TEACHER;
     }
 
     public Dictionary(String name, String filePath, Long fileSize, String category, DictionaryCreationType creationType) {
@@ -74,5 +85,6 @@ public class Dictionary {
         this.category = category;
         this.wordCount = 0;
         this.creationType = creationType;
+        this.scopeType = creationType == DictionaryCreationType.IMPORTED ? ResourceScopeType.SYSTEM : ResourceScopeType.TEACHER;
     }
 }

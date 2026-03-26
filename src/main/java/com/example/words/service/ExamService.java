@@ -11,6 +11,7 @@ import com.example.words.dto.SubmitExamRequest;
 import com.example.words.dto.SubmitExamResponse;
 import com.example.words.exception.BadRequestException;
 import com.example.words.exception.ResourceNotFoundException;
+import com.example.words.model.AppUser;
 import com.example.words.model.Definition;
 import com.example.words.model.Dictionary;
 import com.example.words.model.Exam;
@@ -44,16 +45,22 @@ public class ExamService {
     private final ExamQuestionRepository examQuestionRepository;
     private final DictionaryService dictionaryService;
     private final MetaWordRepository metaWordRepository;
+    private final AccessControlService accessControlService;
+    private final UserService userService;
 
     public ExamService(
             ExamRepository examRepository,
             ExamQuestionRepository examQuestionRepository,
             DictionaryService dictionaryService,
-            MetaWordRepository metaWordRepository) {
+            MetaWordRepository metaWordRepository,
+            AccessControlService accessControlService,
+            UserService userService) {
         this.examRepository = examRepository;
         this.examQuestionRepository = examQuestionRepository;
         this.dictionaryService = dictionaryService;
         this.metaWordRepository = metaWordRepository;
+        this.accessControlService = accessControlService;
+        this.userService = userService;
     }
 
     @Transactional
@@ -115,6 +122,24 @@ public class ExamService {
         return toExamResponse(savedExam, dictionary.getName(), savedQuestions);
     }
 
+    @Transactional
+    public ExamResponse createExam(CreateExamRequest request, AppUser actor) {
+        userService.getUserEntity(request.getTargetUserId());
+        Dictionary dictionary = dictionaryService.findById(request.getDictionaryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + request.getDictionaryId()));
+        accessControlService.ensureCanViewDictionary(actor, dictionary);
+        accessControlService.ensureCanCreateExamForStudent(actor, request.getTargetUserId());
+
+        ExamResponse response = createExam(request);
+        Exam savedExam = examRepository.findById(response.getExamId())
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found: " + response.getExamId()));
+        savedExam.setCreatedByUserId(actor.getId());
+        savedExam.setTargetUserId(request.getTargetUserId());
+        savedExam.setAssignedAt(LocalDateTime.now());
+        examRepository.save(savedExam);
+        return getExam(savedExam.getId(), actor);
+    }
+
     @Transactional(readOnly = true)
     public ExamResponse getExam(Long examId) {
         Exam exam = examRepository.findById(examId)
@@ -126,15 +151,24 @@ public class ExamService {
     }
 
     @Transactional(readOnly = true)
-    public List<ExamHistoryItemDto> getExamHistory(Long dictionaryId) {
-        List<Exam> exams = dictionaryId == null
-                ? examRepository.findByStatusOrderBySubmittedAtDescCreatedAtDesc(ExamStatus.SUBMITTED)
-                : examRepository.findByDictionaryIdAndStatusOrderBySubmittedAtDescCreatedAtDesc(
-                        dictionaryId,
-                        ExamStatus.SUBMITTED
-                );
+    public ExamResponse getExam(Long examId, AppUser actor) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found: " + examId));
+        accessControlService.ensureCanViewExam(actor, exam);
+        return getExam(examId);
+    }
 
-        return exams.stream()
+    @Transactional(readOnly = true)
+    public List<ExamHistoryItemDto> getExamHistory(Long dictionaryId) {
+        return getExamHistorySource(dictionaryId).stream()
+                .map(this::toExamHistoryItem)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ExamHistoryItemDto> getExamHistory(Long dictionaryId, AppUser actor) {
+        return getExamHistorySource(dictionaryId).stream()
+                .filter(exam -> canViewExam(actor, exam))
                 .map(this::toExamHistoryItem)
                 .toList();
     }
@@ -151,6 +185,14 @@ public class ExamService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + exam.getDictionaryId()));
         List<ExamQuestion> questions = examQuestionRepository.findByExamIdOrderByQuestionOrderAsc(examId);
         return buildSubmitExamResponse(exam, dictionary.getName(), questions);
+    }
+
+    @Transactional(readOnly = true)
+    public SubmitExamResponse getExamResult(Long examId, AppUser actor) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found: " + examId));
+        accessControlService.ensureCanViewExam(actor, exam);
+        return getExamResult(examId);
     }
 
     @Transactional
@@ -218,6 +260,18 @@ public class ExamService {
         );
     }
 
+    @Transactional
+    public SubmitExamResponse submitExam(Long examId, SubmitExamRequest request, AppUser actor) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found: " + examId));
+        accessControlService.ensureCanSubmitExam(actor, exam);
+        if (exam.getStartedAt() == null) {
+            exam.setStartedAt(LocalDateTime.now());
+            examRepository.save(exam);
+        }
+        return submitExam(examId, request);
+    }
+
     private Map<Long, String> normalizeAnswers(List<ExamAnswerDto> answerDtos, List<ExamQuestion> questions) {
         Map<Long, String> answers = new LinkedHashMap<>();
         Set<Long> validQuestionIds = questions.stream()
@@ -280,6 +334,24 @@ public class ExamService {
                 exam.getCreatedAt(),
                 exam.getSubmittedAt()
         );
+    }
+
+    private List<Exam> getExamHistorySource(Long dictionaryId) {
+        return dictionaryId == null
+                ? examRepository.findByStatusOrderBySubmittedAtDescCreatedAtDesc(ExamStatus.SUBMITTED)
+                : examRepository.findByDictionaryIdAndStatusOrderBySubmittedAtDescCreatedAtDesc(
+                        dictionaryId,
+                        ExamStatus.SUBMITTED
+                );
+    }
+
+    private boolean canViewExam(AppUser actor, Exam exam) {
+        try {
+            accessControlService.ensureCanViewExam(actor, exam);
+            return true;
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return false;
+        }
     }
 
     private ExamQuestionDto toQuestionDto(ExamQuestion question) {
