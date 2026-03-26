@@ -23,4 +23,8 @@ public interface DictionaryRepository extends JpaRepository<Dictionary, Long> {
     @Modifying
     @Query("DELETE FROM Dictionary d WHERE d.creationType = :creationType")
     int deleteByCreationType(@Param("creationType") DictionaryCreationType creationType);
+
+    @Modifying
+    @Query("UPDATE Dictionary d SET d.wordCount = COALESCE(d.wordCount, 0) + :delta WHERE d.id = :dictionaryId")
+    int incrementWordCount(@Param("dictionaryId") Long dictionaryId, @Param("delta") int delta);
 }

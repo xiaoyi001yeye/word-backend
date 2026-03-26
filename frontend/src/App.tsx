@@ -36,16 +36,9 @@ function App() {
   const [showExamSetupModal, setShowExamSetupModal] = useState(false);
   const [showExamHistoryModal, setShowExamHistoryModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
-  const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
-  const [activeExam, setActiveExam] = useState<Exam | null>(null);
-  const [examResult, setExamResult] = useState<ExamSubmissionResult | null>(null);
-  const [examAnswers, setExamAnswers] = useState<Record<number, string>>({});
-  const [examLoading, setExamLoading] = useState(false);
-  const [examError, setExamError] = useState<string | null>(null);
-  const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
-  const [isCompact, setIsCompact] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('words');
-  const [showMobileDetail, setShowMobileDetail] = useState(false);
+  const [dictionaryForCsvImport] = useState<Dictionary | null>(null);
+  const [isImportingDictionaries, setIsImportingDictionaries] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const isLoadingRef = useRef(false);
   const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
   const prevWordPageRef = useRef<number>(1);
@@ -104,10 +97,30 @@ function App() {
     setShowAddWordListModal(true);
   }, []);
 
-  const handleImportCsv = useCallback((dict: Dictionary) => {
-    setDictionaryForCsvImport(dict);
-    setShowCsvImportModal(true);
-  }, []);
+  const handleImportDictionaries = useCallback(async () => {
+    if (isImportingDictionaries) {
+      return;
+    }
+    setIsImportingDictionaries(true);
+    setImportFeedback(null);
+    try {
+      const result = await dictionaryApi.importDictionaries();
+      await loadDictionaries();
+      setImportFeedback({
+        type: 'success',
+        message: `导入完成，本次新增 ${result.count} 本辞书。`,
+      });
+    } catch (error) {
+      console.error('Failed to import dictionaries:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setImportFeedback({
+        type: 'error',
+        message: `导入失败：${errorMessage}`,
+      });
+    } finally {
+      setIsImportingDictionaries(false);
+    }
+  }, [isImportingDictionaries, loadDictionaries]);
 
   const handleWordListAdded = useCallback(() => {
     if (dictionaryForAdd?.id === selectedDictionary?.id) {
@@ -561,9 +574,40 @@ function App() {
                   <span className="app__hero-stat-label">辞书总数</span>
                   <strong className="app__hero-stat-value">{dictionaries.length}</strong>
                 </div>
-                <div className="app__hero-stat">
-                  <span className="app__hero-stat-label">当前工作区</span>
-                  <strong className="app__hero-stat-value">{workspaceLabel}</strong>
+                <div className="sidebar__actions">
+                  <button
+                    className="import-dictionaries-btn"
+                    onClick={handleImportDictionaries}
+                    disabled={isImportingDictionaries}
+                    title="导入 books 目录下所有辞书"
+                  >
+                    {isImportingDictionaries ? (
+                      <>
+                        <span className="btn-spinner"></span>
+                        <span>导入中...</span>
+                      </>
+                    ) : (
+                      <span>导入books辞书</span>
+                    )}
+                  </button>
+                  <button
+                    className="add-dictionary-btn"
+                    onClick={() => setShowCreateModal(true)}
+                    title="创建新辞书"
+                  >
+                    <span>+</span>
+                    <span>添加辞书</span>
+                  </button>
+                </div>
+              </div>
+              {importFeedback && (
+                <div className={`sidebar__import-feedback sidebar__import-feedback--${importFeedback.type}`}>
+                  {importFeedback.message}
+                </div>
+              )}
+              {loading && dictionaries.length === 0 ? (
+                <div className="sidebar__loading">
+                  <span className="sidebar__spinner"></span>
                 </div>
                 <div className="app__hero-stat">
                   <span className="app__hero-stat-label">当前状态</span>

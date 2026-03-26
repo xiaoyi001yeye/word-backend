@@ -1,6 +1,7 @@
 package com.example.words.service;
 
 import com.example.words.dto.MetaWordEntryDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.opencsv.bean.CsvToBeanBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,8 @@ public class CsvImportService {
     public CsvImportService(DictionaryWordService dictionaryWordService) {
         this.dictionaryWordService = dictionaryWordService;
     }
+    
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 解析CSV文件并导入到指定词典
@@ -61,6 +64,61 @@ public class CsvImportService {
         } catch (Exception e) {
             log.error("CSV导入失败，词典ID: {}, 文件名: {}", dictionaryId, file.getOriginalFilename(), e);
             throw new RuntimeException("CSV导入失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 解析JSON数据并导入到指定词典
+     * 
+     * @param jsonData JSON字符串
+     * @param dictionaryId 词典ID
+     * @return 处理结果
+     */
+    public DictionaryWordService.WordListProcessResult processJsonImport(
+            String jsonData, Long dictionaryId) {
+        
+        log.info("开始处理JSON数据导入，词典ID: {}, 数据长度: {} 字符", 
+                dictionaryId, jsonData.length());
+        
+        try {
+            // 解析JSON数据
+            List<MetaWordEntryDto> wordEntries = parseJsonData(jsonData);
+            log.info("JSON数据解析完成，共 {} 条记录", wordEntries.size());
+            
+            // 验证数据
+            ValidationResult validation = validateCsvData(wordEntries);
+            if (!validation.isValid()) {
+                throw new IllegalArgumentException("JSON数据验证失败:\n" + 
+                    validation.getErrorMessageString());
+            }
+            
+            // 调用现有服务处理单词列表
+            DictionaryWordService.WordListProcessResult result = 
+                dictionaryWordService.processWordList(dictionaryId, wordEntries);
+            
+            log.info("JSON导入完成: 总计={}, 已存在={}, 新建={}, 添加={}, 失败={}",
+                    result.getTotal(), result.getExisted(), result.getCreated(), 
+                    result.getAdded(), result.getFailed());
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("JSON导入失败，词典ID: {}", dictionaryId, e);
+            throw new RuntimeException("JSON导入失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 解析JSON数据
+     */
+    private List<MetaWordEntryDto> parseJsonData(String jsonData) throws Exception {
+        try {
+            // 尝试解析为数组
+            return objectMapper.readValue(jsonData, 
+                objectMapper.getTypeFactory().constructCollectionType(List.class, MetaWordEntryDto.class));
+        } catch (Exception e) {
+            log.error("JSON解析失败: {}", e.getMessage());
+            throw new IllegalArgumentException("JSON格式无效，请确保是有效的单词对象数组");
         }
     }
     

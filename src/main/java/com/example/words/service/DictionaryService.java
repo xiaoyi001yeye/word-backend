@@ -15,7 +15,7 @@ import java.util.Optional;
 public class DictionaryService {
 
     private static final Logger log = LoggerFactory.getLogger(DictionaryService.class);
-    private static final String TRANSLATION_DIR = "/opt/translation";
+    private static final String TRANSLATION_DIR = "/app/books";
 
     private final DictionaryRepository dictionaryRepository;
 
@@ -87,6 +87,14 @@ public class DictionaryService {
             dictionary.setWordCount(wordCount);
             dictionaryRepository.save(dictionary);
         });
+    }
+
+    @Transactional
+    public void incrementWordCount(Long dictionaryId, int delta) {
+        if (delta <= 0) {
+            return;
+        }
+        dictionaryRepository.incrementWordCount(dictionaryId, delta);
     }
 
     @Transactional

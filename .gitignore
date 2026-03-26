@@ -4,3 +4,5 @@ logs/
 .idea/
 /target/
 .DS_Store
+/.vscode
+/maven-repo
