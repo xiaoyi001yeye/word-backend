@@ -13,6 +13,8 @@ import { ExamHistoryModal } from './components/ExamHistoryModal';
 import { ExamSessionModal } from './components/ExamSessionModal';
 import './App.css';
 
+type MobilePanel = 'library' | 'words';
+
 function App() {
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [selectedDictionary, setSelectedDictionary] = useState<Dictionary | null>(null);
@@ -41,6 +43,9 @@ function App() {
   const [examLoading, setExamLoading] = useState(false);
   const [examError, setExamError] = useState<string | null>(null);
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
+  const [isCompact, setIsCompact] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>('words');
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
   const isLoadingRef = useRef(false);
   const lastLoadedRef = useRef<{ dictId: number; page: number } | null>(null);
   const prevWordPageRef = useRef<number>(1);
@@ -64,6 +69,8 @@ function App() {
     setIsSearching(false);
     setSearchKeyword('');
     setWordPage(1);
+    setMobilePanel('words');
+    setShowMobileDetail(false);
   }, []);
 
   const handleDeleteDictionary = useCallback(async (id: number) => {
@@ -79,6 +86,7 @@ function App() {
         setIsSearching(false);
         setSearchKeyword('');
         setWordPage(1);
+        setShowMobileDetail(false);
       }
     } catch (error) {
       console.error('Failed to delete dictionary:', error);
@@ -117,15 +125,12 @@ function App() {
     }
   }, [dictionaryForCsvImport, selectedDictionary]);
 
-
-
   const performSearch = useCallback(async (keyword: string, page: number = 1, dictionaryId?: number) => {
     setLoading(true);
     try {
       const pageResult = await metaWordApi.search(keyword.trim(), dictionaryId, page - 1);
       setMetaWords(pageResult.content);
       setTotalWords(pageResult.totalElements);
-      
       setWordPage(page);
       prevWordPageRef.current = 0;
       lastLoadedRef.current = dictionaryId ? { dictId: dictionaryId, page } : null;
@@ -137,38 +142,62 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 900px)');
+    const updateCompactState = () => {
+      setIsCompact(mediaQuery.matches);
+    };
+
+    updateCompactState();
+    mediaQuery.addEventListener('change', updateCompactState);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateCompactState);
+    };
+  }, []);
+
+  useEffect(() => {
     if (dictionaries.length === 0) {
       loadDictionaries();
     }
   }, [dictionaries.length, loadDictionaries]);
 
   useEffect(() => {
-    if (isLoadingRef.current) return;
-    
-    console.log('[useEffect] wordPage:', wordPage, 'selectedDictionary:', selectedDictionary?.id, 'searchKeyword:', searchKeyword, 'isSearching:', isSearching);
-    
-    // Determine what to load based on current state
+    if (isLoadingRef.current) {
+      return;
+    }
+
     if (isSearching && searchKeyword.trim()) {
-      // Search mode: keyword search
       if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === -1) {
-        console.log('[useEffect] Skip search - already loaded');
         return;
       }
       prevWordPageRef.current = wordPage;
       lastLoadedRef.current = { dictId: -1, page: wordPage };
-      
+
       performSearch(searchKeyword, wordPage);
     } else if (selectedDictionary && !isSearching) {
-      // Dictionary browsing mode: load dictionary words
       if (prevWordPageRef.current === wordPage && lastLoadedRef.current?.dictId === selectedDictionary.id) {
-        console.log('[useEffect] Skip dictionary - already loaded');
         return;
       }
       prevWordPageRef.current = wordPage;
-      
+
       performSearch('', wordPage, selectedDictionary.id);
     }
   }, [wordPage, selectedDictionary, isSearching, searchKeyword, performSearch]);
+
+  useEffect(() => {
+    if (!isCompact) {
+      setShowMobileDetail(false);
+      return;
+    }
+
+    if (selectedWord) {
+      setShowMobileDetail(true);
+    }
+  }, [selectedWord, isCompact]);
 
   const handleSelectDictionary = useCallback((dict: Dictionary) => {
     setSelectedDictionary(dict);
@@ -176,35 +205,38 @@ function App() {
     setIsSearching(false);
     setSearchKeyword('');
     setWordPage(1);
-    // Don't set totalWords here - it will be set by performSearch
+    setMobilePanel('words');
+    setShowMobileDetail(false);
     lastLoadedRef.current = null;
-    // The useEffect will trigger performSearch with dictionaryId
   }, []);
-
-
 
   const handleSearchClear = useCallback(() => {
     setIsSearching(false);
     setSearchKeyword('');
     setWordPage(1);
+    setMobilePanel('words');
     prevWordPageRef.current = 0;
     lastLoadedRef.current = null;
   }, []);
 
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchKeyword(query);
-    // Clear dictionary selection when user starts typing (if query is not empty)
+    setMobilePanel('words');
     if (query.trim()) {
       setSelectedDictionary(null);
-      setIsSearching(true); // Set searching mode when user types
+      setSelectedWord(null);
+      setIsSearching(true);
     } else {
-      setIsSearching(false); // Clear searching mode when query is empty
+      setIsSearching(false);
     }
   }, []);
 
   const handleSelectWord = useCallback((word: MetaWord) => {
     setSelectedWord(word);
-  }, []);
+    if (isCompact) {
+      setShowMobileDetail(true);
+    }
+  }, [isCompact]);
 
   const handleOpenExamSetup = useCallback(() => {
     if (!selectedDictionary) {
@@ -317,7 +349,6 @@ function App() {
     .slice((dictPage - 1) * DICT_PAGE_SIZE, dictPage * DICT_PAGE_SIZE);
 
   const totalDictPages = Math.ceil(filteredDictionaries.length / DICT_PAGE_SIZE);
-
   const totalWordPages = Math.ceil(totalWords / WORD_PAGE_SIZE);
   const workspaceLabel = isSearching
     ? '全库搜索'
@@ -331,16 +362,199 @@ function App() {
     ? totalWords
     : selectedDictionary?.wordCount || totalWords;
 
+  const sidebarContent = (
+    <div className="sidebar__section">
+      <div className="sidebar__header">
+        <div className="sidebar__header-copy">
+          <p className="sidebar__eyebrow">Library</p>
+          <h2 className="sidebar__title">辞书书架</h2>
+          <p className="sidebar__summary">
+            {filteredDictionaries.length} / {dictionaries.length} 本可用辞书
+          </p>
+        </div>
+
+        <div className="sidebar__actions">
+          <button
+            className="add-dictionary-btn"
+            onClick={() => setShowCreateModal(true)}
+            title="创建新辞书"
+          >
+            <span>新建辞书</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="sidebar__toolbar">
+        <div className="sidebar__search">
+          <input
+            type="text"
+            className="sidebar__search-input"
+            placeholder="筛选辞书名称"
+            value={dictSearchQuery}
+            onChange={(e) => setDictSearchQuery(e.target.value)}
+          />
+          {dictSearchQuery && (
+            <button
+              className="sidebar__search-clear"
+              onClick={() => setDictSearchQuery('')}
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <p className="sidebar__hint">导入、创建或选择一本辞书，右侧会立即同步单词工作区。</p>
+      </div>
+
+      {loading && dictionaries.length === 0 ? (
+        <div className="sidebar__loading">
+          <span className="sidebar__spinner"></span>
+        </div>
+      ) : filteredDictionaries.length === 0 ? (
+        <div className="sidebar__empty">
+          <p>还没有匹配的辞书</p>
+        </div>
+      ) : (
+        <div className="sidebar__list">
+          {paginatedDictionaries.map((dict, index) => (
+            <div
+              key={dict.id}
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              <DictionaryCard
+                dictionary={dict}
+                isSelected={selectedDictionary?.id === dict.id}
+                onClick={() => handleSelectDictionary(dict)}
+                onDelete={() => handleDeleteDictionary(dict.id)}
+                onAddJson={() => handleAddWords(dict)}
+                onImportCsv={() => handleImportCsv(dict)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totalDictPages > 1 && (
+        <div className="sidebar__pagination">
+          <button
+            className="sidebar__page-btn"
+            disabled={dictPage === 1 || loading}
+            onClick={() => setDictPage(p => p - 1)}
+          >
+            ‹
+          </button>
+          <span className="sidebar__page-info">{dictPage} / {totalDictPages}</span>
+          <button
+            className="sidebar__page-btn"
+            disabled={dictPage === totalDictPages || loading}
+            onClick={() => setDictPage(p => p + 1)}
+          >
+            ›
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const listPanel = (
+    <div className="content__panel content__panel--list">
+      <div className="panel__header">
+        <div className="panel__header-main">
+          <div>
+            <p className="panel__eyebrow">{isSearching ? 'Search Results' : 'Word Shelf'}</p>
+            <h2 className="panel__title">
+              {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
+            </h2>
+          </div>
+          {activeWordCount > 0 && (
+            <span className="panel__count">{activeWordCount} 个词条</span>
+          )}
+        </div>
+        <div className="panel__header-actions">
+          {isCompact && selectedWord && (
+            <button
+              className="exam-history-btn"
+              onClick={() => setShowMobileDetail(true)}
+            >
+              查看详情
+            </button>
+          )}
+          {selectedDictionary && !isSearching && (
+            <>
+              <button className="exam-history-btn" onClick={handleOpenExamHistory}>
+                考试历史
+              </button>
+              <button className="exam-trigger-btn" onClick={handleOpenExamSetup}>
+                开始考试
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="panel__list-wrapper">
+        <WordList
+          words={metaWords}
+          selectedWord={selectedWord}
+          onSelectWord={handleSelectWord}
+          loading={loading && metaWords.length === 0}
+        />
+      </div>
+      {totalWordPages > 1 && (
+        <div className="content__pagination">
+          <button
+            className="content__page-btn"
+            disabled={wordPage === 1 || loading}
+            onClick={() => setWordPage(p => p - 1)}
+          >
+            ‹
+          </button>
+          <span className="content__page-info">{wordPage} / {totalWordPages}</span>
+          <button
+            className="content__page-btn"
+            disabled={wordPage === totalWordPages || loading}
+            onClick={() => setWordPage(p => p + 1)}
+          >
+            ›
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const detailPanel = (
+    <div className="content__panel content__panel--detail">
+      <div className="panel__header">
+        <div>
+          <p className="panel__eyebrow">Word Detail</p>
+          <h2 className="panel__title">单词详情</h2>
+        </div>
+        <span className="panel__count">
+          {selectedWord ? '已选词条' : '等待选择'}
+        </span>
+      </div>
+      <WordDetail word={selectedWord} />
+    </div>
+  );
+
   return (
     <div className="app">
       <header className="app__header">
         <div className="app__header-content">
+          <div className="app__masthead">
+            <div>
+              <p className="app__eyebrow">Word Atelier</p>
+              <h1 className="app__title">"Words are, of course, the most powerful drug used by mankind."</h1>
+            </div>
+            <div className="app__masthead-meta">
+              <span className="app__masthead-chip">{workspaceLabel}</span>
+              <span className="app__masthead-chip">{activeWordCount} 个词条</span>
+            </div>
+          </div>
+
           <div className="app__hero">
             <div className="app__hero-copy">
-              <p className="app__eyebrow">Vocabulary Studio</p>
-              <h1 className="app__title">把词汇库做成一块真正能学习、检索和练习的工作台</h1>
+              <p className="app__eyebrow">Workspace</p>
               <p className="app__subtitle">
-                在辞书、搜索、详情和考试之间自然切换，让每次查词都更专注，也更有沉浸感。
+                在手机上专注单条任务，在平板上维持双栏阅读，在桌面端继续保留完整学习台面。
               </p>
               <div className="app__hero-stats">
                 <div className="app__hero-stat">
@@ -352,8 +566,8 @@ function App() {
                   <strong className="app__hero-stat-value">{workspaceLabel}</strong>
                 </div>
                 <div className="app__hero-stat">
-                  <span className="app__hero-stat-label">词条规模</span>
-                  <strong className="app__hero-stat-value">{activeWordCount}</strong>
+                  <span className="app__hero-stat-label">当前状态</span>
+                  <strong className="app__hero-stat-value">{workspaceMeta}</strong>
                 </div>
               </div>
             </div>
@@ -373,191 +587,103 @@ function App() {
                   />
                 </div>
                 <p className="app__search-help">
-                  支持按关键词横跨全部单词检索，也可以切回左侧辞书做定向学习。
+                  搜索会自动切到词条工作区，选词后在手机端以抽屉展开详情，在更大屏幕里保持并排阅读。
                 </p>
               </div>
             </div>
           </div>
+
+          {isCompact && (
+            <div className="app__mobile-switcher">
+              <button
+                className={`app__mobile-switch ${mobilePanel === 'library' ? 'app__mobile-switch--active' : ''}`}
+                onClick={() => setMobilePanel('library')}
+              >
+                辞书
+              </button>
+              <button
+                className={`app__mobile-switch ${mobilePanel === 'words' ? 'app__mobile-switch--active' : ''}`}
+                onClick={() => setMobilePanel('words')}
+              >
+                词条
+              </button>
+              <button
+                className={`app__mobile-switch ${showMobileDetail ? 'app__mobile-switch--active' : ''}`}
+                onClick={() => selectedWord && setShowMobileDetail(true)}
+                disabled={!selectedWord}
+              >
+                详情
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className={`app__main ${sidebarCollapsed ? 'app__main--sidebar-collapsed' : ''}`}>
-        <aside className={`app__sidebar ${sidebarCollapsed ? 'app__sidebar--collapsed' : ''}`}>
-          <button 
-            className="sidebar__toggle"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? '展开词典列表' : '收起词典列表'}
-          >
-            {sidebarCollapsed ? '▶' : '◀'}
-          </button>
-          {!sidebarCollapsed && (
-            <div className="sidebar__section">
-              <div className="sidebar__header">
-                <div className="sidebar__header-copy">
-                  <p className="sidebar__eyebrow">Library</p>
-                  <h2 className="sidebar__title">辞书书架</h2>
-                  <p className="sidebar__summary">
-                    {filteredDictionaries.length} / {dictionaries.length} 本可用辞书
-                  </p>
-                </div>
+      {!isCompact ? (
+        <main className={`app__main ${sidebarCollapsed ? 'app__main--sidebar-collapsed' : ''}`}>
+          <aside className={`app__sidebar ${sidebarCollapsed ? 'app__sidebar--collapsed' : ''}`}>
+            <button
+              className="sidebar__toggle"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              title={sidebarCollapsed ? '展开词典列表' : '收起词典列表'}
+            >
+              {sidebarCollapsed ? '▶' : '◀'}
+            </button>
+            {!sidebarCollapsed && sidebarContent}
+          </aside>
 
-                <div className="sidebar__actions">
-                  <button
-                    className="add-dictionary-btn"
-                    onClick={() => setShowCreateModal(true)}
-                    title="创建新辞书"
-                  >
-                    <span>新建辞书</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="sidebar__toolbar">
-                <div className="sidebar__search">
-                  <input
-                    type="text"
-                    className="sidebar__search-input"
-                    placeholder="筛选辞书名称"
-                    value={dictSearchQuery}
-                    onChange={(e) => setDictSearchQuery(e.target.value)}
-                  />
-                  {dictSearchQuery && (
-                    <button
-                      className="sidebar__search-clear"
-                      onClick={() => setDictSearchQuery('')}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                <p className="sidebar__hint">导入、创建或选择一本辞书，右侧会立即同步单词工作区。</p>
-              </div>
-
-              {loading && dictionaries.length === 0 ? (
-                <div className="sidebar__loading">
-                  <span className="sidebar__spinner"></span>
-                </div>
-              ) : filteredDictionaries.length === 0 ? (
-                <div className="sidebar__empty">
-                  <p>还没有匹配的辞书</p>
-                </div>
-              ) : (
-                <div className="sidebar__list">
-                  {paginatedDictionaries.map((dict, index) => (
-                    <div
-                      key={dict.id}
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <DictionaryCard
-                        dictionary={dict}
-                        isSelected={selectedDictionary?.id === dict.id}
-                        onClick={() => handleSelectDictionary(dict)}
-                        onDelete={() => handleDeleteDictionary(dict.id)}
-                        onAddJson={() => handleAddWords(dict)}
-                        onImportCsv={() => handleImportCsv(dict)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {totalDictPages > 1 && (
-                <div className="sidebar__pagination">
-                  <button
-                    className="sidebar__page-btn"
-                    disabled={dictPage === 1 || loading}
-                    onClick={() => setDictPage(p => p - 1)}
-                  >
-                    ‹
-                  </button>
-                  <span className="sidebar__page-info">{dictPage} / {totalDictPages}</span>
-                  <button
-                    className="sidebar__page-btn"
-                    disabled={dictPage === totalDictPages || loading}
-                    onClick={() => setDictPage(p => p + 1)}
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
-            </div>
+          <section className="app__workspace">
+            {listPanel}
+            {detailPanel}
+          </section>
+        </main>
+      ) : (
+        <main className="app__main app__main--compact">
+          {mobilePanel === 'library' ? (
+            <section className="app__mobile-stage app__mobile-stage--library">
+              {sidebarContent}
+            </section>
+          ) : (
+            <section className="app__mobile-stage app__mobile-stage--words">
+              {listPanel}
+            </section>
           )}
-        </aside>
+        </main>
+      )}
 
-        <section className="app__content">
-          <div className="content__panel content__panel--list">
-            <div className="panel__header">
-              <div className="panel__header-main">
-                <div>
-                  <p className="panel__eyebrow">{isSearching ? 'Search Results' : 'Word Shelf'}</p>
-                  <h2 className="panel__title">
-                    {isSearching ? '搜索结果' : selectedDictionary?.name || '单词列表'}
-                  </h2>
-                </div>
-                {activeWordCount > 0 && (
-                  <span className="panel__count">{activeWordCount} 个词条</span>
-                )}
-              </div>
-              {selectedDictionary && !isSearching && (
-                <div className="panel__header-actions">
-                  <button className="exam-history-btn" onClick={handleOpenExamHistory}>
-                    考试历史
-                  </button>
-                  <button className="exam-trigger-btn" onClick={handleOpenExamSetup}>
-                    开始考试
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="panel__list-wrapper">
-              <WordList
-                words={metaWords}
-                selectedWord={selectedWord}
-                onSelectWord={handleSelectWord}
-                loading={loading && metaWords.length === 0}
-              />
-            </div>
-            {totalWordPages > 1 && (
-              <div className="content__pagination">
-                <button
-                  className="content__page-btn"
-                  disabled={wordPage === 1 || loading}
-                  onClick={() => setWordPage(p => p - 1)}
-                >
-                  ‹
-                </button>
-                <span className="content__page-info">{wordPage} / {totalWordPages}</span>
-                <button
-                  className="content__page-btn"
-                  disabled={wordPage === totalWordPages || loading}
-                  onClick={() => setWordPage(p => p + 1)}
-                >
-                  ›
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="content__panel content__panel--detail">
-            <div className="panel__header">
+      {isCompact && selectedWord && (
+        <div className={`detail-drawer ${showMobileDetail ? 'detail-drawer--open' : ''}`}>
+          <button
+            className={`detail-drawer__scrim ${showMobileDetail ? 'detail-drawer__scrim--open' : ''}`}
+            aria-label="关闭单词详情"
+            onClick={() => setShowMobileDetail(false)}
+          />
+          <aside className="detail-drawer__panel" aria-modal="true" role="dialog">
+            <div className="detail-drawer__header">
               <div>
-                <p className="panel__eyebrow">Word Detail</p>
-                <h2 className="panel__title">单词详情</h2>
+                <p className="panel__eyebrow">Focused Entry</p>
+                <h2 className="panel__title">{selectedWord.word}</h2>
               </div>
-              <span className="panel__count">
-                {selectedWord ? '已选词条' : '等待选择'}
-              </span>
+              <button
+                className="modal__close"
+                onClick={() => setShowMobileDetail(false)}
+              >
+                ×
+              </button>
             </div>
-            <WordDetail word={selectedWord} />
-          </div>
-        </section>
-      </main>
+            <div className="detail-drawer__body">
+              <WordDetail word={selectedWord} />
+            </div>
+          </aside>
+        </div>
+      )}
 
       <CreateDictionaryModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onDictionaryCreated={handleDictionaryCreated}
       />
-      
+
       {dictionaryForAdd && (
         <AddWordListModal
           isOpen={showAddWordListModal}
@@ -566,7 +692,7 @@ function App() {
           onSuccess={handleWordListAdded}
         />
       )}
-      
+
       {dictionaryForCsvImport && (
         <CsvImportModal
           isOpen={showCsvImportModal}

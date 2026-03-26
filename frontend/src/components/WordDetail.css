@@ -166,3 +166,23 @@
   font-size: 0.76rem;
   color: var(--color-text-muted);
 }
+
+@media (max-width: 720px) {
+  .word-detail {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .word-detail__hero,
+  .word-detail__section {
+    border-radius: 20px;
+  }
+
+  .word-detail__word {
+    font-size: clamp(2.25rem, 10vw, 3.1rem);
+  }
+
+  .word-detail__example {
+    padding-left: 0.8rem;
+  }
+}

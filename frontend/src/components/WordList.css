@@ -167,3 +167,25 @@
     transform: translateY(0);
   }
 }
+
+@media (max-width: 720px) {
+  .word-list__items {
+    padding: 0.75rem;
+  }
+
+  .word-item {
+    border-radius: 18px;
+  }
+
+  .word-item__text {
+    font-size: 1.35rem;
+  }
+
+  .word-item__top {
+    gap: 0.55rem;
+  }
+
+  .word-item__difficulty {
+    min-width: 3.2rem;
+  }
+}
