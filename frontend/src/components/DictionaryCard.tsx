@@ -6,10 +6,11 @@ interface DictionaryCardProps {
   isSelected: boolean;
   onClick: () => void;
   onDelete?: () => void;
-  onAdd?: () => void;
+  onAddJson?: () => void;
+  onImportCsv?: () => void;
 }
 
-export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAdd }: DictionaryCardProps) {
+export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAddJson, onImportCsv }: DictionaryCardProps) {
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -29,47 +30,69 @@ export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAd
     }
   };
 
-  const handleAddClick = (e: React.MouseEvent) => {
+  const handleAddJsonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onAdd) {
-      onAdd();
+    if (onAddJson) {
+      onAddJson();
     }
   };
+
+  const handleImportCsvClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onImportCsv) {
+      onImportCsv();
+    }
+  };
+
+  const sourceLabel = dictionary.creationType === 'USER_CREATED' ? '自建' : '导入';
 
   return (
     <div className={`dictionary-card ${isSelected ? 'selected' : ''}`} onClick={onClick}>
       <div className="dictionary-card__header">
-        <h3 className="dictionary-card__title">{dictionary.name}</h3>
+        <div className="dictionary-card__title-group">
+          <span className="dictionary-card__source">{sourceLabel}</span>
+          <h3 className="dictionary-card__title">{dictionary.name}</h3>
+        </div>
         <div className="dictionary-card__header-right">
-          {dictionary.creationType === 'USER_CREATED' && (
-            <div className="dictionary-card__actions">
-              {onAdd && (
-                <button
-                  className="dictionary-card__add-btn"
-                  onClick={handleAddClick}
-                  title="添加单词"
-                  aria-label="添加单词"
-                >
-                  ＋
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  className="dictionary-card__delete-btn"
-                  onClick={handleDeleteClick}
-                  title="删除辞书"
-                  aria-label="删除辞书"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          )}
-          {dictionary.category && (
-            <span className="dictionary-card__category">{dictionary.category}</span>
-          )}
+          <div className="dictionary-card__actions">
+            {onAddJson && (
+              <button
+                className="dictionary-card__add-btn"
+                onClick={handleAddJsonClick}
+                title="添加JSON单词"
+                aria-label="添加JSON单词"
+              >
+                📝
+              </button>
+            )}
+            {onImportCsv && (
+              <button
+                className="dictionary-card__import-btn"
+                onClick={handleImportCsvClick}
+                title="导入CSV文件"
+                aria-label="导入CSV文件"
+              >
+                📄
+              </button>
+            )}
+            {dictionary.creationType === 'USER_CREATED' && onDelete && (
+              <button
+                className="dictionary-card__delete-btn"
+                onClick={handleDeleteClick}
+                title="删除辞书"
+                aria-label="删除辞书"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       </div>
+      {dictionary.category && (
+        <div className="dictionary-card__meta">
+          <span className="dictionary-card__category">{dictionary.category}</span>
+        </div>
+      )}
       <div className="dictionary-card__stats">
         <div className="dictionary-card__stat">
           <span className="dictionary-card__stat-value">{dictionary.wordCount || 0}</span>

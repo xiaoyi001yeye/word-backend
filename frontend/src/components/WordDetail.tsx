@@ -10,28 +10,43 @@ export function WordDetail({ word }: WordDetailProps) {
     return (
       <div className="word-detail">
         <div className="word-detail__empty">
-          <span className="word-detail__empty-icon">📖</span>
-          <span className="word-detail__empty-text">选择一个单词查看详情</span>
+          <span className="word-detail__empty-icon">Word</span>
+          <span className="word-detail__empty-text">选择左侧任意单词后，这里会展示释义、翻译、例句和难度。</span>
         </div>
       </div>
     );
   }
 
+  const difficultyText = {
+    1: '简单',
+    2: '较简单',
+    3: '中等',
+    4: '较难',
+    5: '困难',
+  }[word.difficulty ?? 0];
+
   return (
     <div className="word-detail">
-      <div className="word-detail__header">
-        <h2 className="word-detail__word">{word.word}</h2>
-        {word.phonetic && <span className="word-detail__phonetic">{word.phonetic}</span>}
+      <div className="word-detail__hero">
+        <div className="word-detail__header">
+          <p className="word-detail__eyebrow">Word Entry</p>
+          <h2 className="word-detail__word">{word.word}</h2>
+          {word.phonetic && <span className="word-detail__phonetic">{word.phonetic}</span>}
+        </div>
+
+        <div className="word-detail__hero-meta">
+          {word.partOfSpeech && (
+            <span className="word-detail__pill">{word.partOfSpeech}</span>
+          )}
+          {word.difficulty && (
+            <span className="word-detail__pill word-detail__pill--accent">
+              难度 {word.difficulty} · {difficultyText}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="word-detail__content">
-        {word.partOfSpeech && (
-          <div className="word-detail__section">
-            <span className="word-detail__label">词性</span>
-            <span className="word-detail__part-of-speech">{word.partOfSpeech}</span>
-          </div>
-        )}
-
         {word.definition && (
           <div className="word-detail__section">
             <span className="word-detail__label">释义</span>
@@ -64,11 +79,7 @@ export function WordDetail({ word }: WordDetailProps) {
                 />
               ))}
               <span className="word-detail__difficulty-text">
-                {word.difficulty === 1 && '简单'}
-                {word.difficulty === 2 && '较简单'}
-                {word.difficulty === 3 && '中等'}
-                {word.difficulty === 4 && '较难'}
-                {word.difficulty === 5 && '困难'}
+                {difficultyText}
               </span>
             </div>
           </div>

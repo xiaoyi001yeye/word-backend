@@ -1,4 +1,14 @@
-import type { Dictionary, DictionaryWord, MetaWord, Page } from '../types';
+import type {
+  Dictionary,
+  DictionaryWord,
+  Exam,
+  ExamAnswer,
+  ExamHistoryItem,
+  ExamSubmissionResult,
+  MetaWord,
+  MetaWordEntry,
+  Page,
+} from '../types';
 
 export interface WordListProcessResult {
   message: string;
@@ -13,11 +23,16 @@ export interface WordListProcessResult {
 const API_BASE = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
+  const headers = new Headers(options?.headers ?? {});
+
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
     ...options,
+    headers,
   });
   if (!response.ok) {
     throw new Error(`API Error: ${response.status}`);
@@ -71,7 +86,7 @@ export const dictionaryWordApi = {
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
-  addWordList: (dictionaryId: number, words: any[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/list`, {
+  addWordList: (dictionaryId: number, words: MetaWordEntry[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/list`, {
     method: 'POST',
     body: JSON.stringify({ words }),
   }),
@@ -85,5 +100,22 @@ export const dictionaryWordApi = {
       'Content-Type': 'application/json',
     },
     body: jsonData,
+  }),
+};
+
+export const examApi = {
+  create: (dictionaryId: number, questionCount: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
+    method: 'POST',
+    body: JSON.stringify({ dictionaryId, questionCount }),
+  }),
+  getHistory: (dictionaryId?: number) => {
+    const query = dictionaryId ? `?dictionaryId=${dictionaryId}` : '';
+    return fetchJson<ExamHistoryItem[]>(`${API_BASE}/exams/history${query}`);
+  },
+  getById: (examId: number) => fetchJson<Exam>(`${API_BASE}/exams/${examId}`),
+  getResult: (examId: number) => fetchJson<ExamSubmissionResult>(`${API_BASE}/exams/${examId}/result`),
+  submit: (examId: number, answers: ExamAnswer[]) => fetchJson<ExamSubmissionResult>(`${API_BASE}/exams/${examId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
   }),
 };
