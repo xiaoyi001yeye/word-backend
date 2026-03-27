@@ -29,6 +29,7 @@ export function ClassManagementModal({
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [classroomStudents, setClassroomStudents] = useState<User[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -148,6 +149,19 @@ export function ClassManagementModal({
     };
   }, [isOpen, loadClassroomStudents, selectedClassroom]);
 
+  useEffect(() => {
+    if (!selectedClassroom) {
+      setEditForm(EMPTY_FORM);
+      return;
+    }
+
+    setEditForm({
+      name: selectedClassroom.name,
+      description: selectedClassroom.description ?? '',
+      teacherId: selectedClassroom.teacherId ? String(selectedClassroom.teacherId) : '',
+    });
+  }, [selectedClassroom]);
+
   const classroomStudentIds = useMemo(
     () => new Set(classroomStudents.map((student) => student.id)),
     [classroomStudents],
@@ -167,6 +181,16 @@ export function ClassManagementModal({
   ) => {
     const { name, value } = event.target;
     setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleEditInputChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = event.target;
+    setEditForm((previous) => ({
       ...previous,
       [name]: value,
     }));
@@ -218,6 +242,35 @@ export function ClassManagementModal({
       await onMembershipChanged?.();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '删除班级失败');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleUpdateClassroom = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedClassroom) {
+      return;
+    }
+
+    setSavingKey(`update-${selectedClassroom.id}`);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const updated = await classroomApi.update(selectedClassroom.id, {
+        name: editForm.name.trim(),
+        description: editForm.description.trim() || undefined,
+        teacherId: isAdmin && editForm.teacherId ? Number(editForm.teacherId) : undefined,
+      });
+      setSelectedClassroom(updated);
+      setSuccessMessage('班级信息已更新。');
+      const refreshedClassrooms = await loadClassrooms();
+      const syncedClassroom = refreshedClassrooms.find((classroom) => classroom.id === updated.id) ?? updated;
+      setSelectedClassroom(syncedClassroom);
+      await onMembershipChanged?.();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : '更新班级失败');
     } finally {
       setSavingKey(null);
     }
@@ -352,6 +405,82 @@ export function ClassManagementModal({
                 </button>
               </div>
             </form>
+
+            <div className="class-management__editor">
+              <div className="user-management__section-header">
+                <div>
+                  <p className="panel__eyebrow">Edit Classroom</p>
+                  <h3 className="user-management__section-title">编辑班级信息</h3>
+                </div>
+                <span className="panel__count">
+                  {selectedClassroom ? `ID ${selectedClassroom.id}` : '请选择班级'}
+                </span>
+              </div>
+
+              {!selectedClassroom ? (
+                <div className="exam-history__empty class-management__empty">
+                  <p>从右侧班级列表中选择一个班级后，可在这里修改班级信息。</p>
+                </div>
+              ) : (
+                <form onSubmit={handleUpdateClassroom} className="modal__form user-management__form">
+                  <div className="form__group">
+                    <label htmlFor="edit-classroom-name" className="form__label">班级名称</label>
+                    <input
+                      id="edit-classroom-name"
+                      name="name"
+                      className="form__input"
+                      value={editForm.name}
+                      onChange={handleEditInputChange}
+                      placeholder="例如 高一(3)班"
+                      disabled={savingKey === `update-${selectedClassroom.id}`}
+                    />
+                  </div>
+
+                  {isAdmin && (
+                    <div className="form__group">
+                      <label htmlFor="edit-classroom-teacher" className="form__label">负责教师</label>
+                      <select
+                        id="edit-classroom-teacher"
+                        name="teacherId"
+                        className="form__select"
+                        value={editForm.teacherId}
+                        onChange={handleEditInputChange}
+                        disabled={savingKey === `update-${selectedClassroom.id}`}
+                      >
+                        {teachers.map((teacher) => (
+                          <option key={teacher.id} value={teacher.id}>
+                            {teacher.displayName} ({teacher.username})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="form__group">
+                    <label htmlFor="edit-classroom-description" className="form__label">班级说明</label>
+                    <textarea
+                      id="edit-classroom-description"
+                      name="description"
+                      className="form__input class-management__textarea"
+                      value={editForm.description}
+                      onChange={handleEditInputChange}
+                      placeholder="可选：记录学段、用途或教学备注"
+                      disabled={savingKey === `update-${selectedClassroom.id}`}
+                    />
+                  </div>
+
+                  <div className="modal__footer user-management__footer">
+                    <button
+                      type="submit"
+                      className="btn btn--primary"
+                      disabled={savingKey === `update-${selectedClassroom.id}`}
+                    >
+                      {savingKey === `update-${selectedClassroom.id}` ? '保存中...' : '保存修改'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </section>
 
           <section className="class-management__section">

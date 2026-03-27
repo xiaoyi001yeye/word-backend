@@ -135,6 +135,27 @@
   color: var(--color-text-primary);
 }
 
+.app__title--quote {
+  max-width: 18ch;
+  font-size: clamp(2.2rem, 4vw, 4.2rem);
+  line-height: 1;
+}
+
+.app__quote-translation {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--color-text-secondary);
+}
+
+.app__quote-author {
+  margin: 0.65rem 0 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
 .app__subtitle {
   max-width: 48rem;
   margin: 0;
@@ -1205,6 +1226,14 @@ textarea.form__input {
   min-height: 8rem;
 }
 
+.class-management__editor {
+  border-top: 1px solid rgba(64, 53, 38, 0.08);
+}
+
+.class-management__empty {
+  padding: 1.2rem 1.45rem 1.45rem;
+}
+
 .class-management__list {
   display: flex;
   flex-direction: column;
@@ -1592,7 +1621,7 @@ textarea.form__input {
 }
 
 .auth-shell__title {
-  max-width: 11ch;
+  max-width: 14ch;
   margin: 0;
   font-size: clamp(3.2rem, 6vw, 5.8rem);
   line-height: 0.9;
@@ -1605,6 +1634,13 @@ textarea.form__input {
   margin: 1.4rem 0 0;
   font-size: 1rem;
   line-height: 1.85;
+  color: var(--color-text-secondary);
+}
+
+.auth-shell__quote-author {
+  margin: 0.9rem 0 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
   color: var(--color-text-secondary);
 }
 
@@ -1732,7 +1768,7 @@ textarea.form__input {
   }
 
   .auth-shell__title {
-    max-width: 13ch;
+    max-width: 16ch;
     font-size: clamp(2.7rem, 10vw, 4.5rem);
   }
 }

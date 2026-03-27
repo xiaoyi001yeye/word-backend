@@ -1,23 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import type { FamousQuote } from '../types';
+
+const INSIGHT_COPY = [
+  '管理员可创建账号并分配角色',
+  '教师可管理自己的词书与学生',
+  '学生只看到被分配的学习资源',
+];
 
 interface LoginScreenProps {
   loading: boolean;
   error: string | null;
+  quote: FamousQuote;
   onSubmit: (username: string, password: string) => Promise<void>;
 }
 
-export function LoginScreen({ loading, error, onSubmit }: LoginScreenProps) {
+export function LoginScreen({ loading, error, quote, onSubmit }: LoginScreenProps) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin123456');
-
-  const insightCopy = useMemo(
-    () => [
-      '管理员可创建账号并分配角色',
-      '教师可管理自己的词书与学生',
-      '学生只看到被分配的学习资源',
-    ],
-    [],
-  );
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -29,16 +28,15 @@ export function LoginScreen({ loading, error, onSubmit }: LoginScreenProps) {
       <section className="auth-shell__hero">
         <div className="auth-shell__hero-copy">
           <p className="app__eyebrow">Word Atelier Access</p>
-          <h1 className="auth-shell__title">让词书、角色与考试终于在同一套入口里协同起来。</h1>
-          <p className="auth-shell__subtitle">
-            登录后按角色进入同一个学习工作台。管理员治理资源，教师组织学习，学生只处理自己的任务。
-          </p>
+          <h1 className="auth-shell__title">"{quote.text}"</h1>
+          <p className="auth-shell__subtitle">{quote.translation}</p>
+          <p className="auth-shell__quote-author">- {quote.author}</p>
         </div>
 
         <div className="auth-shell__insights">
-          {insightCopy.map((item) => (
+          {INSIGHT_COPY.map((item, index) => (
             <div key={item} className="auth-shell__insight">
-              <span className="auth-shell__insight-index">0{insightCopy.indexOf(item) + 1}</span>
+              <span className="auth-shell__insight-index">0{index + 1}</span>
               <span>{item}</span>
             </div>
           ))}

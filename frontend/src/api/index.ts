@@ -6,6 +6,7 @@ import type {
   ExamAnswer,
   ExamHistoryItem,
   ExamSubmissionResult,
+  FamousQuote,
   LoginResponse,
   MetaWord,
   MetaWordEntry,
@@ -25,6 +26,7 @@ export interface WordListProcessResult {
 
 const API_BASE = '/api';
 const TOKEN_STORAGE_KEY = 'word_atelier_token';
+const LOGIN_QUOTE_STORAGE_KEY = 'word_atelier_login_quote';
 
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -44,10 +46,50 @@ export function clearStoredToken() {
   window.localStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+export function getStoredLoginQuote(): FamousQuote | null {
+  const raw = window.localStorage.getItem(LOGIN_QUOTE_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<FamousQuote>;
+    if (
+      typeof parsed.text === 'string'
+      && typeof parsed.translation === 'string'
+      && typeof parsed.author === 'string'
+    ) {
+      return {
+        text: parsed.text,
+        translation: parsed.translation,
+        author: parsed.author,
+      };
+    }
+  } catch {
+    // Ignore invalid cached quotes and clear them below.
+  }
+
+  window.localStorage.removeItem(LOGIN_QUOTE_STORAGE_KEY);
+  return null;
+}
+
+export function storeLoginQuote(quote: FamousQuote) {
+  window.localStorage.setItem(LOGIN_QUOTE_STORAGE_KEY, JSON.stringify(quote));
+}
+
+export function clearStoredLoginQuote() {
+  window.localStorage.removeItem(LOGIN_QUOTE_STORAGE_KEY);
+}
+
+interface FetchJsonOptions extends RequestInit {
+  skipUnauthorizedHandler?: boolean;
+}
+
+async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const headers = new Headers(options?.headers ?? {});
   const token = getStoredToken();
+  const { skipUnauthorizedHandler = false, ...requestOptions } = options ?? {};
 
   if (!isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -58,7 +100,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   const response = await fetch(url, {
-    ...options,
+    ...requestOptions,
+    credentials: requestOptions.credentials ?? 'same-origin',
     headers,
   });
   if (!response.ok) {
@@ -73,7 +116,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 
     if (response.status === 401) {
       clearStoredToken();
-      unauthorizedHandler?.();
+      if (!skipUnauthorizedHandler) {
+        unauthorizedHandler?.();
+      }
     }
 
     throw new Error(message);
@@ -90,6 +135,13 @@ export const authApi = {
   login: (username: string, password: string) => fetchJson<LoginResponse>(`${API_BASE}/auth/login`, {
     method: 'POST',
     body: JSON.stringify({ username, password }),
+  }),
+  getLoginQuote: () => fetchJson<FamousQuote>(`${API_BASE}/auth/quote`, {
+    skipUnauthorizedHandler: true,
+  }),
+  logout: () => fetchJson<void>(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    skipUnauthorizedHandler: true,
   }),
   me: () => fetchJson<User>(`${API_BASE}/auth/me`),
 };
@@ -151,6 +203,15 @@ export const metaWordApi = {
 export const dictionaryWordApi = {
   getByDictionary: (dictionaryId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`),
   getWordsByDictionary: (dictionaryId: number, page: number = 1, size: number = 10) => fetchJson<Page<MetaWord>>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}/words?page=${page}&size=${size}`),
+  getMetaWordSuggestions: (
+    dictionaryId: number,
+    keyword: string,
+    limit: number = 8,
+    signal?: AbortSignal,
+  ) => fetchJson<MetaWord[]>(
+    `${API_BASE}/dictionary-words/dictionary/${dictionaryId}/meta-word-suggestions?keyword=${encodeURIComponent(keyword)}&limit=${limit}`,
+    { signal },
+  ),
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
@@ -220,6 +281,14 @@ export const classroomApi = {
     teacherId?: number;
   }) => fetchJson<Classroom>(`${API_BASE}/classrooms`, {
     method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  update: (id: number, payload: {
+    name: string;
+    description?: string;
+    teacherId?: number;
+  }) => fetchJson<Classroom>(`${API_BASE}/classrooms/${id}`, {
+    method: 'PUT',
     body: JSON.stringify(payload),
   }),
   deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/classrooms/${id}`, {

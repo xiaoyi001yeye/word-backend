@@ -64,9 +64,16 @@ export interface User {
   lastLoginAt?: string | null;
 }
 
+export interface FamousQuote {
+  text: string;
+  translation: string;
+  author: string;
+}
+
 export interface LoginResponse {
   token: string;
   user: User;
+  quote: FamousQuote;
 }
 
 export interface DictionaryWord {

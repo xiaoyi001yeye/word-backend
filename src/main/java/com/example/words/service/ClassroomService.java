@@ -2,6 +2,7 @@ package com.example.words.service;
 
 import com.example.words.dto.ClassroomResponse;
 import com.example.words.dto.CreateClassroomRequest;
+import com.example.words.dto.UpdateClassroomRequest;
 import com.example.words.dto.UserResponse;
 import com.example.words.exception.BadRequestException;
 import com.example.words.exception.ResourceNotFoundException;
@@ -59,6 +60,18 @@ public class ClassroomService {
         classroom.setName(request.getName().trim());
         classroom.setDescription(trimToNull(request.getDescription()));
         classroom.setTeacherId(teacherId);
+
+        return toResponse(classroomRepository.save(classroom));
+    }
+
+    @Transactional
+    public ClassroomResponse updateClassroom(Long classroomId, UpdateClassroomRequest request, AppUser actor) {
+        Classroom classroom = getClassroomEntity(classroomId);
+        ensureCanManageClassroom(actor, classroom);
+
+        classroom.setName(request.getName().trim());
+        classroom.setDescription(trimToNull(request.getDescription()));
+        classroom.setTeacherId(resolveUpdatedTeacherId(request, classroom, actor));
 
         return toResponse(classroomRepository.save(classroom));
     }
@@ -155,6 +168,26 @@ public class ClassroomService {
 
         if (actor.getRole() == UserRole.TEACHER) {
             return actor.getId();
+        }
+
+        throw new AccessDeniedException("Only admin or teacher can manage classrooms");
+    }
+
+    private Long resolveUpdatedTeacherId(UpdateClassroomRequest request, Classroom classroom, AppUser actor) {
+        if (actor.getRole() == UserRole.ADMIN) {
+            Long teacherId = request.getTeacherId() != null ? request.getTeacherId() : classroom.getTeacherId();
+            AppUser teacher = userService.getUserEntity(teacherId);
+            if (teacher.getRole() != UserRole.TEACHER) {
+                throw new BadRequestException("User is not a teacher: " + teacherId);
+            }
+            return teacherId;
+        }
+
+        if (actor.getRole() == UserRole.TEACHER) {
+            if (request.getTeacherId() != null && !request.getTeacherId().equals(classroom.getTeacherId())) {
+                throw new AccessDeniedException("Only admin can reassign classroom teacher");
+            }
+            return classroom.getTeacherId();
         }
 
         throw new AccessDeniedException("Only admin or teacher can manage classrooms");

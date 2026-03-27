@@ -2,6 +2,7 @@ package com.example.words.service;
 
 import com.example.words.dto.LoginRequest;
 import com.example.words.dto.LoginResponse;
+import com.example.words.dto.QuoteResponse;
 import com.example.words.dto.UserResponse;
 import com.example.words.model.AppUser;
 import com.example.words.repository.AppUserRepository;
@@ -21,16 +22,19 @@ public class AuthService {
     private final AppUserRepository appUserRepository;
     private final JwtService jwtService;
     private final CurrentUserService currentUserService;
+    private final FamousQuoteService famousQuoteService;
 
     public AuthService(
             AuthenticationManager authenticationManager,
             AppUserRepository appUserRepository,
             JwtService jwtService,
-            CurrentUserService currentUserService) {
+            CurrentUserService currentUserService,
+            FamousQuoteService famousQuoteService) {
         this.authenticationManager = authenticationManager;
         this.appUserRepository = appUserRepository;
         this.jwtService = jwtService;
         this.currentUserService = currentUserService;
+        this.famousQuoteService = famousQuoteService;
     }
 
     @Transactional
@@ -48,12 +52,18 @@ public class AuthService {
 
         return new LoginResponse(
                 jwtService.generateToken(AuthenticatedUser.from(user)),
-                UserResponse.from(user)
+                UserResponse.from(user),
+                famousQuoteService.getRandomQuote()
         );
     }
 
     @Transactional(readOnly = true)
     public UserResponse me() {
         return UserResponse.from(currentUserService.getCurrentUser());
+    }
+
+    @Transactional(readOnly = true)
+    public QuoteResponse getLoginQuote() {
+        return famousQuoteService.getRandomQuote();
     }
 }

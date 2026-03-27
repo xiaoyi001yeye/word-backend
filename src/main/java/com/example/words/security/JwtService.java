@@ -47,6 +47,10 @@ public class JwtService {
                 && claims.getExpiration().after(new Date());
     }
 
+    public long getExpirationSeconds() {
+        return expirationHours * 3600;
+    }
+
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(signingKey)

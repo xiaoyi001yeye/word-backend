@@ -1,55 +1,60 @@
 package com.example.words.service;
 
-import com.example.words.model.DictionaryWord;
-import com.example.words.model.MetaWord;
-import com.example.words.model.Phonetic;
-import com.example.words.model.PartOfSpeech;
-import com.example.words.model.Definition;
-import com.example.words.model.ExampleSentence;
-import com.example.words.model.Inflection;
-import com.example.words.dto.MetaWordEntryDto;
-import com.example.words.dto.MetaWordEntryDtoV2;
-import com.example.words.dto.PhoneticDto;
-import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.dto.DefinitionDto;
 import com.example.words.dto.ExampleSentenceDto;
 import com.example.words.dto.InflectionDto;
+import com.example.words.dto.MetaWordEntryDto;
+import com.example.words.dto.MetaWordEntryDtoV2;
+import com.example.words.dto.MetaWordSuggestionDto;
+import com.example.words.dto.PartOfSpeechDto;
+import com.example.words.dto.PhoneticDto;
+import com.example.words.model.DictionaryWord;
+import com.example.words.model.Definition;
+import com.example.words.model.ExampleSentence;
+import com.example.words.model.Inflection;
+import com.example.words.model.MetaWord;
+import com.example.words.model.PartOfSpeech;
+import com.example.words.model.Phonetic;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.BatchPreparedStatementSetter;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 public class DictionaryWordService {
 
     private static final Logger log = LoggerFactory.getLogger(DictionaryWordService.class);
+    private static final int DEFAULT_SUGGESTION_LIMIT = 8;
+    private static final int MAX_SUGGESTION_LIMIT = 20;
 
     private final DictionaryWordRepository dictionaryWordRepository;
     private final MetaWordRepository metaWordRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final DictionaryService dictionaryService;
 
     public DictionaryWordService(
             DictionaryWordRepository dictionaryWordRepository,
             MetaWordRepository metaWordRepository,
-            JdbcTemplate jdbcTemplate) {
+            JdbcTemplate jdbcTemplate,
+            DictionaryService dictionaryService) {
         this.dictionaryWordRepository = dictionaryWordRepository;
         this.metaWordRepository = metaWordRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.dictionaryService = dictionaryService;
     }
 
     public List<DictionaryWord> findByDictionaryId(Long dictionaryId) {
@@ -63,6 +68,24 @@ public class DictionaryWordService {
     public Page<MetaWord> findMetaWordsByDictionaryId(Long dictionaryId, int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
         return metaWordRepository.findByDictionaryId(dictionaryId, pageable);
+    }
+
+    public List<MetaWordSuggestionDto> findSuggestionsForDictionary(Long dictionaryId, String keyword, Integer limit) {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        if (normalizedKeyword.isEmpty()) {
+            return List.of();
+        }
+
+        int normalizedLimit = DEFAULT_SUGGESTION_LIMIT;
+        if (limit != null) {
+            normalizedLimit = Math.max(1, Math.min(limit, MAX_SUGGESTION_LIMIT));
+        }
+
+        Pageable pageable = PageRequest.of(0, normalizedLimit);
+        return metaWordRepository.findSuggestionsByDictionaryIdAndKeyword(dictionaryId, normalizedKeyword, pageable)
+                .stream()
+                .map(this::toSuggestionDto)
+                .toList();
     }
 
     public Optional<DictionaryWord> findByDictionaryIdAndMetaWordId(Long dictionaryId, Long metaWordId) {
@@ -83,6 +106,7 @@ public class DictionaryWordService {
         if (!dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, metaWordId)) {
             DictionaryWord dictionaryWord = new DictionaryWord(dictionaryId, metaWordId);
             dictionaryWordRepository.save(dictionaryWord);
+            dictionaryService.incrementWordCount(dictionaryId, 1);
             log.debug("Saved dictionary-word relation: dictionary={}, word={}", dictionaryId, metaWordId);
         }
     }
@@ -90,6 +114,7 @@ public class DictionaryWordService {
     @Transactional
     public void deleteByDictionaryId(Long dictionaryId) {
         dictionaryWordRepository.deleteByDictionaryId(dictionaryId);
+        dictionaryService.updateWordCount(dictionaryId, 0);
     }
 
     @Transactional
@@ -98,11 +123,10 @@ public class DictionaryWordService {
     }
 
     @Transactional
-    public void saveAllBatch(Long dictionaryId, List<Long> metaWordIds) {
-        List<DictionaryWord> associations = metaWordIds.stream()
-                .map(metaWordId -> new DictionaryWord(dictionaryId, metaWordId))
-                .toList();
-        dictionaryWordRepository.saveAll(associations);
+    public int saveAllBatch(Long dictionaryId, List<Long> metaWordIds) {
+        int insertedCount = saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
+        dictionaryService.incrementWordCount(dictionaryId, insertedCount);
+        return insertedCount;
     }
 
     @Transactional
@@ -204,6 +228,7 @@ public class DictionaryWordService {
             
             if (!newAssociations.isEmpty()) {
                 dictionaryWordRepository.saveAll(newAssociations);
+                dictionaryService.incrementWordCount(dictionaryId, newAssociations.size());
                 log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
             }
         }
@@ -395,6 +420,7 @@ public class DictionaryWordService {
             
             if (!newAssociations.isEmpty()) {
                 dictionaryWordRepository.saveAll(newAssociations);
+                dictionaryService.incrementWordCount(dictionaryId, newAssociations.size());
                 log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
             }
         }
@@ -423,5 +449,18 @@ public class DictionaryWordService {
         public int getCreated() { return created; }
         public int getAdded() { return added; }
         public int getFailed() { return failed; }
+    }
+
+    private MetaWordSuggestionDto toSuggestionDto(MetaWord metaWord) {
+        return new MetaWordSuggestionDto(
+                metaWord.getId(),
+                metaWord.getWord(),
+                metaWord.getPhonetic(),
+                metaWord.getDefinition(),
+                metaWord.getPartOfSpeech(),
+                metaWord.getExampleSentence(),
+                metaWord.getTranslation(),
+                metaWord.getDifficulty()
+        );
     }
 }

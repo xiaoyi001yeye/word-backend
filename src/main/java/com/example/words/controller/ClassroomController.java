@@ -2,6 +2,7 @@ package com.example.words.controller;
 
 import com.example.words.dto.ClassroomResponse;
 import com.example.words.dto.CreateClassroomRequest;
+import com.example.words.dto.UpdateClassroomRequest;
 import com.example.words.dto.UserResponse;
 import com.example.words.service.ClassroomService;
 import com.example.words.service.CurrentUserService;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,6 +42,14 @@ public class ClassroomController {
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<ClassroomResponse> createClassroom(@Valid @RequestBody CreateClassroomRequest request) {
         return ResponseEntity.ok(classroomService.createClassroom(request, currentUserService.getCurrentUser()));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<ClassroomResponse> updateClassroom(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateClassroomRequest request) {
+        return ResponseEntity.ok(classroomService.updateClassroom(id, request, currentUserService.getCurrentUser()));
     }
 
     @DeleteMapping("/{id}")

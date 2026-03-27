@@ -1,0 +1,10 @@
+.git
+.idea
+.opencode
+.DS_Store
+target
+logs
+books
+frontend/node_modules
+frontend/dist
+meta-word-restructuring

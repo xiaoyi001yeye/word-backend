@@ -59,8 +59,8 @@ export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAd
               <button
                 className="dictionary-card__add-btn"
                 onClick={handleAddJsonClick}
-                title="添加JSON单词"
-                aria-label="添加JSON单词"
+                title="手动录词"
+                aria-label="手动录词"
               >
                 📝
               </button>
@@ -69,8 +69,8 @@ export function DictionaryCard({ dictionary, isSelected, onClick, onDelete, onAd
               <button
                 className="dictionary-card__import-btn"
                 onClick={handleImportCsvClick}
-                title="导入CSV文件"
-                aria-label="导入CSV文件"
+                title="批量导入"
+                aria-label="批量导入"
               >
                 📄
               </button>

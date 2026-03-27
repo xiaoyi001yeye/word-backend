@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   authApi,
   classroomApi,
+  clearStoredLoginQuote,
   clearStoredToken,
   dictionaryApi,
   dictionaryWordApi,
   examApi,
+  getStoredLoginQuote,
   metaWordApi,
   setUnauthorizedHandler,
+  storeLoginQuote,
   storeToken,
   studentApi,
   teacherApi,
@@ -19,6 +22,7 @@ import type {
   Exam,
   ExamHistoryItem,
   ExamSubmissionResult,
+  FamousQuote,
   MetaWord,
   User,
 } from './types';
@@ -40,11 +44,18 @@ import './App.css';
 
 type MobilePanel = 'library' | 'words';
 
+const FALLBACK_LOGIN_QUOTE: FamousQuote = {
+  text: 'Learning never exhausts the mind.',
+  translation: '学习从不会使头脑疲惫。',
+  author: 'Leonardo da Vinci',
+};
+
 function App() {
   const [authChecking, setAuthChecking] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loginQuote, setLoginQuote] = useState<FamousQuote | null>(() => getStoredLoginQuote());
 
   const [dictionaries, setDictionaries] = useState<Dictionary[]>([]);
   const [availableStudents, setAvailableStudents] = useState<User[]>([]);
@@ -60,6 +71,7 @@ function App() {
   const [dictPage, setDictPage] = useState(1);
   const [wordPage, setWordPage] = useState(1);
   const [totalWords, setTotalWords] = useState(0);
+  const [wordRefreshKey, setWordRefreshKey] = useState(0);
   const [isCompact, setIsCompact] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('library');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
@@ -108,6 +120,7 @@ function App() {
     setDictPage(1);
     setWordPage(1);
     setTotalWords(0);
+    setWordRefreshKey(0);
     setSidebarCollapsed(false);
     setMobilePanel('library');
     setShowMobileDetail(false);
@@ -131,23 +144,30 @@ function App() {
     setExamResult(null);
   }, []);
 
-  const handleSignOut = useCallback(() => {
+  const performLocalSignOut = useCallback(() => {
+    clearStoredLoginQuote();
     clearStoredToken();
+    setLoginQuote(null);
     setCurrentUser(null);
     setAuthError(null);
     resetWorkspace();
   }, [resetWorkspace]);
 
+  const handleSignOut = useCallback(() => {
+    performLocalSignOut();
+    void authApi.logout().catch(() => undefined);
+  }, [performLocalSignOut]);
+
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      handleSignOut();
+      performLocalSignOut();
       setAuthError('登录状态已失效，请重新登录。');
     });
 
     return () => {
       setUnauthorizedHandler(null);
     };
-  }, [handleSignOut]);
+  }, [performLocalSignOut]);
 
   useEffect(() => {
     let mounted = true;
@@ -161,7 +181,9 @@ function App() {
         }
       } catch {
         if (mounted) {
+          clearStoredLoginQuote();
           clearStoredToken();
+          setLoginQuote(null);
           setCurrentUser(null);
         }
       } finally {
@@ -177,6 +199,34 @@ function App() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (authChecking || currentUser) {
+      return undefined;
+    }
+
+    let mounted = true;
+
+    const loadLoginQuote = async () => {
+      try {
+        const quote = await authApi.getLoginQuote();
+        if (mounted) {
+          storeLoginQuote(quote);
+          setLoginQuote(quote);
+        }
+      } catch {
+        if (mounted) {
+          setLoginQuote((current) => current ?? FALLBACK_LOGIN_QUOTE);
+        }
+      }
+    };
+
+    void loadLoginQuote();
+
+    return () => {
+      mounted = false;
+    };
+  }, [authChecking, currentUser]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -320,7 +370,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [currentUser, isSearching, searchKeyword, selectedDictionary, wordPage]);
+  }, [currentUser, isSearching, searchKeyword, selectedDictionary, wordPage, wordRefreshKey]);
 
   useEffect(() => {
     if (!isCompact) {
@@ -356,6 +406,7 @@ function App() {
       : '输入关键词开始搜索'
     : selectedDictionary?.category || '选择一本辞书开始浏览';
   const activeWordCount = isSearching ? totalWords : selectedDictionary?.wordCount || totalWords;
+  const displayedQuote = loginQuote ?? FALLBACK_LOGIN_QUOTE;
 
   const canManageDictionary = useCallback((dictionary: Dictionary) => {
     if (!currentUser) {
@@ -370,12 +421,16 @@ function App() {
     return false;
   }, [currentUser, isAdmin, isTeacher]);
 
+  const canManageSelectedDictionary = selectedDictionary ? canManageDictionary(selectedDictionary) : false;
+
   const handleLogin = useCallback(async (username: string, password: string) => {
     setAuthLoading(true);
     setAuthError(null);
     try {
       const response = await authApi.login(username, password);
       storeToken(response.token);
+      storeLoginQuote(response.quote);
+      setLoginQuote(response.quote);
       setCurrentUser(response.user);
       resetWorkspace();
     } catch (error) {
@@ -607,7 +662,14 @@ function App() {
   }
 
   if (!currentUser) {
-    return <LoginScreen loading={authLoading} error={authError} onSubmit={handleLogin} />;
+    return (
+      <LoginScreen
+        loading={authLoading}
+        error={authError}
+        quote={displayedQuote}
+        onSubmit={handleLogin}
+      />
+    );
   }
 
   const sidebarContent = (
@@ -736,6 +798,28 @@ function App() {
           )}
           {selectedDictionary && (
             <>
+              {canManageSelectedDictionary && (
+                <>
+                  <button
+                    className="exam-history-btn"
+                    onClick={() => {
+                      setDictionaryForAdd(selectedDictionary);
+                      setShowAddWordListModal(true);
+                    }}
+                  >
+                    手动录词
+                  </button>
+                  <button
+                    className="exam-history-btn"
+                    onClick={() => {
+                      setDictionaryForCsvImport(selectedDictionary);
+                      setShowCsvImportModal(true);
+                    }}
+                  >
+                    批量导入
+                  </button>
+                </>
+              )}
               {canManageWorkspace && (
                 <button className="exam-history-btn" onClick={handleOpenAssignDictionary}>
                   分配班级/学生
@@ -805,7 +889,9 @@ function App() {
           <div className="app__masthead">
             <div>
               <p className="app__eyebrow">Word Atelier</p>
-              <h1 className="app__title">Roles, dictionaries, and exams now meet inside one learning workspace.</h1>
+              <h1 className="app__title app__title--quote">"{displayedQuote.text}"</h1>
+              <p className="app__quote-translation">{displayedQuote.translation}</p>
+              <p className="app__quote-author">- {displayedQuote.author}</p>
             </div>
             <div className="app__masthead-meta">
               <span className="app__masthead-chip">{workspaceLabel}</span>
@@ -976,6 +1062,7 @@ function App() {
           onSuccess={() => {
             loadDictionaries();
             setWordPage(1);
+            setWordRefreshKey((previousValue) => previousValue + 1);
           }}
         />
       )}
@@ -992,6 +1079,7 @@ function App() {
           onSuccess={() => {
             loadDictionaries();
             setWordPage(1);
+            setWordRefreshKey((previousValue) => previousValue + 1);
           }}
         />
       )}

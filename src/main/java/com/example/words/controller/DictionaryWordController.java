@@ -2,10 +2,13 @@ package com.example.words.controller;
 
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
+import com.example.words.dto.MetaWordSuggestionDto;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
+import com.example.words.model.DictionaryWord;
+import com.example.words.model.MetaWord;
 import com.example.words.service.CsvImportService;
 import com.example.words.service.AccessControlService;
 import com.example.words.service.CurrentUserService;
@@ -16,8 +19,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
-import com.example.words.model.DictionaryWord;
-import com.example.words.model.MetaWord;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -87,17 +88,27 @@ public class DictionaryWordController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/dictionary/{dictionaryId}/meta-word-suggestions")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public List<MetaWordSuggestionDto> getMetaWordSuggestions(
+            @PathVariable Long dictionaryId,
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "8") Integer limit) {
+        ensureCanManageDictionary(dictionaryId);
+        return dictionaryWordService.findSuggestionsForDictionary(dictionaryId, keyword, limit);
+    }
+
     @PostMapping("/{dictionaryId}/batch")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<Map<String, Object>> addWordsToDictionary(
             @PathVariable Long dictionaryId,
             @RequestBody AddWordsToDictionaryRequest request) {
         ensureCanManageDictionary(dictionaryId);
-        dictionaryWordService.saveAllBatch(dictionaryId, request.getMetaWordIds());
+        int addedCount = dictionaryWordService.saveAllBatch(dictionaryId, request.getMetaWordIds());
         return ResponseEntity.ok(Map.of(
                 "message", "Words added to dictionary successfully",
                 "dictionaryId", dictionaryId,
-                "wordCount", request.getMetaWordIds().size()
+                "wordCount", addedCount
         ));
     }
 
