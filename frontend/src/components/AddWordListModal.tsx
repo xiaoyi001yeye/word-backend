@@ -914,16 +914,16 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
               </div>
             </div>
           )}
-        </form>
 
-        <div className="modal__footer">
-          <button type="button" className="btn btn--secondary" onClick={handleClose} disabled={loading}>
-            关闭
-          </button>
-          <button type="submit" className="btn btn--primary" disabled={loading || !canSubmit}>
-            {loading ? '处理中...' : submitLabel}
-          </button>
-        </div>
+          <div className="modal__footer">
+            <button type="button" className="btn btn--secondary" onClick={handleClose} disabled={loading}>
+              关闭
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={loading || !canSubmit}>
+              {loading ? '处理中...' : submitLabel}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
