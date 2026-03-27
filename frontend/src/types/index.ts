@@ -29,8 +29,51 @@ export interface Dictionary {
   category?: string;
   wordCount?: number;
   creationType?: 'USER_CREATED' | 'IMPORTED';
+  createdBy?: number;
+  ownerUserId?: number;
+  scopeType?: 'SYSTEM' | 'TEACHER' | 'PERSONAL';
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface Classroom {
+  id: number;
+  name: string;
+  description?: string | null;
+  teacherId: number;
+  teacherName?: string | null;
+  studentCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
+
+export type UserStatus = 'ACTIVE' | 'DISABLED' | 'LOCKED';
+
+export interface User {
+  id: number;
+  username: string;
+  displayName: string;
+  email?: string | null;
+  phone?: string | null;
+  role: UserRole;
+  status: UserStatus;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  lastLoginAt?: string | null;
+}
+
+export interface FamousQuote {
+  text: string;
+  translation: string;
+  author: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+  quote: FamousQuote;
 }
 
 export interface DictionaryWord {

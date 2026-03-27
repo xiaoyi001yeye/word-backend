@@ -1,13 +1,17 @@
 import type {
+  Classroom,
   Dictionary,
   DictionaryWord,
   Exam,
   ExamAnswer,
   ExamHistoryItem,
   ExamSubmissionResult,
+  FamousQuote,
+  LoginResponse,
   MetaWord,
   MetaWordEntry,
   Page,
+  User,
 } from '../types';
 
 export interface WordListProcessResult {
@@ -21,24 +25,126 @@ export interface WordListProcessResult {
 }
 
 const API_BASE = '/api';
+const TOKEN_STORAGE_KEY = 'word_atelier_token';
+const LOGIN_QUOTE_STORAGE_KEY = 'word_atelier_login_quote';
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+export function getStoredToken() {
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+export function storeToken(token: string) {
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredToken() {
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getStoredLoginQuote(): FamousQuote | null {
+  const raw = window.localStorage.getItem(LOGIN_QUOTE_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<FamousQuote>;
+    if (
+      typeof parsed.text === 'string'
+      && typeof parsed.translation === 'string'
+      && typeof parsed.author === 'string'
+    ) {
+      return {
+        text: parsed.text,
+        translation: parsed.translation,
+        author: parsed.author,
+      };
+    }
+  } catch {
+    // Ignore invalid cached quotes and clear them below.
+  }
+
+  window.localStorage.removeItem(LOGIN_QUOTE_STORAGE_KEY);
+  return null;
+}
+
+export function storeLoginQuote(quote: FamousQuote) {
+  window.localStorage.setItem(LOGIN_QUOTE_STORAGE_KEY, JSON.stringify(quote));
+}
+
+export function clearStoredLoginQuote() {
+  window.localStorage.removeItem(LOGIN_QUOTE_STORAGE_KEY);
+}
+
+interface FetchJsonOptions extends RequestInit {
+  skipUnauthorizedHandler?: boolean;
+}
+
+async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const headers = new Headers(options?.headers ?? {});
+  const token = getStoredToken();
+  const { skipUnauthorizedHandler = false, ...requestOptions } = options ?? {};
 
   if (!isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   const response = await fetch(url, {
-    ...options,
+    ...requestOptions,
+    credentials: requestOptions.credentials ?? 'same-origin',
     headers,
   });
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    let message = `API Error: ${response.status}`;
+
+    try {
+      const errorBody = await response.json();
+      message = errorBody.message || errorBody.error || message;
+    } catch {
+      // Ignore non-JSON error bodies.
+    }
+
+    if (response.status === 401) {
+      clearStoredToken();
+      if (!skipUnauthorizedHandler) {
+        unauthorizedHandler?.();
+      }
+    }
+
+    throw new Error(message);
   }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return response.json();
 }
+
+export const authApi = {
+  login: (username: string, password: string) => fetchJson<LoginResponse>(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  }),
+  getLoginQuote: () => fetchJson<FamousQuote>(`${API_BASE}/auth/quote`, {
+    skipUnauthorizedHandler: true,
+  }),
+  logout: () => fetchJson<void>(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    skipUnauthorizedHandler: true,
+  }),
+  me: () => fetchJson<User>(`${API_BASE}/auth/me`),
+};
 
 export const dictionaryApi = {
   getAll: () => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries`),
@@ -52,6 +158,20 @@ export const dictionaryApi = {
   deleteAll: () => fetch(`${API_BASE}/dictionaries`, { method: 'DELETE' }),
   deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/dictionaries/${id}`, { method: 'DELETE' }),
   deleteUserCreated: () => fetchJson<{ message: string; deletedCount: number }>(`${API_BASE}/dictionaries/user-created`, { method: 'DELETE' }),
+  assignStudents: (id: number, studentIds: number[]) => fetchJson<{ message: string; dictionaryId: number; assignedCount: number }>(
+    `${API_BASE}/dictionaries/${id}/assign/students`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ studentIds }),
+    },
+  ),
+  assignClassrooms: (id: number, classroomIds: number[]) => fetchJson<{ message: string; dictionaryId: number; assignedCount: number }>(
+    `${API_BASE}/dictionaries/${id}/assign/classrooms`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ classroomIds }),
+    },
+  ),
 };
 
 export const metaWordApi = {
@@ -83,6 +203,15 @@ export const metaWordApi = {
 export const dictionaryWordApi = {
   getByDictionary: (dictionaryId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`),
   getWordsByDictionary: (dictionaryId: number, page: number = 1, size: number = 10) => fetchJson<Page<MetaWord>>(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}/words?page=${page}&size=${size}`),
+  getMetaWordSuggestions: (
+    dictionaryId: number,
+    keyword: string,
+    limit: number = 8,
+    signal?: AbortSignal,
+  ) => fetchJson<MetaWord[]>(
+    `${API_BASE}/dictionary-words/dictionary/${dictionaryId}/meta-word-suggestions?keyword=${encodeURIComponent(keyword)}&limit=${limit}`,
+    { signal },
+  ),
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
@@ -104,9 +233,9 @@ export const dictionaryWordApi = {
 };
 
 export const examApi = {
-  create: (dictionaryId: number, questionCount: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
+  create: (dictionaryId: number, questionCount: number, targetUserId: number) => fetchJson<Exam>(`${API_BASE}/exams`, {
     method: 'POST',
-    body: JSON.stringify({ dictionaryId, questionCount }),
+    body: JSON.stringify({ dictionaryId, questionCount, targetUserId }),
   }),
   getHistory: (dictionaryId?: number) => {
     const query = dictionaryId ? `?dictionaryId=${dictionaryId}` : '';
@@ -118,4 +247,73 @@ export const examApi = {
     method: 'POST',
     body: JSON.stringify({ answers }),
   }),
+};
+
+export const userApi = {
+  getAll: () => fetchJson<User[]>(`${API_BASE}/users`),
+  getStudents: () => fetchJson<User[]>(`${API_BASE}/users/students`),
+  create: (payload: {
+    username: string;
+    password: string;
+    displayName: string;
+    email?: string;
+    phone?: string;
+    role: User['role'];
+  }) => fetchJson<User>(`${API_BASE}/users`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  updateRole: (id: number, role: User['role']) => fetchJson<User>(`${API_BASE}/users/${id}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  }),
+  updateStatus: (id: number, status: User['status']) => fetchJson<User>(`${API_BASE}/users/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  }),
+};
+
+export const classroomApi = {
+  getAll: () => fetchJson<Classroom[]>(`${API_BASE}/classrooms`),
+  create: (payload: {
+    name: string;
+    description?: string;
+    teacherId?: number;
+  }) => fetchJson<Classroom>(`${API_BASE}/classrooms`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  update: (id: number, payload: {
+    name: string;
+    description?: string;
+    teacherId?: number;
+  }) => fetchJson<Classroom>(`${API_BASE}/classrooms/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
+  deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/classrooms/${id}`, {
+    method: 'DELETE',
+  }),
+  getStudents: (id: number) => fetchJson<User[]>(`${API_BASE}/classrooms/${id}/students`),
+  addStudent: (id: number, studentId: number) => fetchJson<void>(`${API_BASE}/classrooms/${id}/students/${studentId}`, {
+    method: 'POST',
+  }),
+  removeStudent: (id: number, studentId: number) => fetchJson<void>(`${API_BASE}/classrooms/${id}/students/${studentId}`, {
+    method: 'DELETE',
+  }),
+};
+
+export const teacherApi = {
+  getMyStudents: () => fetchJson<User[]>(`${API_BASE}/teachers/me/students`),
+  getStudents: (teacherId: number) => fetchJson<User[]>(`${API_BASE}/teachers/${teacherId}/students`),
+  assignStudent: (teacherId: number, studentId: number) => fetchJson<void>(`${API_BASE}/teachers/${teacherId}/students/${studentId}`, {
+    method: 'POST',
+  }),
+  removeStudent: (teacherId: number, studentId: number) => fetchJson<void>(`${API_BASE}/teachers/${teacherId}/students/${studentId}`, {
+    method: 'DELETE',
+  }),
+};
+
+export const studentApi = {
+  getMyDictionaries: () => fetchJson<Dictionary[]>(`${API_BASE}/students/me/dictionaries`),
 };

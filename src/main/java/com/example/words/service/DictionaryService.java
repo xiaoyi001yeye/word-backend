@@ -2,7 +2,11 @@ package com.example.words.service;
 
 import com.example.words.model.Dictionary;
 import com.example.words.model.DictionaryCreationType;
+import com.example.words.model.ResourceScopeType;
+import com.example.words.model.AppUser;
+import com.example.words.model.UserRole;
 import com.example.words.repository.DictionaryRepository;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,17 +22,64 @@ public class DictionaryService {
     private static final String TRANSLATION_DIR = "/app/books";
 
     private final DictionaryRepository dictionaryRepository;
+    private final DictionaryAssignmentService dictionaryAssignmentService;
+    private final AccessControlService accessControlService;
 
-    public DictionaryService(DictionaryRepository dictionaryRepository) {
+    public DictionaryService(
+            DictionaryRepository dictionaryRepository,
+            DictionaryAssignmentService dictionaryAssignmentService,
+            AccessControlService accessControlService) {
         this.dictionaryRepository = dictionaryRepository;
+        this.dictionaryAssignmentService = dictionaryAssignmentService;
+        this.accessControlService = accessControlService;
     }
 
     public List<Dictionary> findAll() {
         return dictionaryRepository.findAll();
     }
 
+    public List<Dictionary> findVisibleDictionaries(AppUser actor) {
+        List<Dictionary> dictionaries = dictionaryRepository.findAll();
+        if (actor.getRole() == UserRole.ADMIN) {
+            return dictionaries;
+        }
+
+        if (actor.getRole() == UserRole.TEACHER) {
+            return dictionaries.stream()
+                    .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
+                            || actor.getId().equals(dictionary.getOwnerUserId())
+                            || actor.getId().equals(dictionary.getCreatedBy()))
+                    .toList();
+        }
+
+        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId());
+        return dictionaries.stream()
+                .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
+                        || assignedDictionaryIds.contains(dictionary.getId()))
+                .toList();
+    }
+
+    public List<Dictionary> findAssignedDictionariesForStudent(Long studentId) {
+        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId);
+        return dictionaryRepository.findAll().stream()
+                .filter(dictionary -> assignedDictionaryIds.contains(dictionary.getId()))
+                .toList();
+    }
+
     public Optional<Dictionary> findById(Long id) {
         return dictionaryRepository.findById(id);
+    }
+
+    public Optional<Dictionary> findByIdVisibleToUser(Long id, AppUser actor) {
+        return dictionaryRepository.findById(id)
+                .filter(dictionary -> {
+                    try {
+                        accessControlService.ensureCanViewDictionary(actor, dictionary);
+                        return true;
+                    } catch (org.springframework.security.access.AccessDeniedException ex) {
+                        return false;
+                    }
+                });
     }
 
     public Optional<Dictionary> findByName(String name) {
@@ -39,8 +90,24 @@ public class DictionaryService {
         return dictionaryRepository.findByCategory(category);
     }
 
+    public List<Dictionary> findByCategoryVisibleToUser(String category, AppUser actor) {
+        return findVisibleDictionaries(actor).stream()
+                .filter(dictionary -> category.equals(dictionary.getCategory()))
+                .toList();
+    }
+
     @Transactional
     public Dictionary save(Dictionary dictionary) {
+        return dictionaryRepository.save(dictionary);
+    }
+
+    @Transactional
+    public Dictionary createDictionary(Dictionary dictionary, AppUser actor) {
+        dictionary.setId(null);
+        dictionary.setCreationType(DictionaryCreationType.USER_CREATED);
+        dictionary.setCreatedBy(actor.getId());
+        dictionary.setOwnerUserId(actor.getId());
+        dictionary.setScopeType(actor.getRole() == UserRole.ADMIN ? ResourceScopeType.SYSTEM : ResourceScopeType.TEACHER);
         return dictionaryRepository.save(dictionary);
     }
 
@@ -121,6 +188,18 @@ public class DictionaryService {
                         log.warn("Cannot delete imported dictionary: {} (ID: {})", dictionary.getName(), id);
                         return false;
                     }
+                })
+                .orElse(false);
+    }
+
+    @Transactional
+    public boolean deleteById(Long id, AppUser actor) {
+        return dictionaryRepository.findById(id)
+                .map(dictionary -> {
+                    accessControlService.ensureCanManageDictionary(actor, dictionary);
+                    dictionaryRepository.delete(dictionary);
+                    log.info("Deleted dictionary: {} (ID: {}) by user {}", dictionary.getName(), id, actor.getId());
+                    return true;
                 })
                 .orElse(false);
     }

@@ -5,6 +5,7 @@ import com.example.words.service.MetaWordService;
 import com.example.words.dto.MetaWordSearchRequest;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -59,12 +60,14 @@ public class MetaWordController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MetaWord> create(@RequestBody MetaWord metaWord) {
         MetaWord saved = metaWordService.save(metaWord);
         return ResponseEntity.ok(saved);
     }
     
     @PostMapping("/v2")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MetaWord> createV2(@RequestBody MetaWordEntryDtoV2 metaWordDto) {
         // Convert DTO to entity and save
         MetaWord metaWord = new MetaWord(
@@ -89,12 +92,14 @@ public class MetaWordController {
     }
 
     @DeleteMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteAll() {
         metaWordService.deleteAll();
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/import")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> importFromBooks() {
         int count = metaWordService.importFromBooksDirectory();
         return ResponseEntity.ok(Map.of(

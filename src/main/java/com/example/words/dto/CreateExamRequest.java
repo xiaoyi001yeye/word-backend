@@ -17,4 +17,7 @@ public class CreateExamRequest {
     @NotNull(message = "questionCount is required")
     @Min(value = 1, message = "questionCount must be greater than 0")
     private Integer questionCount;
+
+    @NotNull(message = "targetUserId is required")
+    private Long targetUserId;
 }

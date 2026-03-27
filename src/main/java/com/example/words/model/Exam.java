@@ -44,9 +44,21 @@ public class Exam {
     @Column(name = "score")
     private Integer score;
 
+    @Column(name = "created_by_user_id")
+    private Long createdByUserId;
+
+    @Column(name = "target_user_id")
+    private Long targetUserId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private ExamStatus status = ExamStatus.GENERATED;
+
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
+
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
 
     @CreatedDate
     @Column(name = "created_at", updatable = false)

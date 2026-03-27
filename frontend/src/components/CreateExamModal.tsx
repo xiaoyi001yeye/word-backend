@@ -1,24 +1,27 @@
 import { useEffect, useState } from 'react';
-import type { Dictionary } from '../types';
+import type { Dictionary, User } from '../types';
 
 interface CreateExamModalProps {
   isOpen: boolean;
   dictionary: Dictionary | null;
+  availableStudents: User[];
   loading: boolean;
   error: string | null;
   onClose: () => void;
-  onStart: (questionCount: number) => Promise<void>;
+  onStart: (questionCount: number, targetUserId: number) => Promise<void>;
 }
 
 export function CreateExamModal({
   isOpen,
   dictionary,
+  availableStudents,
   loading,
   error,
   onClose,
   onStart,
 }: CreateExamModalProps) {
   const [questionCount, setQuestionCount] = useState(10);
+  const [targetUserId, setTargetUserId] = useState<number | ''>('');
 
   useEffect(() => {
     if (!dictionary) {
@@ -28,13 +31,24 @@ export function CreateExamModal({
     setQuestionCount(suggestedCount);
   }, [dictionary]);
 
+  useEffect(() => {
+    if (availableStudents.length === 0) {
+      setTargetUserId('');
+      return;
+    }
+    setTargetUserId(availableStudents[0].id);
+  }, [availableStudents]);
+
   if (!isOpen || !dictionary) {
     return null;
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    await onStart(questionCount);
+    if (targetUserId === '') {
+      return;
+    }
+    await onStart(questionCount, targetUserId);
   };
 
   return (
@@ -71,13 +85,40 @@ export function CreateExamModal({
             />
           </div>
 
+          <div className="form__group">
+            <label htmlFor="targetUserId" className="form__label">
+              指定学生
+            </label>
+            <select
+              id="targetUserId"
+              className="form__select"
+              value={targetUserId}
+              onChange={(event) => setTargetUserId(Number(event.target.value))}
+              disabled={loading || availableStudents.length === 0}
+            >
+              {availableStudents.length === 0 ? (
+                <option value="">暂无可用学生</option>
+              ) : (
+                availableStudents.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.displayName} ({student.username})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
           {error && <div className="form__error">{error}</div>}
 
           <div className="modal__footer">
             <button type="button" className="btn btn--secondary" onClick={onClose} disabled={loading}>
               取消
             </button>
-            <button type="submit" className="btn btn--primary" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={loading || availableStudents.length === 0 || targetUserId === ''}
+            >
               {loading ? '正在出题...' : '开始考试'}
             </button>
           </div>

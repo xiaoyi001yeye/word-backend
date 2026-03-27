@@ -30,6 +30,26 @@ public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
 
     Page<MetaWord> findByWordStartingWith(String prefix, Pageable pageable);
 
+    @Query("""
+            SELECT m
+            FROM MetaWord m
+            WHERE LOWER(m.word) LIKE CONCAT(LOWER(:keyword), '%')
+              AND NOT EXISTS (
+                SELECT dw.id
+                FROM DictionaryWord dw
+                WHERE dw.dictionaryId = :dictionaryId
+                  AND dw.metaWordId = m.id
+              )
+            ORDER BY
+              CASE WHEN LOWER(m.word) = LOWER(:keyword) THEN 0 ELSE 1 END,
+              LENGTH(m.word),
+              LOWER(m.word)
+            """)
+    List<MetaWord> findSuggestionsByDictionaryIdAndKeyword(
+            @Param("dictionaryId") Long dictionaryId,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
     @Query(value = "SELECT m.* FROM meta_words m WHERE m.id IN (SELECT dw.meta_word_id FROM dictionary_words dw WHERE dw.dictionary_id = :dictionaryId) AND m.word LIKE CONCAT(:keyword, '%')",
            countQuery = "SELECT COUNT(*) FROM meta_words m WHERE m.id IN (SELECT dw.meta_word_id FROM dictionary_words dw WHERE dw.dictionary_id = :dictionaryId) AND m.word LIKE CONCAT(:keyword, '%')",
            nativeQuery = true)
