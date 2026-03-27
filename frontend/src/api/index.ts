@@ -1,5 +1,6 @@
 import type {
   Classroom,
+  CreateStudyPlanPayload,
   Dictionary,
   DictionaryWord,
   Exam,
@@ -11,6 +12,14 @@ import type {
   MetaWord,
   MetaWordEntry,
   Page,
+  RecordStudyPayload,
+  StudentAttentionDailyStat,
+  StudentStudyPlanSummary,
+  StudyPlan,
+  StudyPlanOverview,
+  StudyPlanStudentAttention,
+  StudyPlanStudentSummary,
+  StudyTask,
   User,
 } from '../types';
 
@@ -316,4 +325,38 @@ export const teacherApi = {
 
 export const studentApi = {
   getMyDictionaries: () => fetchJson<Dictionary[]>(`${API_BASE}/students/me/dictionaries`),
+};
+
+export const studyPlanApi = {
+  create: (payload: CreateStudyPlanPayload) => fetchJson<StudyPlan>(`${API_BASE}/study-plans`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  list: () => fetchJson<StudyPlan[]>(`${API_BASE}/study-plans`),
+  getById: (id: number) => fetchJson<StudyPlan>(`${API_BASE}/study-plans/${id}`),
+  publish: (id: number) => fetchJson<StudyPlan>(`${API_BASE}/study-plans/${id}/publish`, {
+    method: 'POST',
+  }),
+  getOverview: (id: number) => fetchJson<StudyPlanOverview>(`${API_BASE}/study-plans/${id}/overview`),
+  getStudents: (id: number) => fetchJson<StudyPlanStudentSummary[]>(`${API_BASE}/study-plans/${id}/students`),
+  getStudentAttention: (id: number, studentId: number) => fetchJson<StudyPlanStudentAttention>(
+    `${API_BASE}/study-plans/${id}/students/${studentId}/attention`,
+  ),
+};
+
+export const studentStudyPlanApi = {
+  listMine: () => fetchJson<StudentStudyPlanSummary[]>(`${API_BASE}/students/me/study-plans`),
+  getTodayTask: (studentStudyPlanId: number) => fetchJson<StudyTask>(
+    `${API_BASE}/students/me/study-plans/${studentStudyPlanId}/today`,
+  ),
+  record: (studentStudyPlanId: number, payload: RecordStudyPayload) => fetchJson<StudyTask>(
+    `${API_BASE}/students/me/study-plans/${studentStudyPlanId}/records`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  ),
+  getAttention: (studentStudyPlanId: number) => fetchJson<StudentAttentionDailyStat[]>(
+    `${API_BASE}/students/me/study-plans/${studentStudyPlanId}/attention`,
+  ),
 };

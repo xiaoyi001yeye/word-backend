@@ -13,6 +13,8 @@ public interface DictionaryWordRepository extends JpaRepository<DictionaryWord, 
 
     List<DictionaryWord> findByDictionaryId(Long dictionaryId);
 
+    List<DictionaryWord> findByDictionaryIdOrderByIdAsc(Long dictionaryId);
+
     List<DictionaryWord> findByMetaWordId(Long metaWordId);
 
     Optional<DictionaryWord> findByDictionaryIdAndMetaWordId(Long dictionaryId, Long metaWordId);
