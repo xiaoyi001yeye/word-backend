@@ -159,3 +159,173 @@ export interface ExamHistoryItem {
   createdAt?: string;
   submittedAt?: string;
 }
+
+export type ReviewMode = 'EBBINGHAUS' | 'FIXED_INTERVAL' | 'CUSTOM';
+
+export type StudyPlanStatus = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
+
+export type StudentStudyPlanStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'DROPPED';
+
+export type StudyDayTaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED';
+
+export type StudyTaskType = 'OVERDUE_REVIEW' | 'TODAY_REVIEW' | 'NEW_LEARN';
+
+export type StudyActionType = 'LEARN' | 'REVIEW';
+
+export type StudyRecordResult = 'CORRECT' | 'INCORRECT' | 'SKIPPED';
+
+export type AttentionState = 'FOCUSED' | 'MIXED' | 'IDLE';
+
+export interface CreateStudyPlanPayload {
+  name: string;
+  description?: string;
+  dictionaryId: number;
+  classroomIds: number[];
+  startDate: string;
+  endDate?: string;
+  timezone: string;
+  dailyNewCount: number;
+  dailyReviewLimit: number;
+  reviewMode: ReviewMode;
+  reviewIntervals: number[];
+  completionThreshold: number;
+  dailyDeadlineTime: string;
+  attentionTrackingEnabled: boolean;
+  minFocusSecondsPerWord: number;
+  maxFocusSecondsPerWord: number;
+  longStayWarningSeconds: number;
+  idleTimeoutSeconds: number;
+}
+
+export interface StudyPlan {
+  id: number;
+  name: string;
+  description?: string | null;
+  teacherId: number;
+  dictionaryId: number;
+  dictionaryName: string;
+  classroomIds: number[];
+  startDate: string;
+  endDate?: string | null;
+  timezone: string;
+  dailyNewCount: number;
+  dailyReviewLimit: number;
+  reviewMode: ReviewMode;
+  reviewIntervals: number[];
+  completionThreshold: number;
+  dailyDeadlineTime: string;
+  attentionTrackingEnabled: boolean;
+  minFocusSecondsPerWord: number;
+  maxFocusSecondsPerWord: number;
+  longStayWarningSeconds: number;
+  idleTimeoutSeconds: number;
+  status: StudyPlanStatus;
+  studentCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface StudyPlanOverview {
+  studyPlanId: number;
+  studyPlanName: string;
+  status: StudyPlanStatus;
+  taskDate: string;
+  totalStudents: number;
+  completedStudents: number;
+  notStartedStudents: number;
+  inProgressStudents: number;
+  missedStudents: number;
+  averageCompletionRate: number;
+  averageAttentionScore: number;
+}
+
+export interface StudentAttentionDailyStat {
+  taskDate: string;
+  wordsVisited: number;
+  wordsCompleted: number;
+  totalFocusSeconds: number;
+  avgFocusSecondsPerWord: number;
+  medianFocusSecondsPerWord: number;
+  maxFocusSecondsPerWord: number;
+  longStayWordCount: number;
+  idleInterruptCount: number;
+  attentionScore: number;
+}
+
+export interface StudyPlanStudentSummary {
+  studentId: number;
+  studentName: string;
+  studentStudyPlanId: number;
+  status: StudentStudyPlanStatus;
+  taskDate: string;
+  todayStatus: StudyDayTaskStatus;
+  completedCount: number;
+  totalTaskCount: number;
+  completionRate: number;
+  totalFocusSeconds: number;
+  avgFocusSecondsPerWord: number;
+  attentionScore: number;
+  currentStreak: number;
+  lastStudyAt?: string | null;
+}
+
+export interface StudyPlanStudentAttention {
+  studentId: number;
+  studentName: string;
+  planId: number;
+  dailyStats: StudentAttentionDailyStat[];
+}
+
+export interface StudentStudyPlanSummary {
+  studentStudyPlanId: number;
+  studyPlanId: number;
+  planName: string;
+  dictionaryId: number;
+  dictionaryName: string;
+  status: StudentStudyPlanStatus;
+  overallProgress: number;
+  currentStreak: number;
+  lastStudyAt?: string | null;
+  taskDate: string;
+  todayStatus: StudyDayTaskStatus;
+  totalTaskCount: number;
+  completedCount: number;
+  completionRate: number;
+  avgFocusSeconds: number;
+  attentionScore: number;
+}
+
+export interface StudyTaskItem {
+  metaWordId: number;
+  word?: string | null;
+  translation?: string | null;
+  phonetic?: string | null;
+  taskType: StudyTaskType;
+  phase: number;
+}
+
+export interface StudyTask {
+  studentStudyPlanId: number;
+  taskDate: string;
+  status: StudyDayTaskStatus;
+  overdueCount: number;
+  reviewCount: number;
+  newCount: number;
+  completedCount: number;
+  totalFocusSeconds: number;
+  completionRate: number;
+  avgFocusSecondsPerWord: number;
+  attentionScore: number;
+  queue: StudyTaskItem[];
+}
+
+export interface RecordStudyPayload {
+  metaWordId: number;
+  actionType: StudyActionType;
+  result: StudyRecordResult;
+  durationSeconds: number;
+  focusSeconds: number;
+  idleSeconds: number;
+  interactionCount: number;
+  attentionState: AttentionState;
+}

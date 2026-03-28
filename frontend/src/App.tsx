@@ -37,6 +37,8 @@ import { ExamHistoryModal } from './components/ExamHistoryModal';
 import { ExamSessionModal } from './components/ExamSessionModal';
 import { LoginScreen } from './components/LoginScreen';
 import { SearchBox } from './components/SearchBox';
+import { StudentStudyPlanModal } from './components/StudentStudyPlanModal';
+import { StudyPlanManagementModal } from './components/StudyPlanManagementModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { WordDetail } from './components/WordDetail';
 import { WordList } from './components/WordList';
@@ -84,6 +86,7 @@ function App() {
   const [showUserManagementModal, setShowUserManagementModal] = useState(false);
   const [showClassManagementModal, setShowClassManagementModal] = useState(false);
   const [showAssignDictionaryModal, setShowAssignDictionaryModal] = useState(false);
+  const [showStudyPlanModal, setShowStudyPlanModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
   const [dictionaryForAssignment, setDictionaryForAssignment] = useState<Dictionary | null>(null);
@@ -132,6 +135,7 @@ function App() {
     setShowUserManagementModal(false);
     setShowClassManagementModal(false);
     setShowAssignDictionaryModal(false);
+    setShowStudyPlanModal(false);
     setDictionaryForAdd(null);
     setDictionaryForCsvImport(null);
     setDictionaryForAssignment(null);
@@ -904,6 +908,12 @@ function App() {
                   班级管理
                 </button>
               )}
+              <button
+                className="exam-history-btn"
+                onClick={() => setShowStudyPlanModal(true)}
+              >
+                学习计划
+              </button>
               {isAdmin && (
                 <button
                   className="exam-history-btn"
@@ -1156,6 +1166,20 @@ function App() {
           setDictionaryForAssignment(null);
         }}
       />
+
+      {canManageWorkspace ? (
+        <StudyPlanManagementModal
+          isOpen={showStudyPlanModal}
+          dictionaries={dictionaries}
+          classrooms={availableClassrooms}
+          onClose={() => setShowStudyPlanModal(false)}
+        />
+      ) : (
+        <StudentStudyPlanModal
+          isOpen={showStudyPlanModal}
+          onClose={() => setShowStudyPlanModal(false)}
+        />
+      )}
     </div>
   );
 }
