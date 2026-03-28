@@ -34,11 +34,11 @@ export function AppShell(props: AppShellProps) {
     const navigation = () => {
         const items: NavItem[] = [
             { href: "/", label: "总览", icon: LayoutDashboard, roles: ["ADMIN", "TEACHER"] },
-            { href: "/users", label: "用户与师生", icon: Users, roles: ["ADMIN", "TEACHER"] },
+            { href: "/users", label: "用户管理", icon: Users, roles: ["ADMIN", "TEACHER"] },
             { href: "/classrooms", label: "班级管理", icon: School, roles: ["ADMIN", "TEACHER"] },
             { href: "/dictionaries", label: "词书资源", icon: BookCopy, roles: ["ADMIN", "TEACHER"] },
             { href: "/study-plans", label: "学习计划", icon: CalendarRange, roles: ["ADMIN", "TEACHER"] },
-            { href: "/imports", label: "导入中心", icon: DatabaseZap, roles: ["ADMIN"] },
+            { href: "/imports", label: "辞书导入", icon: DatabaseZap, roles: ["ADMIN"] },
         ];
 
         return items.filter((item) => auth.user() && item.roles.includes(auth.user()!.role));

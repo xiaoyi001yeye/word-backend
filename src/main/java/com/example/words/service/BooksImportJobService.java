@@ -66,6 +66,10 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -166,25 +170,18 @@ public class BooksImportJobService {
                 BooksImportJobStatus.READY_TO_PUBLISH,
                 BooksImportJobStatus.FAILED
         ), "Batch cannot start auto-merge in current status");
-        updateJob(batchId, job -> {
-            job.setStatus(BooksImportJobStatus.AUTO_MERGING);
-            job.setErrorMessage(null);
-            job.setCurrentFile(null);
-        });
-        booksImportTaskExecutor.execute(() -> runAutoMerge(batchId));
+        scheduleAutoMerge(batchId, true);
         return getJob(batchId);
     }
 
     public BooksImportJobResponse startPublish(String batchId) {
         BooksImportJob batch = getJobEntity(batchId);
-        ensureStatus(batch, List.of(BooksImportJobStatus.READY_TO_PUBLISH), "Batch is not ready to publish");
-        updateJob(batchId, job -> {
-            job.setStatus(BooksImportJobStatus.PUBLISHING);
-            job.setPublishStartedAt(LocalDateTime.now());
-            job.setPublishFinishedAt(null);
-            job.setErrorMessage(null);
-        });
-        booksImportTaskExecutor.execute(() -> runPublish(batchId));
+        ensureStatus(
+                batch,
+                List.of(BooksImportJobStatus.WAITING_REVIEW, BooksImportJobStatus.READY_TO_PUBLISH),
+                "Batch is not ready to publish"
+        );
+        schedulePublish(batchId, true);
         return getJob(batchId);
     }
 
@@ -244,6 +241,42 @@ public class BooksImportJobService {
                 importBatchFileRowMapper(),
                 batchId
         );
+    }
+
+    public Page<BooksImportBatchFileResponse> getFilesPage(String batchId, int page, int size) {
+        assertBatchExists(batchId);
+        Pageable pageable = buildPageable(page, size);
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM import_batch_files WHERE batch_id = ?",
+                Long.class,
+                batchId
+        );
+        List<BooksImportBatchFileResponse> content = jdbcTemplate.query(
+                """
+                        SELECT id,
+                               batch_id,
+                               file_name,
+                               dictionary_name,
+                               status,
+                               row_count,
+                               success_rows,
+                               failed_rows,
+                               duration_ms,
+                               error_message,
+                               created_at,
+                               updated_at
+                        FROM import_batch_files
+                        WHERE batch_id = ?
+                        ORDER BY updated_at DESC, id DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                importBatchFileRowMapper(),
+                batchId,
+                pageable.getPageSize(),
+                pageable.getOffset()
+        );
+        return new PageImpl<>(content, pageable, total == null ? 0 : total);
     }
 
     public List<BooksImportConflictResponse> getConflicts(String batchId, ImportConflictType type, Boolean resolved) {
@@ -487,6 +520,9 @@ public class BooksImportJobService {
                     }
                 }
             });
+            if (finalStagedRows > 0) {
+                scheduleAutoMerge(batchId, false);
+            }
         } catch (Exception ex) {
             log.error("Books import staging failed: {}", batchId, ex);
             markFailed(batchId, ex);
@@ -558,6 +594,11 @@ public class BooksImportJobService {
             }
 
             refreshBatchCountersAndStatus(batchId, true);
+            BooksImportJob latestJob = getJobEntity(batchId);
+            if (latestJob.getStatus() == BooksImportJobStatus.READY_TO_PUBLISH
+                    || latestJob.getStatus() == BooksImportJobStatus.WAITING_REVIEW) {
+                schedulePublish(batchId, false);
+            }
         } catch (Exception ex) {
             log.error("Books import auto-merge failed: {}", batchId, ex);
             markFailed(batchId, ex);
@@ -571,23 +612,26 @@ public class BooksImportJobService {
                     Long.class,
                     batchId
             );
-            if (unresolvedConflictCount > 0) {
-                throw new ConflictException("Batch still has unresolved conflicts");
-            }
 
             upsertMetaWords(batchId);
             publishDictionaryEntries(batchId);
 
-            transactionTemplate.executeWithoutResult(status -> {
-                jdbcTemplate.update("DELETE FROM book_import_stage WHERE batch_id = ?", batchId);
-            });
+            if (unresolvedConflictCount == 0) {
+                transactionTemplate.executeWithoutResult(status -> {
+                    jdbcTemplate.update("DELETE FROM book_import_stage WHERE batch_id = ?", batchId);
+                });
+            }
 
             updateJob(batchId, job -> {
-                job.setStatus(BooksImportJobStatus.SUCCEEDED);
+                job.setStatus(unresolvedConflictCount > 0
+                        ? BooksImportJobStatus.WAITING_REVIEW
+                        : BooksImportJobStatus.SUCCEEDED);
                 job.setCurrentFile(null);
                 job.setPublishFinishedAt(LocalDateTime.now());
                 job.setFinishedAt(LocalDateTime.now());
-                job.setErrorMessage(null);
+                if (unresolvedConflictCount == 0) {
+                    job.setErrorMessage(null);
+                }
             });
         } catch (Exception ex) {
             log.error("Books import publish failed: {}", batchId, ex);
@@ -660,13 +704,14 @@ public class BooksImportJobService {
                     result.totalRows(),
                     result.successRows(),
                     result.failedRows(),
-                    result.success() ? null : result.errorMessage(),
+                    result.success() ? null : normalizeErrorMessage(result.errorMessage()),
                     durationMs
             );
             return result;
         } catch (Exception ex) {
             long durationMs = System.currentTimeMillis() - startTime;
             log.error("Failed to stage file {}", fileName, ex);
+            String errorMessage = normalizeErrorMessage(ex);
             updateBatchFileStatus(
                     batchId,
                     fileName,
@@ -674,10 +719,10 @@ public class BooksImportJobService {
                     0L,
                     0L,
                     0L,
-                    ex.getMessage(),
+                    errorMessage,
                     durationMs
             );
-            return new FileStageResult(false, 0L, 0L, 0L, ex.getMessage());
+            return new FileStageResult(false, 0L, 0L, 0L, errorMessage);
         }
     }
 
@@ -723,10 +768,7 @@ public class BooksImportJobService {
                         estimateDifficulty(category),
                         null,
                         null,
-                        toJsonString(Map.of(
-                                "word", word,
-                                "definition", definition
-                        ))
+                        toJsonString(buildCsvRawPayload(word, definition))
                 ));
                 if (batch.size() >= STAGE_BATCH_SIZE) {
                     stageRows(batch);
@@ -857,6 +899,34 @@ public class BooksImportJobService {
                     }
                 }
         );
+    }
+
+    private Map<String, Object> buildCsvRawPayload(String word, String definition) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("word", word);
+        payload.put("definition", definition);
+        return payload;
+    }
+
+    private Pageable buildPageable(int page, int size) {
+        int normalizedPage = Math.max(page, 1) - 1;
+        int normalizedSize = Math.min(Math.max(size, 1), 100);
+        return PageRequest.of(normalizedPage, normalizedSize);
+    }
+
+    private String normalizeErrorMessage(Exception ex) {
+        return normalizeErrorMessage(ex == null ? null : ex.getMessage(), ex == null ? null : ex.getClass().getSimpleName());
+    }
+
+    private String normalizeErrorMessage(String message) {
+        return normalizeErrorMessage(message, "UnknownError");
+    }
+
+    private String normalizeErrorMessage(String message, String fallback) {
+        if (message == null || message.isBlank()) {
+            return fallback;
+        }
+        return message;
     }
 
     private void flushAccumulator(
@@ -1109,6 +1179,28 @@ public class BooksImportJobService {
     }
 
     private void publishDictionaryEntries(String batchId) {
+        List<DictionaryPublishSource> dictionaries = jdbcTemplate.query(
+                """
+                        SELECT stage.dictionary_name,
+                               MAX(stage.category) AS category,
+                               MIN(files.file_name) AS file_name,
+                               MIN(files.file_size) AS file_size
+                        FROM book_import_stage stage
+                        LEFT JOIN import_batch_files files
+                          ON files.batch_id = stage.batch_id
+                         AND files.dictionary_name = stage.dictionary_name
+                        WHERE stage.batch_id = ?
+                        GROUP BY stage.dictionary_name
+                        ORDER BY stage.dictionary_name
+                        """,
+                (rs, rowNum) -> new DictionaryPublishSource(
+                        rs.getString("dictionary_name"),
+                        rs.getString("category"),
+                        rs.getString("file_name"),
+                        nullableLong(rs, "file_size")
+                ),
+                batchId
+        );
         List<ResolvedDictionaryEntry> entries = jdbcTemplate.query(
                 """
                         WITH dedup_entries AS (
@@ -1145,41 +1237,15 @@ public class BooksImportJobService {
             entriesByDictionary.computeIfAbsent(entry.dictionaryName(), ignored -> new ArrayList<>()).add(entry);
         }
 
-        for (Map.Entry<String, List<ResolvedDictionaryEntry>> entry : entriesByDictionary.entrySet()) {
-            String dictionaryName = entry.getKey();
-            List<ResolvedDictionaryEntry> dictionaryEntries = entry.getValue();
-            String fileName = jdbcTemplate.queryForObject(
-                    """
-                            SELECT file_name
-                            FROM import_batch_files
-                            WHERE batch_id = ?
-                              AND dictionary_name = ?
-                            ORDER BY id
-                            LIMIT 1
-                            """,
-                    String.class,
-                    batchId,
-                    dictionaryName
-            );
-            Long fileSize = jdbcTemplate.queryForObject(
-                    """
-                            SELECT file_size
-                            FROM import_batch_files
-                            WHERE batch_id = ?
-                              AND dictionary_name = ?
-                            ORDER BY id
-                            LIMIT 1
-                            """,
-                    Long.class,
-                    batchId,
-                    dictionaryName
-            );
+        for (DictionaryPublishSource source : dictionaries) {
+            String dictionaryName = source.dictionaryName();
+            List<ResolvedDictionaryEntry> dictionaryEntries = entriesByDictionary.getOrDefault(dictionaryName, List.of());
             LocalDateTime startedAt = LocalDateTime.now();
             Dictionary dictionary = transactionTemplate.execute(status -> publishSingleDictionary(
-                    batchId,
                     dictionaryName,
-                    fileName,
-                    fileSize,
+                    defaultIfBlank(source.category(), "其他"),
+                    source.fileName(),
+                    source.fileSize(),
                     dictionaryEntries
             ));
             jdbcTemplate.update(
@@ -1208,19 +1274,18 @@ public class BooksImportJobService {
     }
 
     private Dictionary publishSingleDictionary(
-            String batchId,
             String dictionaryName,
+            String category,
             String fileName,
             Long fileSize,
             List<ResolvedDictionaryEntry> dictionaryEntries) {
-        String category = dictionaryEntries.isEmpty() ? "其他" : dictionaryEntries.get(0).category();
         Dictionary dictionary = dictionaryRepository.findByName(dictionaryName)
                 .map(existing -> {
                     if (existing.getCreationType() == DictionaryCreationType.USER_CREATED) {
                         throw new ConflictException("Dictionary name conflicts with user-created dictionary: " + dictionaryName);
                     }
                     existing.setCategory(category);
-                    existing.setFilePath(Path.of(BOOKS_DIR, fileName).toString());
+                    existing.setFilePath(buildDictionaryFilePath(fileName));
                     existing.setFileSize(fileSize);
                     existing.setCreationType(DictionaryCreationType.IMPORTED);
                     existing.setScopeType(ResourceScopeType.SYSTEM);
@@ -1228,7 +1293,7 @@ public class BooksImportJobService {
                 })
                 .orElseGet(() -> dictionaryRepository.save(new Dictionary(
                         dictionaryName,
-                        Path.of(BOOKS_DIR, fileName).toString(),
+                        buildDictionaryFilePath(fileName),
                         fileSize,
                         category,
                         DictionaryCreationType.IMPORTED
@@ -1250,6 +1315,9 @@ public class BooksImportJobService {
             Long dictionaryId,
             Long chapterTagId,
             List<ResolvedDictionaryEntry> dictionaryEntries) {
+        if (dictionaryEntries.isEmpty()) {
+            return;
+        }
         jdbcTemplate.batchUpdate(
                 """
                         INSERT INTO dictionary_words (
@@ -1275,6 +1343,16 @@ public class BooksImportJobService {
                     }
                 }
         );
+    }
+
+    private String buildDictionaryFilePath(String fileName) {
+        String normalizedFileName = trimToNull(fileName);
+        return normalizedFileName == null ? null : Path.of(BOOKS_DIR, normalizedFileName).toString();
+    }
+
+    private String defaultIfBlank(String value, String fallback) {
+        String normalizedValue = trimToNull(value);
+        return normalizedValue == null ? fallback : normalizedValue;
     }
 
     private Map<String, Object> buildResolvedPayload(
@@ -1419,6 +1497,32 @@ public class BooksImportJobService {
         updater.accept(job);
         BooksImportJob savedJob = booksImportJobRepository.save(job);
         publishSnapshot(savedJob);
+    }
+
+    private void scheduleAutoMerge(String batchId, boolean clearErrorMessage) {
+        updateJob(batchId, job -> {
+            job.setStatus(BooksImportJobStatus.AUTO_MERGING);
+            if (clearErrorMessage) {
+                job.setErrorMessage(null);
+            }
+            job.setCurrentFile(null);
+            job.setFinishedAt(null);
+        });
+        booksImportTaskExecutor.execute(() -> runAutoMerge(batchId));
+    }
+
+    private void schedulePublish(String batchId, boolean clearErrorMessage) {
+        updateJob(batchId, job -> {
+            job.setStatus(BooksImportJobStatus.PUBLISHING);
+            job.setPublishStartedAt(LocalDateTime.now());
+            job.setPublishFinishedAt(null);
+            if (clearErrorMessage) {
+                job.setErrorMessage(null);
+            }
+            job.setCurrentFile(null);
+            job.setFinishedAt(null);
+        });
+        booksImportTaskExecutor.execute(() -> runPublish(batchId));
     }
 
     private BooksImportJob getJobEntity(String jobId) {
@@ -1714,6 +1818,13 @@ public class BooksImportJobService {
             String normalizedWord,
             int firstEntryOrder,
             Long metaWordId) {
+    }
+
+    private record DictionaryPublishSource(
+            String dictionaryName,
+            String category,
+            String fileName,
+            Long fileSize) {
     }
 
     private record FileStageResult(

@@ -7,6 +7,7 @@ import type {
     ClassroomResponse,
     Dictionary,
     LoginResponse,
+    PaginatedResponse,
     QuoteResponse,
     StudyPlanOverviewResponse,
     StudyPlanResponse,
@@ -86,6 +87,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return payload as T;
 }
 
+const buildQueryString = (params: Record<string, string | number | undefined>) => {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === "") {
+            return;
+        }
+        searchParams.set(key, String(value));
+    });
+    const query = searchParams.toString();
+    return query ? `?${query}` : "";
+};
+
 export const api = {
     authQuote: () => request<QuoteResponse>("/api/auth/quote"),
     authMe: () => request<UserResponse>("/api/auth/me"),
@@ -94,6 +107,8 @@ export const api = {
     logout: () => request<void>("/api/auth/logout", { method: "POST" }),
 
     listUsers: () => request<UserResponse[]>("/api/users"),
+    listUsersPage: (params: { page?: number; size?: number; role?: string; name?: string }) =>
+        request<PaginatedResponse<UserResponse>>(`/api/users/page${buildQueryString(params)}`),
     listStudents: () => request<UserResponse[]>("/api/users/students"),
     createUser: (payload: {
         username: string;
@@ -110,12 +125,16 @@ export const api = {
 
     listTeacherStudents: (teacherId: number) => request<UserResponse[]>(`/api/teachers/${teacherId}/students`),
     listMyStudents: () => request<UserResponse[]>("/api/teachers/me/students"),
+    listMyStudentsPage: (params: { page?: number; size?: number; name?: string }) =>
+        request<PaginatedResponse<UserResponse>>(`/api/teachers/me/students/page${buildQueryString(params)}`),
     assignStudentToTeacher: (teacherId: number, studentId: number) =>
         request<void>(`/api/teachers/${teacherId}/students/${studentId}`, { method: "POST" }),
     removeStudentFromTeacher: (teacherId: number, studentId: number) =>
         request<void>(`/api/teachers/${teacherId}/students/${studentId}`, { method: "DELETE" }),
 
     listClassrooms: () => request<ClassroomResponse[]>("/api/classrooms"),
+    listClassroomsPage: (params: { page?: number; size?: number; keyword?: string; sortBy?: string; sortDir?: string }) =>
+        request<PaginatedResponse<ClassroomResponse>>(`/api/classrooms/page${buildQueryString(params)}`),
     createClassroom: (payload: { name: string; description?: string; teacherId?: number | null }) =>
         request<ClassroomResponse>("/api/classrooms", { method: "POST", body: payload }),
     deleteClassroom: (classroomId: number) =>
@@ -150,6 +169,10 @@ export const api = {
     getImportBatch: (batchId: string) => request<BooksImportJobResponse>(`/api/books-import/batches/${batchId}`),
     getImportBatchFiles: (batchId: string) =>
         request<BooksImportBatchFileResponse[]>(`/api/books-import/batches/${batchId}/files`),
+    getImportBatchFilesPage: (batchId: string, params: { page?: number; size?: number }) =>
+        request<PaginatedResponse<BooksImportBatchFileResponse>>(
+            `/api/books-import/batches/${batchId}/files/page${buildQueryString(params)}`,
+        ),
     getImportBatchConflicts: (batchId: string) =>
         request<BooksImportConflictResponse[]>(`/api/books-import/batches/${batchId}/conflicts`),
     autoMergeImportBatch: (batchId: string) =>

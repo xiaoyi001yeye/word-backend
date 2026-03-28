@@ -9,6 +9,7 @@ import com.example.words.service.BooksImportJobService;
 import com.example.words.service.CurrentUserService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -52,6 +53,14 @@ public class BooksImportController {
     @GetMapping("/{batchId}/files")
     public ResponseEntity<List<BooksImportBatchFileResponse>> getBatchFiles(@PathVariable String batchId) {
         return ResponseEntity.ok(booksImportJobService.getFiles(batchId));
+    }
+
+    @GetMapping("/{batchId}/files/page")
+    public ResponseEntity<Page<BooksImportBatchFileResponse>> getBatchFilesPage(
+            @PathVariable String batchId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(booksImportJobService.getFilesPage(batchId, page, size));
     }
 
     @PostMapping("/{batchId}/auto-merge")
