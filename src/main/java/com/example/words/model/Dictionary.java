@@ -46,6 +46,9 @@ public class Dictionary {
     @Column(name = "word_count")
     private Integer wordCount;
 
+    @Column(name = "entry_count")
+    private Integer entryCount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "creation_type", nullable = false)
     private DictionaryCreationType creationType = DictionaryCreationType.USER_CREATED;
@@ -74,6 +77,7 @@ public class Dictionary {
         this.fileSize = fileSize;
         this.category = category;
         this.wordCount = 0;
+        this.entryCount = 0;
         this.creationType = DictionaryCreationType.USER_CREATED;
         this.scopeType = ResourceScopeType.TEACHER;
     }
@@ -84,6 +88,7 @@ public class Dictionary {
         this.fileSize = fileSize;
         this.category = category;
         this.wordCount = 0;
+        this.entryCount = 0;
         this.creationType = creationType;
         this.scopeType = creationType == DictionaryCreationType.IMPORTED ? ResourceScopeType.SYSTEM : ResourceScopeType.TEACHER;
     }

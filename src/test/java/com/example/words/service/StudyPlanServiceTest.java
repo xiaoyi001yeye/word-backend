@@ -303,11 +303,11 @@ class StudyPlanServiceTest {
         when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateOrderByCreatedAtAsc(200L, today)).thenReturn(List.of());
         when(studyWordProgressRepository.findByStudentStudyPlanId(200L))
                 .thenReturn(List.of(dueProgress, futureProgress), generatedProgresses);
-        when(dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(10L)).thenReturn(List.of(
-                new DictionaryWord(1L, 10L, 1L, null),
-                new DictionaryWord(2L, 10L, 2L, null),
-                new DictionaryWord(3L, 10L, 3L, null),
-                new DictionaryWord(4L, 10L, 4L, null)
+        when(dictionaryWordRepository.findByDictionaryIdOrderByDisplayOrder(10L)).thenReturn(List.of(
+                new DictionaryWord(1L, 10L, 1L, (java.time.LocalDateTime) null),
+                new DictionaryWord(2L, 10L, 2L, (java.time.LocalDateTime) null),
+                new DictionaryWord(3L, 10L, 3L, (java.time.LocalDateTime) null),
+                new DictionaryWord(4L, 10L, 4L, (java.time.LocalDateTime) null)
         ));
         when(studyWordProgressRepository.saveAll(any())).thenAnswer(invocation -> {
             List<StudyWordProgress> progressList = invocation.getArgument(0);
@@ -431,12 +431,6 @@ class StudyPlanServiceTest {
             savedDailyStatRef.set(dailyStat);
             return dailyStat;
         });
-        when(dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(10L)).thenReturn(List.of(
-                new DictionaryWord(1L, 10L, 1L, null),
-                new DictionaryWord(2L, 10L, 2L, null),
-                new DictionaryWord(3L, 10L, 3L, null),
-                new DictionaryWord(4L, 10L, 4L, null)
-        ));
         when(studentAttentionDailyStatRepository.findByStudentStudyPlanIdOrderByTaskDateDesc(200L))
                 .thenAnswer(invocation -> savedDailyStatRef.get() == null ? List.of() : List.of(savedDailyStatRef.get()));
         when(studyDayTaskItemRepository.findByStudyDayTaskIdOrderByTaskOrderAsc(300L)).thenReturn(List.of(studyDayTaskItem));
@@ -568,12 +562,6 @@ class StudyPlanServiceTest {
             savedDailyStatRef.set(dailyStat);
             return dailyStat;
         });
-        when(dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(10L)).thenReturn(List.of(
-                new DictionaryWord(1L, 10L, 1L, null),
-                new DictionaryWord(2L, 10L, 2L, null),
-                new DictionaryWord(3L, 10L, 3L, null),
-                new DictionaryWord(4L, 10L, 4L, null)
-        ));
         when(studentAttentionDailyStatRepository.findByStudentStudyPlanIdOrderByTaskDateDesc(200L))
                 .thenAnswer(invocation -> savedDailyStatRef.get() == null ? List.of() : List.of(savedDailyStatRef.get()));
         when(studyDayTaskItemRepository.findByStudyDayTaskIdOrderByTaskOrderAsc(300L)).thenReturn(List.of(studyDayTaskItem));

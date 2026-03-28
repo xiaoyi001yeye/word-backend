@@ -34,6 +34,12 @@ public class DictionaryWord {
     @Column(name = "meta_word_id", nullable = false)
     private Long metaWordId;
 
+    @Column(name = "chapter_tag_id")
+    private Long chapterTagId;
+
+    @Column(name = "entry_order", nullable = false)
+    private Integer entryOrder = 1;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -41,5 +47,20 @@ public class DictionaryWord {
     public DictionaryWord(Long dictionaryId, Long metaWordId) {
         this.dictionaryId = dictionaryId;
         this.metaWordId = metaWordId;
+    }
+
+    public DictionaryWord(Long dictionaryId, Long metaWordId, Long chapterTagId, Integer entryOrder) {
+        this.dictionaryId = dictionaryId;
+        this.metaWordId = metaWordId;
+        this.chapterTagId = chapterTagId;
+        this.entryOrder = entryOrder;
+    }
+
+    public DictionaryWord(Long id, Long dictionaryId, Long metaWordId, LocalDateTime createdAt) {
+        this.id = id;
+        this.dictionaryId = dictionaryId;
+        this.metaWordId = metaWordId;
+        this.createdAt = createdAt;
+        this.entryOrder = 1;
     }
 }

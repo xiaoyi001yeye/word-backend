@@ -191,6 +191,22 @@ public class DictionaryService {
     public void updateWordCount(Long dictionaryId, int wordCount) {
         dictionaryRepository.findById(dictionaryId).ifPresent(dictionary -> {
             dictionary.setWordCount(wordCount);
+            if (dictionary.getEntryCount() == null) {
+                dictionary.setEntryCount(wordCount);
+            }
+            dictionaryRepository.save(dictionary);
+        });
+    }
+
+    @Transactional
+    public void updateCounts(Long dictionaryId, int wordCount, int entryCount) {
+        dictionaryRepository.updateCounts(dictionaryId, wordCount, entryCount);
+    }
+
+    @Transactional
+    public void updateEntryCount(Long dictionaryId, int entryCount) {
+        dictionaryRepository.findById(dictionaryId).ifPresent(dictionary -> {
+            dictionary.setEntryCount(entryCount);
             dictionaryRepository.save(dictionary);
         });
     }

@@ -2,6 +2,7 @@ package com.example.words.controller;
 
 import com.example.words.model.MetaWord;
 import com.example.words.service.MetaWordService;
+import com.example.words.dto.MetaWordDetailResponse;
 import com.example.words.dto.MetaWordSearchRequest;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import org.springframework.http.ResponseEntity;
@@ -43,6 +44,13 @@ public class MetaWordController {
     @GetMapping("/{id}")
     public ResponseEntity<MetaWord> get(@PathVariable Long id) {
         return metaWordService.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/detail")
+    public ResponseEntity<MetaWordDetailResponse> getDetail(@PathVariable Long id) {
+        return metaWordService.findDetailById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

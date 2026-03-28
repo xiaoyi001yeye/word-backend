@@ -16,6 +16,7 @@ import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
 import com.example.words.model.ClassroomMember;
 import com.example.words.model.Dictionary;
+import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.model.StudentAttentionDailyStat;
 import com.example.words.model.StudentStudyPlan;
@@ -844,7 +845,7 @@ public class StudyPlanService {
     }
 
     private void refreshStudentStudyPlanMetrics(StudentStudyPlan studentStudyPlan, StudyPlan studyPlan) {
-        long totalWords = dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(studyPlan.getDictionaryId()).size();
+        long totalWords = dictionaryWordRepository.countDistinctMetaWordIdByDictionaryId(studyPlan.getDictionaryId());
         long reviewedWords = buildStudyWordProgressMap(studyWordProgressRepository.findByStudentStudyPlanId(studentStudyPlan.getId()))
                 .values().stream()
                 .filter(progress -> progress.getLastReviewAt() != null)
@@ -958,15 +959,10 @@ public class StudyPlanService {
                 .limit(studyPlan.getDailyReviewLimit())
                 .toList();
 
-        List<Long> orderedDictionaryWordIds = dictionaryWordRepository
-                .findByDictionaryIdOrderByIdAsc(studyPlan.getDictionaryId()).stream()
-                .map(dictionaryWord -> dictionaryWord.getMetaWordId())
-                .toList();
-
-        List<Long> newWordIds = orderedDictionaryWordIds.stream()
-                .filter(metaWordId -> !progressMap.containsKey(metaWordId))
-                .limit(studyPlan.getDailyNewCount())
-                .toList();
+        List<Long> newWordIds = resolveOrderedNewWordIds(
+                studyPlan.getDictionaryId(),
+                progressMap,
+                studyPlan.getDailyNewCount());
 
         List<StudyWordProgress> newProgresses = new ArrayList<>();
         for (Long newWordId : newWordIds) {
@@ -1033,6 +1029,24 @@ public class StudyPlanService {
         }
 
         return savedStudyDayTask;
+    }
+
+    private List<Long> resolveOrderedNewWordIds(
+            Long dictionaryId,
+            Map<Long, StudyWordProgress> progressMap,
+            Integer dailyNewCount) {
+        Set<Long> selectedMetaWordIds = new LinkedHashSet<>();
+        for (DictionaryWord dictionaryWord : dictionaryWordRepository.findByDictionaryIdOrderByDisplayOrder(dictionaryId)) {
+            Long metaWordId = dictionaryWord.getMetaWordId();
+            if (progressMap.containsKey(metaWordId) || selectedMetaWordIds.contains(metaWordId)) {
+                continue;
+            }
+            selectedMetaWordIds.add(metaWordId);
+            if (selectedMetaWordIds.size() >= dailyNewCount) {
+                break;
+            }
+        }
+        return List.copyOf(selectedMetaWordIds);
     }
 
     private boolean isDueOn(StudyWordProgress progress, LocalDate taskDate) {

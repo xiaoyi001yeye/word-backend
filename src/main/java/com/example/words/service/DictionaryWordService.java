@@ -1,6 +1,7 @@
 package com.example.words.service;
 
 import com.example.words.dto.DefinitionDto;
+import com.example.words.dto.DictionaryWordEntryResponse;
 import com.example.words.dto.ExampleSentenceDto;
 import com.example.words.dto.InflectionDto;
 import com.example.words.dto.MetaWordEntryDto;
@@ -8,29 +9,31 @@ import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.dto.MetaWordSuggestionDto;
 import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.dto.PhoneticDto;
-import com.example.words.model.DictionaryWord;
 import com.example.words.model.Definition;
+import com.example.words.model.DictionaryWord;
 import com.example.words.model.ExampleSentence;
 import com.example.words.model.Inflection;
 import com.example.words.model.MetaWord;
 import com.example.words.model.PartOfSpeech;
 import com.example.words.model.Phonetic;
+import com.example.words.model.Tag;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
+import com.example.words.repository.TagRepository;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.core.BatchPreparedStatementSetter;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,22 +46,25 @@ public class DictionaryWordService {
 
     private final DictionaryWordRepository dictionaryWordRepository;
     private final MetaWordRepository metaWordRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final TagRepository tagRepository;
+    private final TagService tagService;
     private final DictionaryService dictionaryService;
 
     public DictionaryWordService(
             DictionaryWordRepository dictionaryWordRepository,
             MetaWordRepository metaWordRepository,
-            JdbcTemplate jdbcTemplate,
+            TagRepository tagRepository,
+            TagService tagService,
             DictionaryService dictionaryService) {
         this.dictionaryWordRepository = dictionaryWordRepository;
         this.metaWordRepository = metaWordRepository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.tagRepository = tagRepository;
+        this.tagService = tagService;
         this.dictionaryService = dictionaryService;
     }
 
     public List<DictionaryWord> findByDictionaryId(Long dictionaryId) {
-        return dictionaryWordRepository.findByDictionaryId(dictionaryId);
+        return dictionaryWordRepository.findByDictionaryIdOrderByDisplayOrder(dictionaryId);
     }
 
     public List<DictionaryWord> findByMetaWordId(Long metaWordId) {
@@ -68,6 +74,14 @@ public class DictionaryWordService {
     public Page<MetaWord> findMetaWordsByDictionaryId(Long dictionaryId, int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
         return metaWordRepository.findByDictionaryId(dictionaryId, pageable);
+    }
+
+    public Page<DictionaryWordEntryResponse> findEntriesByDictionaryId(Long dictionaryId, int page, int size, String keyword) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<DictionaryWord> entryPage = keyword == null || keyword.trim().isEmpty()
+                ? dictionaryWordRepository.findPageByDictionaryIdOrderByDisplayOrder(dictionaryId, pageable)
+                : dictionaryWordRepository.findPageByDictionaryIdAndKeywordOrderByDisplayOrder(dictionaryId, keyword.trim(), pageable);
+        return toEntryResponsePage(entryPage);
     }
 
     public List<MetaWordSuggestionDto> findSuggestionsForDictionary(Long dictionaryId, String keyword, Integer limit) {
@@ -98,23 +112,27 @@ public class DictionaryWordService {
 
     @Transactional
     public DictionaryWord save(DictionaryWord dictionaryWord) {
-        return dictionaryWordRepository.save(dictionaryWord);
+        DictionaryWord saved = dictionaryWordRepository.save(normalizeEntry(dictionaryWord));
+        refreshDictionaryCounts(saved.getDictionaryId());
+        return saved;
     }
 
     @Transactional
     public void saveIfNotExists(Long dictionaryId, Long metaWordId) {
-        if (!dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, metaWordId)) {
-            DictionaryWord dictionaryWord = new DictionaryWord(dictionaryId, metaWordId);
-            dictionaryWordRepository.save(dictionaryWord);
-            dictionaryService.incrementWordCount(dictionaryId, 1);
-            log.debug("Saved dictionary-word relation: dictionary={}, word={}", dictionaryId, metaWordId);
+        if (dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, metaWordId)) {
+            return;
         }
+        Long defaultChapterTagId = tagService.getOrCreateDefaultChapterTagId(dictionaryId);
+        int nextOrder = nextEntryOrder(dictionaryId, defaultChapterTagId);
+        dictionaryWordRepository.save(new DictionaryWord(dictionaryId, metaWordId, defaultChapterTagId, nextOrder));
+        refreshDictionaryCounts(dictionaryId);
+        log.debug("Saved dictionary-word relation into default chapter: dictionary={}, word={}", dictionaryId, metaWordId);
     }
 
     @Transactional
     public void deleteByDictionaryId(Long dictionaryId) {
         dictionaryWordRepository.deleteByDictionaryId(dictionaryId);
-        dictionaryService.updateWordCount(dictionaryId, 0);
+        dictionaryService.updateCounts(dictionaryId, 0, 0);
     }
 
     @Transactional
@@ -124,9 +142,7 @@ public class DictionaryWordService {
 
     @Transactional
     public int saveAllBatch(Long dictionaryId, List<Long> metaWordIds) {
-        int insertedCount = saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
-        dictionaryService.incrementWordCount(dictionaryId, insertedCount);
-        return insertedCount;
+        return saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
     }
 
     @Transactional
@@ -135,108 +151,227 @@ public class DictionaryWordService {
             return 0;
         }
 
-        int[] results = jdbcTemplate.batchUpdate(
-                "INSERT INTO dictionary_words (dictionary_id, meta_word_id) VALUES (?, ?) " +
-                        "ON CONFLICT (dictionary_id, meta_word_id) DO NOTHING",
-                new BatchPreparedStatementSetter() {
-                    @Override
-                    public void setValues(java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
-                        ps.setLong(1, dictionaryId);
-                        ps.setLong(2, metaWordIds.get(i));
-                    }
-
-                    @Override
-                    public int getBatchSize() {
-                        return metaWordIds.size();
-                    }
-                }
-        );
-
-        int insertedCount = 0;
-        for (int result : results) {
-            if (result != 0) {
-                insertedCount++;
+        Long defaultChapterTagId = tagService.getOrCreateDefaultChapterTagId(dictionaryId);
+        int nextOrder = nextEntryOrder(dictionaryId, defaultChapterTagId);
+        List<DictionaryWord> entries = new ArrayList<>();
+        for (Long metaWordId : metaWordIds) {
+            if (metaWordId == null) {
+                continue;
             }
+            entries.add(new DictionaryWord(dictionaryId, metaWordId, defaultChapterTagId, nextOrder++));
         }
-        return insertedCount;
+        if (entries.isEmpty()) {
+            return 0;
+        }
+        dictionaryWordRepository.saveAll(entries);
+        refreshDictionaryCounts(dictionaryId);
+        return entries.size();
     }
 
     @Transactional
     public WordListProcessResult processWordList(Long dictionaryId, List<MetaWordEntryDto> words) {
-        log.debug("Processing word list for dictionary {}, input size: {}", dictionaryId, words.size());
-        Map<String, MetaWordEntryDto> uniqueWords = new LinkedHashMap<>();
-        for (MetaWordEntryDto dto : words) {
-            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
-                continue;
-            }
-            String wordKey = dto.getWord().trim().toLowerCase();
-            uniqueWords.put(wordKey, dto);
+        if (words == null || words.isEmpty()) {
+            return new WordListProcessResult(0, 0, 0, 0, 0);
         }
-        
-        log.debug("Unique words count: {}", uniqueWords.size());
-        int total = uniqueWords.size();
+        log.debug("Processing word list for dictionary {}, input size: {}", dictionaryId, words.size());
+        int total = 0;
         int existed = 0;
         int created = 0;
         int added = 0;
         int failed = 0;
-        
-        List<Long> metaWordIds = new ArrayList<>();
-        
-        for (MetaWordEntryDto dto : uniqueWords.values()) {
+
+        Long defaultChapterTagId = tagService.getOrCreateDefaultChapterTagId(dictionaryId);
+        int nextOrder = nextEntryOrder(dictionaryId, defaultChapterTagId);
+        List<DictionaryWord> entriesToCreate = new ArrayList<>();
+
+        for (MetaWordEntryDto dto : words) {
+            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
+                continue;
+            }
+            total++;
             String word = dto.getWord().trim();
             try {
                 Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
                 MetaWord metaWord;
-                
                 if (existingMetaWordOpt.isPresent()) {
                     metaWord = existingMetaWordOpt.get();
                     existed++;
-                    log.debug("Word already exists: {} (id: {})", word, metaWord.getId());
-                    
                     updateMetaWordFields(metaWord, dto);
                     metaWord = metaWordRepository.save(metaWord);
                 } else {
                     metaWord = new MetaWord();
                     metaWord.setWord(word);
-                    created++;
-                    log.debug("Creating new meta word: {}", word);
-                    
                     updateMetaWordFields(metaWord, dto);
                     metaWord = metaWordRepository.save(metaWord);
+                    created++;
                 }
-                
-                metaWordIds.add(metaWord.getId());
+                entriesToCreate.add(new DictionaryWord(dictionaryId, metaWord.getId(), defaultChapterTagId, nextOrder++));
+                added++;
             } catch (Exception e) {
                 log.error("Failed to process word: {}", word, e);
                 failed++;
             }
         }
-        
-        if (!metaWordIds.isEmpty()) {
-            List<DictionaryWord> existingAssociations = dictionaryWordRepository.findByDictionaryId(dictionaryId);
-            Set<Long> existingMetaWordIds = existingAssociations.stream()
-                    .map(DictionaryWord::getMetaWordId)
-                    .collect(java.util.stream.Collectors.toSet());
-            
-            List<DictionaryWord> newAssociations = new ArrayList<>();
-            for (Long metaWordId : metaWordIds) {
-                if (!existingMetaWordIds.contains(metaWordId)) {
-                    newAssociations.add(new DictionaryWord(dictionaryId, metaWordId));
-                    added++;
-                }
-            }
-            
-            if (!newAssociations.isEmpty()) {
-                dictionaryWordRepository.saveAll(newAssociations);
-                dictionaryService.incrementWordCount(dictionaryId, newAssociations.size());
-                log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
-            }
+
+        if (!entriesToCreate.isEmpty()) {
+            dictionaryWordRepository.saveAll(entriesToCreate);
+            refreshDictionaryCounts(dictionaryId);
         }
-        
-        log.debug("Word list processing completed: total={}, existed={}, created={}, added={}, failed={}", total, existed, created, added, failed);
+
         return new WordListProcessResult(total, existed, created, added, failed);
     }
-    
+
+    @Transactional
+    public WordListProcessResult processWordListV2(Long dictionaryId, List<MetaWordEntryDtoV2> words) {
+        if (words == null || words.isEmpty()) {
+            return new WordListProcessResult(0, 0, 0, 0, 0);
+        }
+        log.debug("Processing word list V2 for dictionary {}, input size: {}", dictionaryId, words.size());
+        int total = 0;
+        int existed = 0;
+        int created = 0;
+        int added = 0;
+        int failed = 0;
+
+        Long defaultChapterTagId = tagService.getOrCreateDefaultChapterTagId(dictionaryId);
+        int nextOrder = nextEntryOrder(dictionaryId, defaultChapterTagId);
+        List<DictionaryWord> entriesToCreate = new ArrayList<>();
+
+        for (MetaWordEntryDtoV2 dto : words) {
+            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
+                continue;
+            }
+            total++;
+            String word = dto.getWord().trim();
+            try {
+                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
+                MetaWord metaWord;
+                if (existingMetaWordOpt.isPresent()) {
+                    metaWord = existingMetaWordOpt.get();
+                    existed++;
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
+                } else {
+                    metaWord = new MetaWord();
+                    metaWord.setWord(word);
+                    updateMetaWordFields(metaWord, dto);
+                    metaWord = metaWordRepository.save(metaWord);
+                    created++;
+                }
+                entriesToCreate.add(new DictionaryWord(dictionaryId, metaWord.getId(), defaultChapterTagId, nextOrder++));
+                added++;
+            } catch (Exception e) {
+                log.error("Failed to process word: {}", word, e);
+                failed++;
+            }
+        }
+
+        if (!entriesToCreate.isEmpty()) {
+            dictionaryWordRepository.saveAll(entriesToCreate);
+            refreshDictionaryCounts(dictionaryId);
+        }
+
+        return new WordListProcessResult(total, existed, created, added, failed);
+    }
+
+    public static class WordListProcessResult {
+        private final int total;
+        private final int existed;
+        private final int created;
+        private final int added;
+        private final int failed;
+
+        public WordListProcessResult(int total, int existed, int created, int added, int failed) {
+            this.total = total;
+            this.existed = existed;
+            this.created = created;
+            this.added = added;
+            this.failed = failed;
+        }
+
+        public int getTotal() { return total; }
+        public int getExisted() { return existed; }
+        public int getCreated() { return created; }
+        public int getAdded() { return added; }
+        public int getFailed() { return failed; }
+    }
+
+    private Page<DictionaryWordEntryResponse> toEntryResponsePage(Page<DictionaryWord> entryPage) {
+        List<DictionaryWord> entries = entryPage.getContent();
+        Map<Long, MetaWord> metaWordMap = loadMetaWords(entries);
+        Map<Long, Tag> tagMap = loadTags(entries);
+        List<DictionaryWordEntryResponse> content = entries.stream()
+                .map(entry -> toEntryResponse(entry, metaWordMap.get(entry.getMetaWordId()), tagMap.get(entry.getChapterTagId())))
+                .toList();
+        return new PageImpl<>(content, entryPage.getPageable(), entryPage.getTotalElements());
+    }
+
+    private Map<Long, MetaWord> loadMetaWords(List<DictionaryWord> entries) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (DictionaryWord entry : entries) {
+            ids.add(entry.getMetaWordId());
+        }
+        Map<Long, MetaWord> result = new HashMap<>();
+        for (MetaWord metaWord : metaWordRepository.findAllById(ids)) {
+            result.put(metaWord.getId(), metaWord);
+        }
+        return result;
+    }
+
+    private Map<Long, Tag> loadTags(List<DictionaryWord> entries) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (DictionaryWord entry : entries) {
+            if (entry.getChapterTagId() != null) {
+                ids.add(entry.getChapterTagId());
+            }
+        }
+        Map<Long, Tag> result = new HashMap<>();
+        for (Tag tag : tagRepository.findAllById(ids)) {
+            result.put(tag.getId(), tag);
+        }
+        return result;
+    }
+
+    private DictionaryWordEntryResponse toEntryResponse(DictionaryWord entry, MetaWord metaWord, Tag tag) {
+        return new DictionaryWordEntryResponse(
+                entry.getId(),
+                entry.getDictionaryId(),
+                entry.getMetaWordId(),
+                metaWord == null ? null : metaWord.getWord(),
+                metaWord == null ? null : metaWord.getTranslation(),
+                metaWord == null ? null : metaWord.getPhonetic(),
+                metaWord == null ? null : metaWord.getDefinition(),
+                entry.getChapterTagId(),
+                tag == null ? null : tag.getPathName(),
+                entry.getEntryOrder()
+        );
+    }
+
+    private DictionaryWord normalizeEntry(DictionaryWord dictionaryWord) {
+        Long chapterTagId = dictionaryWord.getChapterTagId();
+        if (chapterTagId == null) {
+            chapterTagId = tagService.getOrCreateDefaultChapterTagId(dictionaryWord.getDictionaryId());
+            dictionaryWord.setChapterTagId(chapterTagId);
+        } else {
+            tagService.getChapterTagOrThrow(chapterTagId, dictionaryWord.getDictionaryId());
+        }
+        if (dictionaryWord.getEntryOrder() == null || dictionaryWord.getEntryOrder() < 1) {
+            dictionaryWord.setEntryOrder(nextEntryOrder(dictionaryWord.getDictionaryId(), chapterTagId));
+        }
+        return dictionaryWord;
+    }
+
+    private int nextEntryOrder(Long dictionaryId, Long chapterTagId) {
+        Integer maxOrder = dictionaryWordRepository.findMaxEntryOrderByDictionaryIdAndChapterTagId(dictionaryId, chapterTagId);
+        return (maxOrder == null ? 0 : maxOrder) + 1;
+    }
+
+    private void refreshDictionaryCounts(Long dictionaryId) {
+        int uniqueWordCount = (int) dictionaryWordRepository.countDistinctMetaWordIdByDictionaryId(dictionaryId);
+        int entryCount = (int) dictionaryWordRepository.countByDictionaryId(dictionaryId);
+        dictionaryService.updateCounts(dictionaryId, uniqueWordCount, entryCount);
+    }
+
     private void updateMetaWordFields(MetaWord metaWord, MetaWordEntryDto dto) {
         if (dto.getPhonetic() != null && !dto.getPhonetic().trim().isEmpty()) {
             metaWord.setPhonetic(dto.getPhonetic().trim());
@@ -253,15 +388,10 @@ public class DictionaryWordService {
         if (dto.getTranslation() != null && !dto.getTranslation().trim().isEmpty()) {
             metaWord.setTranslation(dto.getTranslation().trim());
         }
-        if (dto.getDifficulty() != null) {
-            metaWord.setDifficulty(dto.getDifficulty());
-        } else {
-            metaWord.setDifficulty(2);
-        }
+        metaWord.setDifficulty(dto.getDifficulty() != null ? dto.getDifficulty() : 2);
     }
-    
+
     private void updateMetaWordFields(MetaWord metaWord, MetaWordEntryDtoV2 dto) {
-        // Update phonetic detail
         if (dto.getPhonetic() != null) {
             Phonetic phonetic = metaWord.getPhoneticDetail();
             if (phonetic == null) {
@@ -275,61 +405,61 @@ public class DictionaryWordService {
             }
             metaWord.setPhoneticDetail(phonetic);
         }
-        
-        // Update part of speech detail
+
         if (dto.getPartOfSpeech() != null && !dto.getPartOfSpeech().isEmpty()) {
             metaWord.setPartOfSpeechDetail(convertPartOfSpeechDtos(dto.getPartOfSpeech()));
         }
-        
-        // Update difficulty
-        if (dto.getDifficulty() != null) {
-            metaWord.setDifficulty(dto.getDifficulty());
-        } else {
-            metaWord.setDifficulty(2);
-        }
+
+        metaWord.setDifficulty(dto.getDifficulty() != null ? dto.getDifficulty() : 2);
     }
-    
+
     private List<PartOfSpeech> convertPartOfSpeechDtos(List<PartOfSpeechDto> dtos) {
-        if (dtos == null) return null;
-        
+        if (dtos == null) {
+            return null;
+        }
+
         return dtos.stream().map(dto -> {
             PartOfSpeech pos = new PartOfSpeech();
             pos.setPos(dto.getPos() != null ? dto.getPos().trim() : null);
-            
+
             if (dto.getDefinitions() != null) {
                 pos.setDefinitions(convertDefinitionDtos(dto.getDefinitions()));
             }
-            
+
             if (dto.getInflection() != null) {
                 pos.setInflection(convertInflectionDto(dto.getInflection()));
             }
-            
+
             pos.setSynonyms(dto.getSynonyms());
             pos.setAntonyms(dto.getAntonyms());
-            
+
             return pos;
         }).toList();
     }
-    
+
     private List<Definition> convertDefinitionDtos(List<DefinitionDto> dtos) {
-        if (dtos == null) return null;
-        
+        if (dtos == null) {
+            return null;
+        }
+
         return dtos.stream().map(dto -> {
             Definition def = new Definition();
             def.setDefinition(dto.getDefinition() != null ? dto.getDefinition().trim() : null);
             def.setTranslation(dto.getTranslation() != null ? dto.getTranslation().trim() : null);
-            
+
             if (dto.getExampleSentences() != null) {
                 def.setExampleSentences(convertExampleSentenceDtos(dto.getExampleSentences()));
             }
-            
+
             return def;
         }).toList();
     }
-    
+
     private List<ExampleSentence> convertExampleSentenceDtos(List<ExampleSentenceDto> dtos) {
-        if (dtos == null) return null;
-        
+        if (dtos == null) {
+            return null;
+        }
+
         return dtos.stream().map(dto -> {
             ExampleSentence ex = new ExampleSentence();
             ex.setSentence(dto.getSentence() != null ? dto.getSentence().trim() : null);
@@ -337,10 +467,12 @@ public class DictionaryWordService {
             return ex;
         }).toList();
     }
-    
+
     private Inflection convertInflectionDto(InflectionDto dto) {
-        if (dto == null) return null;
-        
+        if (dto == null) {
+            return null;
+        }
+
         Inflection inflection = new Inflection();
         inflection.setPlural(dto.getPlural() != null ? dto.getPlural().trim() : null);
         inflection.setPast(dto.getPast() != null ? dto.getPast().trim() : null);
@@ -349,106 +481,8 @@ public class DictionaryWordService {
         inflection.setThirdPersonSingular(dto.getThirdPersonSingular() != null ? dto.getThirdPersonSingular().trim() : null);
         inflection.setComparative(dto.getComparative() != null ? dto.getComparative().trim() : null);
         inflection.setSuperlative(dto.getSuperlative() != null ? dto.getSuperlative().trim() : null);
-        
+
         return inflection;
-    }
-    
-    @Transactional
-    public WordListProcessResult processWordListV2(Long dictionaryId, List<MetaWordEntryDtoV2> words) {
-        log.debug("Processing word list V2 for dictionary {}, input size: {}", dictionaryId, words.size());
-        Map<String, MetaWordEntryDtoV2> uniqueWords = new LinkedHashMap<>();
-        for (MetaWordEntryDtoV2 dto : words) {
-            if (dto == null || dto.getWord() == null || dto.getWord().trim().isEmpty()) {
-                continue;
-            }
-            String wordKey = dto.getWord().trim().toLowerCase();
-            uniqueWords.put(wordKey, dto);
-        }
-        
-        log.debug("Unique words count: {}", uniqueWords.size());
-        int total = uniqueWords.size();
-        int existed = 0;
-        int created = 0;
-        int added = 0;
-        int failed = 0;
-        
-        List<Long> metaWordIds = new ArrayList<>();
-        
-        for (MetaWordEntryDtoV2 dto : uniqueWords.values()) {
-            String word = dto.getWord().trim();
-            try {
-                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
-                MetaWord metaWord;
-                
-                if (existingMetaWordOpt.isPresent()) {
-                    metaWord = existingMetaWordOpt.get();
-                    existed++;
-                    log.debug("Word already exists: {} (id: {})", word, metaWord.getId());
-                    
-                    updateMetaWordFields(metaWord, dto);
-                    metaWord = metaWordRepository.save(metaWord);
-                } else {
-                    metaWord = new MetaWord();
-                    metaWord.setWord(word);
-                    created++;
-                    log.debug("Creating new meta word: {}", word);
-                    
-                    updateMetaWordFields(metaWord, dto);
-                    metaWord = metaWordRepository.save(metaWord);
-                }
-                
-                metaWordIds.add(metaWord.getId());
-            } catch (Exception e) {
-                log.error("Failed to process word: {}", word, e);
-                failed++;
-            }
-        }
-        
-        if (!metaWordIds.isEmpty()) {
-            List<DictionaryWord> existingAssociations = dictionaryWordRepository.findByDictionaryId(dictionaryId);
-            Set<Long> existingMetaWordIds = existingAssociations.stream()
-                    .map(DictionaryWord::getMetaWordId)
-                    .collect(java.util.stream.Collectors.toSet());
-            
-            List<DictionaryWord> newAssociations = new ArrayList<>();
-            for (Long metaWordId : metaWordIds) {
-                if (!existingMetaWordIds.contains(metaWordId)) {
-                    newAssociations.add(new DictionaryWord(dictionaryId, metaWordId));
-                    added++;
-                }
-            }
-            
-            if (!newAssociations.isEmpty()) {
-                dictionaryWordRepository.saveAll(newAssociations);
-                dictionaryService.incrementWordCount(dictionaryId, newAssociations.size());
-                log.debug("Added {} new associations to dictionary {}", newAssociations.size(), dictionaryId);
-            }
-        }
-        
-        log.debug("Word list V2 processing completed: total={}, existed={}, created={}, added={}, failed={}", total, existed, created, added, failed);
-        return new WordListProcessResult(total, existed, created, added, failed);
-    }
-    
-    public static class WordListProcessResult {
-        private final int total;
-        private final int existed;
-        private final int created;
-        private final int added;
-        private final int failed;
-        
-        public WordListProcessResult(int total, int existed, int created, int added, int failed) {
-            this.total = total;
-            this.existed = existed;
-            this.created = created;
-            this.added = added;
-            this.failed = failed;
-        }
-        
-        public int getTotal() { return total; }
-        public int getExisted() { return existed; }
-        public int getCreated() { return created; }
-        public int getAdded() { return added; }
-        public int getFailed() { return failed; }
     }
 
     private MetaWordSuggestionDto toSuggestionDto(MetaWord metaWord) {

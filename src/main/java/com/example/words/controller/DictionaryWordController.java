@@ -2,6 +2,7 @@ package com.example.words.controller;
 
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
+import com.example.words.dto.DictionaryWordEntryResponse;
 import com.example.words.dto.MetaWordSuggestionDto;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.exception.ResourceNotFoundException;
@@ -68,6 +69,16 @@ public class DictionaryWordController {
     public List<DictionaryWord> getByDictionary(@PathVariable Long dictionaryId) {
         ensureCanViewDictionary(dictionaryId);
         return dictionaryWordService.findByDictionaryId(dictionaryId);
+    }
+
+    @GetMapping("/dictionary/{dictionaryId}/entries")
+    public Page<DictionaryWordEntryResponse> getEntriesByDictionary(
+            @PathVariable Long dictionaryId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        ensureCanViewDictionary(dictionaryId);
+        return dictionaryWordService.findEntriesByDictionaryId(dictionaryId, page, size, keyword);
     }
 
     @GetMapping("/word/{metaWordId}")

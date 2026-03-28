@@ -14,6 +14,7 @@ import com.example.words.dto.MetaWordEntryDto;
 import com.example.words.model.MetaWord;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
+import com.example.words.repository.TagRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class DictionaryWordServiceTest {
@@ -35,6 +35,12 @@ class DictionaryWordServiceTest {
     @Mock
     private MetaWordRepository metaWordRepository;
 
+    @Mock
+    private TagRepository tagRepository;
+
+    @Mock
+    private TagService tagService;
+
     private DictionaryWordService dictionaryWordService;
     private RecordingDictionaryService dictionaryService;
 
@@ -44,7 +50,8 @@ class DictionaryWordServiceTest {
         dictionaryWordService = new DictionaryWordService(
                 dictionaryWordRepository,
                 metaWordRepository,
-                new JdbcTemplate(),
+                tagRepository,
+                tagService,
                 dictionaryService
         );
     }
@@ -59,7 +66,10 @@ class DictionaryWordServiceTest {
             metaWord.setId(idGenerator.incrementAndGet());
             return metaWord;
         });
-        when(dictionaryWordRepository.findByDictionaryId(10L)).thenReturn(List.of());
+        when(tagService.getOrCreateDefaultChapterTagId(10L)).thenReturn(99L);
+        when(dictionaryWordRepository.findMaxEntryOrderByDictionaryIdAndChapterTagId(10L, 99L)).thenReturn(0);
+        when(dictionaryWordRepository.countDistinctMetaWordIdByDictionaryId(10L)).thenReturn(2L);
+        when(dictionaryWordRepository.countByDictionaryId(10L)).thenReturn(2L);
 
         DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordList(
                 10L,
@@ -72,8 +82,9 @@ class DictionaryWordServiceTest {
         assertEquals(2, result.getCreated());
         assertEquals(2, result.getAdded());
         verify(dictionaryWordRepository).saveAll(anyList());
-        assertEquals(10L, dictionaryService.lastIncrementDictionaryId);
-        assertEquals(2, dictionaryService.lastIncrementDelta);
+        assertEquals(10L, dictionaryService.lastUpdatedDictionaryId);
+        assertEquals(2, dictionaryService.lastUpdatedWordCount);
+        assertEquals(2, dictionaryService.lastUpdatedEntryCount);
     }
 
     @Test
@@ -88,12 +99,17 @@ class DictionaryWordServiceTest {
     @Test
     void saveIfNotExistsShouldIncrementCountOnlyWhenAssociationIsNew() {
         when(dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(3L, 7L)).thenReturn(false);
+        when(tagService.getOrCreateDefaultChapterTagId(3L)).thenReturn(11L);
+        when(dictionaryWordRepository.findMaxEntryOrderByDictionaryIdAndChapterTagId(3L, 11L)).thenReturn(0);
+        when(dictionaryWordRepository.countDistinctMetaWordIdByDictionaryId(3L)).thenReturn(1L);
+        when(dictionaryWordRepository.countByDictionaryId(3L)).thenReturn(1L);
 
         dictionaryWordService.saveIfNotExists(3L, 7L);
 
         verify(dictionaryWordRepository).save(any());
-        assertEquals(3L, dictionaryService.lastIncrementDictionaryId);
-        assertEquals(1, dictionaryService.lastIncrementDelta);
+        assertEquals(3L, dictionaryService.lastUpdatedDictionaryId);
+        assertEquals(1, dictionaryService.lastUpdatedWordCount);
+        assertEquals(1, dictionaryService.lastUpdatedEntryCount);
     }
 
     @Test
@@ -137,6 +153,7 @@ class DictionaryWordServiceTest {
         private Integer lastIncrementDelta;
         private Long lastUpdatedDictionaryId;
         private Integer lastUpdatedWordCount;
+        private Integer lastUpdatedEntryCount;
 
         private RecordingDictionaryService() {
             super(null, null, null, null, null, null);
@@ -146,6 +163,13 @@ class DictionaryWordServiceTest {
         public void updateWordCount(Long dictionaryId, int wordCount) {
             lastUpdatedDictionaryId = dictionaryId;
             lastUpdatedWordCount = wordCount;
+        }
+
+        @Override
+        public void updateCounts(Long dictionaryId, int wordCount, int entryCount) {
+            lastUpdatedDictionaryId = dictionaryId;
+            lastUpdatedWordCount = wordCount;
+            lastUpdatedEntryCount = entryCount;
         }
 
         @Override

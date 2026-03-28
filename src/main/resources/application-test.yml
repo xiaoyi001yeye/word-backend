@@ -19,6 +19,9 @@ spring:
       enabled: true
       path: /h2-console
 
+  flyway:
+    enabled: false
+
 logging:
   level:
     com.example.words: DEBUG
