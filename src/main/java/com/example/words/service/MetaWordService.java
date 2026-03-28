@@ -18,6 +18,7 @@ import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.dto.PhoneticDto;
 import com.example.words.repository.MetaWordRepository;
 import com.example.words.repository.TagRepository;
+import com.example.words.util.WordNormalizationUtils;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -94,7 +95,12 @@ public class MetaWordService {
     }
 
     public Optional<MetaWord> findByWord(String word) {
-        return metaWordRepository.findByWord(word);
+        String normalizedWord = WordNormalizationUtils.normalize(word);
+        if (normalizedWord == null || normalizedWord.isEmpty()) {
+            return Optional.empty();
+        }
+        return metaWordRepository.findByNormalizedWord(normalizedWord)
+                .or(() -> metaWordRepository.findByWord(word));
     }
 
     public List<MetaWord> findByDifficulty(Integer difficulty) {
@@ -112,7 +118,7 @@ public class MetaWordService {
 
     @Transactional
     public MetaWord saveIfNotExists(String word, String phonetic, String definition, String partOfSpeech) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -122,7 +128,7 @@ public class MetaWordService {
     
     @Transactional
     public MetaWord saveIfNotExists(String word, Phonetic phoneticDetail, java.util.List<PartOfSpeech> partOfSpeechDetail) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             MetaWord metaWord = existing.get();
             // Update with new detailed information
@@ -140,7 +146,7 @@ public class MetaWordService {
 
     @Transactional
     public MetaWord saveWordIfNotExists(String word) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -162,11 +168,16 @@ public class MetaWordService {
     }
 
     public BooksImportResult importBooksData() {
+        return importBooksData(BooksImportProgressListener.NOOP);
+    }
+
+    public BooksImportResult importBooksData(BooksImportProgressListener progressListener) {
         resetImportData();
 
         java.io.File dir = new java.io.File(BOOKS_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
             log.error("Directory not found: {}", BOOKS_DIR);
+            progressListener.onFilesDiscovered(0);
             return new BooksImportResult(0, 0);
         }
 
@@ -176,10 +187,12 @@ public class MetaWordService {
         });
         if (files == null || files.length == 0) {
             log.warn("No importable files found in directory: {}", BOOKS_DIR);
+            progressListener.onFilesDiscovered(0);
             return new BooksImportResult(0, 0);
         }
 
         Arrays.sort(files, Comparator.comparing(java.io.File::getName));
+        progressListener.onFilesDiscovered(files.length);
 
         long startTime = System.currentTimeMillis();
         log.info("Starting import from {} files", files.length);
@@ -187,12 +200,23 @@ public class MetaWordService {
         Map<String, Long> wordCache = createWordCache();
         int totalWordCount = 0;
         int importedDictionaryCount = 0;
+        int processedFiles = 0;
         for (java.io.File file : files) {
+            progressListener.onFileStarted(file.getName(), processedFiles, files.length);
             ImportFileResult result = importFromFile(file, wordCache);
             if (result.success()) {
                 importedDictionaryCount++;
                 totalWordCount += result.wordCount();
             }
+            processedFiles++;
+            progressListener.onFileCompleted(
+                    file.getName(),
+                    processedFiles,
+                    files.length,
+                    importedDictionaryCount,
+                    totalWordCount,
+                    result.success()
+            );
         }
 
         long elapsedTime = System.currentTimeMillis() - startTime;
@@ -377,6 +401,7 @@ public class MetaWordService {
         }
 
         MetaWord metaWord = metaWordRepository.findByWord(row.word())
+                .or(() -> metaWordRepository.findByNormalizedWord(cacheKey))
                 .orElseGet(() -> {
                     MetaWord newMetaWord = new MetaWord();
                     newMetaWord.setWord(row.word());
@@ -399,7 +424,9 @@ public class MetaWordService {
             metaWord = metaWordRepository.findById(cachedId).orElse(null);
         }
         if (metaWord == null) {
-            metaWord = metaWordRepository.findByWord(word).orElse(null);
+            metaWord = metaWordRepository.findByNormalizedWord(cacheKey)
+                    .or(() -> metaWordRepository.findByWord(word))
+                    .orElse(null);
         }
 
         boolean shouldSave = false;
@@ -456,7 +483,7 @@ public class MetaWordService {
     }
 
     private String normalizeWordKey(String word) {
-        return word.toLowerCase(Locale.ROOT);
+        return WordNormalizationUtils.normalize(word);
     }
 
     private Phonetic convertPhoneticDto(PhoneticDto dto) {

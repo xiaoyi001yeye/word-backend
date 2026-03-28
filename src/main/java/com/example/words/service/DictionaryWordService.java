@@ -20,6 +20,7 @@ import com.example.words.model.Tag;
 import com.example.words.repository.DictionaryWordRepository;
 import com.example.words.repository.MetaWordRepository;
 import com.example.words.repository.TagRepository;
+import com.example.words.util.WordNormalizationUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -191,7 +192,8 @@ public class DictionaryWordService {
             total++;
             String word = dto.getWord().trim();
             try {
-                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
+                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word))
+                        .or(() -> metaWordRepository.findByWord(word));
                 MetaWord metaWord;
                 if (existingMetaWordOpt.isPresent()) {
                     metaWord = existingMetaWordOpt.get();
@@ -244,7 +246,8 @@ public class DictionaryWordService {
             total++;
             String word = dto.getWord().trim();
             try {
-                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByWord(word);
+                Optional<MetaWord> existingMetaWordOpt = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word))
+                        .or(() -> metaWordRepository.findByWord(word));
                 MetaWord metaWord;
                 if (existingMetaWordOpt.isPresent()) {
                     metaWord = existingMetaWordOpt.get();

@@ -1,0 +1,71 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 190 26% 97%;
+        --foreground: 201 42% 12%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 201 42% 12%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 201 42% 12%;
+
+        --primary: 23 82% 58%;
+        --primary-foreground: 0 0% 100%;
+
+        --secondary: 184 24% 88%;
+        --secondary-foreground: 201 42% 12%;
+
+        --muted: 185 20% 92%;
+        --muted-foreground: 194 12% 40%;
+
+        --accent: 170 34% 86%;
+        --accent-foreground: 201 42% 12%;
+
+        --destructive: 0 72% 54%;
+        --destructive-foreground: 0 0% 100%;
+
+        --success: 158 56% 42%;
+        --success-foreground: 0 0% 100%;
+
+        --warning: 36 90% 52%;
+        --warning-foreground: 0 0% 100%;
+
+        --border: 187 18% 81%;
+        --input: 187 18% 81%;
+        --ring: 23 82% 58%;
+        --radius: 1rem;
+    }
+
+    * {
+        @apply border-border;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        @apply bg-background text-foreground font-sans antialiased;
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background-attachment: fixed;
+    }
+
+    #root {
+        min-height: 100vh;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply font-display;
+    }
+}

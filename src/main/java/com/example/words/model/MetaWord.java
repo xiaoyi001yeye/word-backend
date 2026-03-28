@@ -6,6 +6,8 @@ import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,6 +23,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import lombok.Data;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
+import com.example.words.util.WordNormalizationUtils;
 
 @Entity
 @Table(name = "meta_words")
@@ -37,6 +40,9 @@ public class MetaWord {
 
     @Column(name = "word", nullable = false, columnDefinition = "TEXT")
     private String word;
+
+    @Column(name = "normalized_word", nullable = false, columnDefinition = "TEXT")
+    private String normalizedWord;
 
     @Column(name = "phonetic", columnDefinition = "TEXT")
     private String phonetic;
@@ -74,6 +80,7 @@ public class MetaWord {
 
     public MetaWord(String word, String phonetic, String definition, String partOfSpeech) {
         this.word = word;
+        this.normalizedWord = WordNormalizationUtils.normalize(word);
         this.phonetic = phonetic;
         this.definition = definition;
         this.partOfSpeech = partOfSpeech;
@@ -82,7 +89,14 @@ public class MetaWord {
     // Constructor for new format
     public MetaWord(String word, Phonetic phoneticDetail, List<PartOfSpeech> partOfSpeechDetail) {
         this.word = word;
+        this.normalizedWord = WordNormalizationUtils.normalize(word);
         this.phoneticDetail = phoneticDetail;
         this.partOfSpeechDetail = partOfSpeechDetail;
+    }
+
+    @PrePersist
+    @PreUpdate
+    public void normalizeWord() {
+        this.normalizedWord = WordNormalizationUtils.normalize(word);
     }
 }

@@ -1,4 +1,7 @@
 import type {
+  BooksImportBatchFile,
+  BooksImportConflict,
+  BooksImportJob,
   Classroom,
   CreateStudyPlanPayload,
   Dictionary,
@@ -168,7 +171,9 @@ export const dictionaryApi = {
     method: 'POST',
     body: JSON.stringify(dictionary),
   }),
-  importDictionaries: () => fetchJson<{ message: string; count: number }>(`${API_BASE}/dictionaries/import`, { method: 'POST' }),
+  importDictionaries: () => fetchJson<BooksImportJob>(`${API_BASE}/dictionaries/import`, { method: 'POST' }),
+  getLatestImportJob: () => fetchJson<BooksImportJob>(`${API_BASE}/dictionaries/import/latest`),
+  getImportJob: (jobId: string) => fetchJson<BooksImportJob>(`${API_BASE}/dictionaries/import/${jobId}`),
   deleteAll: () => fetch(`${API_BASE}/dictionaries`, { method: 'DELETE' }),
   deleteById: (id: number) => fetchJson<{ message: string; id: number }>(`${API_BASE}/dictionaries/${id}`, { method: 'DELETE' }),
   deleteUserCreated: () => fetchJson<{ message: string; deletedCount: number }>(`${API_BASE}/dictionaries/user-created`, { method: 'DELETE' }),
@@ -186,6 +191,43 @@ export const dictionaryApi = {
       body: JSON.stringify({ classroomIds }),
     },
   ),
+};
+
+export const booksImportApi = {
+  createBatch: () => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches`, { method: 'POST' }),
+  getLatestBatch: () => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches/latest`),
+  getBatch: (batchId: string) => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches/${batchId}`),
+  getBatchFiles: (batchId: string) => fetchJson<BooksImportBatchFile[]>(`${API_BASE}/books-import/batches/${batchId}/files`),
+  startAutoMerge: (batchId: string) => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches/${batchId}/auto-merge`, { method: 'POST' }),
+  getConflicts: (batchId: string, resolved?: boolean) => {
+    const params = new URLSearchParams();
+    if (resolved !== undefined) {
+      params.set('resolved', String(resolved));
+    }
+    const query = params.toString();
+    return fetchJson<BooksImportConflict[]>(
+      `${API_BASE}/books-import/batches/${batchId}/conflicts${query ? `?${query}` : ''}`,
+    );
+  },
+  resolveConflict: (
+    batchId: string,
+    conflictId: number,
+    payload: {
+      resolution: 'KEEP_EXISTING' | 'USE_IMPORTED' | 'MANUAL' | 'IGNORE';
+      finalWord?: string;
+      finalDefinition?: string;
+      finalDifficulty?: number;
+      comment?: string;
+    },
+  ) => fetchJson<BooksImportConflict>(
+    `${API_BASE}/books-import/batches/${batchId}/conflicts/${conflictId}/resolve`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  ),
+  publish: (batchId: string) => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches/${batchId}/publish`, { method: 'POST' }),
+  discard: (batchId: string) => fetchJson<BooksImportJob>(`${API_BASE}/books-import/batches/${batchId}/discard`, { method: 'POST' }),
 };
 
 export const metaWordApi = {
@@ -211,7 +253,7 @@ export const metaWordApi = {
     body: JSON.stringify(word),
   }),
   deleteAll: () => fetch(`${API_BASE}/meta-words`, { method: 'DELETE' }),
-  import: () => fetchJson<{ message: string; count: number }>(`${API_BASE}/meta-words/import`, { method: 'POST' }),
+  import: () => fetchJson<BooksImportJob>(`${API_BASE}/meta-words/import`, { method: 'POST' }),
 };
 
 export const dictionaryWordApi = {

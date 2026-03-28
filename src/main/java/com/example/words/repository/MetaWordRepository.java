@@ -10,13 +10,20 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
 
     Optional<MetaWord> findByWord(String word);
 
+    Optional<MetaWord> findByNormalizedWord(String normalizedWord);
+
     boolean existsByWord(String word);
+
+    boolean existsByNormalizedWord(String normalizedWord);
+
+    List<MetaWord> findByNormalizedWordIn(Collection<String> normalizedWords);
 
     List<MetaWord> findByDifficulty(Integer difficulty);
 

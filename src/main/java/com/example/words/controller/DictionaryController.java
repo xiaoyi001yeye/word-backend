@@ -2,17 +2,19 @@ package com.example.words.controller;
 
 import com.example.words.dto.AssignStudentsRequest;
 import com.example.words.dto.AssignClassroomsRequest;
+import com.example.words.dto.BooksImportJobResponse;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
 import com.example.words.service.AccessControlService;
+import com.example.words.service.BooksImportJobService;
 import com.example.words.service.CurrentUserService;
 import com.example.words.service.ClassroomService;
 import com.example.words.service.DictionaryAssignmentService;
 import com.example.words.service.DictionaryService;
-import com.example.words.service.MetaWordService;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,31 +25,32 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/dictionaries")
 public class DictionaryController {
 
     private final DictionaryService dictionaryService;
-    private final MetaWordService metaWordService;
     private final CurrentUserService currentUserService;
     private final DictionaryAssignmentService dictionaryAssignmentService;
     private final AccessControlService accessControlService;
     private final ClassroomService classroomService;
+    private final BooksImportJobService booksImportJobService;
 
     public DictionaryController(
             DictionaryService dictionaryService,
-            MetaWordService metaWordService,
             CurrentUserService currentUserService,
             DictionaryAssignmentService dictionaryAssignmentService,
             AccessControlService accessControlService,
-            ClassroomService classroomService) {
+            ClassroomService classroomService,
+            BooksImportJobService booksImportJobService) {
         this.dictionaryService = dictionaryService;
-        this.metaWordService = metaWordService;
         this.currentUserService = currentUserService;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
         this.accessControlService = accessControlService;
         this.classroomService = classroomService;
+        this.booksImportJobService = booksImportJobService;
     }
 
     @GetMapping
@@ -76,13 +79,26 @@ public class DictionaryController {
 
     @PostMapping("/import")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> importDictionaries() {
-        MetaWordService.BooksImportResult result = metaWordService.importBooksData();
-        return ResponseEntity.ok(Map.of(
-                "message", "Books imported successfully",
-                "count", result.getDictionaryCount(),
-                "wordCount", result.getWordCount()
-        ));
+    public ResponseEntity<BooksImportJobResponse> importDictionaries() {
+        return ResponseEntity.accepted().body(booksImportJobService.createAndStart(currentUserService.getCurrentUser().getId()));
+    }
+
+    @GetMapping("/import/latest")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BooksImportJobResponse> getLatestImportJob() {
+        return ResponseEntity.ok(booksImportJobService.getLatestJob());
+    }
+
+    @GetMapping("/import/{jobId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BooksImportJobResponse> getImportJob(@PathVariable String jobId) {
+        return ResponseEntity.ok(booksImportJobService.getJob(jobId));
+    }
+
+    @GetMapping(value = "/import/{jobId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public SseEmitter streamImportJob(@PathVariable String jobId) {
+        return booksImportJobService.subscribe(jobId);
     }
 
     @PostMapping("/{id}/assign/students")
