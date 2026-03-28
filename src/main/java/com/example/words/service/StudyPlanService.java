@@ -132,11 +132,11 @@ public class StudyPlanService {
         ensureCanCreateStudyPlan(actor);
         validateRequest(request);
 
+        List<Classroom> classrooms = resolveManagedClassrooms(request.getClassroomIds(), actor);
         Dictionary dictionary = dictionaryService.findById(request.getDictionaryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + request.getDictionaryId()));
         accessControlService.ensureCanViewDictionary(actor, dictionary);
-
-        List<Classroom> classrooms = resolveManagedClassrooms(request.getClassroomIds(), actor);
+        ensureDictionaryAvailableForClassrooms(request.getDictionaryId(), classrooms, actor);
         Long teacherId = resolvePlanTeacherId(classrooms, actor);
 
         StudyPlan studyPlan = new StudyPlan();
@@ -366,8 +366,7 @@ public class StudyPlanService {
         List<Integer> reviewIntervals = parseReviewIntervals(studyPlan.getReviewIntervalsJson());
         LocalDateTime now = resolveNow(studyPlan);
 
-        StudyWordProgress studyWordProgress = studyWordProgressRepository
-                .findByStudentStudyPlanIdAndMetaWordId(studentStudyPlanId, request.getMetaWordId())
+        StudyWordProgress studyWordProgress = findStudyWordProgress(studentStudyPlanId, request.getMetaWordId())
                 .orElseGet(() -> createProgressForExistingItem(studentStudyPlanId, request.getMetaWordId(), taskDate, taskItem));
 
         int focusSeconds = normalizeFocusSeconds(request.getFocusSeconds(), request.getDurationSeconds(), studyPlan);
@@ -534,6 +533,17 @@ public class StudyPlanService {
         return classrooms.isEmpty() ? actor.getId() : classrooms.get(0).getTeacherId();
     }
 
+    private void ensureDictionaryAvailableForClassrooms(Long dictionaryId, List<Classroom> classrooms, AppUser actor) {
+        List<Long> classroomIds = classrooms.stream()
+                .map(Classroom::getId)
+                .toList();
+        boolean available = dictionaryService.findVisibleDictionariesForClassrooms(classroomIds, actor).stream()
+                .anyMatch(dictionary -> Objects.equals(dictionary.getId(), dictionaryId));
+        if (!available) {
+            throw new BadRequestException("dictionaryId is not associated with all selected classrooms");
+        }
+    }
+
     private StudyPlanResponse toStudyPlanResponse(StudyPlan studyPlan) {
         Dictionary dictionary = dictionaryService.findById(studyPlan.getDictionaryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + studyPlan.getDictionaryId()));
@@ -634,8 +644,8 @@ public class StudyPlanService {
                 .map(StudyDayTaskItem::getMetaWordId)
                 .toList();
         Map<Long, MetaWord> metaWordMap = loadMetaWords(metaWordIds);
-        Map<Long, StudyWordProgress> progressMap = studyWordProgressRepository.findByStudentStudyPlanId(studentStudyPlan.getId()).stream()
-                .collect(Collectors.toMap(StudyWordProgress::getMetaWordId, progress -> progress, (left, right) -> left));
+        Map<Long, StudyWordProgress> progressMap = buildStudyWordProgressMap(
+                studyWordProgressRepository.findByStudentStudyPlanId(studentStudyPlan.getId()));
 
         List<StudyTaskItemResponse> queue = new ArrayList<>();
         for (StudyDayTaskItem taskItem : taskItems) {
@@ -835,7 +845,10 @@ public class StudyPlanService {
 
     private void refreshStudentStudyPlanMetrics(StudentStudyPlan studentStudyPlan, StudyPlan studyPlan) {
         long totalWords = dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(studyPlan.getDictionaryId()).size();
-        long reviewedWords = studyWordProgressRepository.countByStudentStudyPlanIdAndLastReviewAtIsNotNull(studentStudyPlan.getId());
+        long reviewedWords = buildStudyWordProgressMap(studyWordProgressRepository.findByStudentStudyPlanId(studentStudyPlan.getId()))
+                .values().stream()
+                .filter(progress -> progress.getLastReviewAt() != null)
+                .count();
         studentStudyPlan.setOverallProgress(percentage(reviewedWords, totalWords));
 
         List<StudentAttentionDailyStat> dailyStats = studentAttentionDailyStatRepository
@@ -935,8 +948,7 @@ public class StudyPlanService {
 
     private StudyDayTask generateTodayTask(StudentStudyPlan studentStudyPlan, StudyPlan studyPlan, LocalDate taskDate) {
         List<StudyWordProgress> existingProgresses = studyWordProgressRepository.findByStudentStudyPlanId(studentStudyPlan.getId());
-        Map<Long, StudyWordProgress> progressMap = existingProgresses.stream()
-                .collect(Collectors.toMap(StudyWordProgress::getMetaWordId, progress -> progress, (left, right) -> left));
+        Map<Long, StudyWordProgress> progressMap = buildStudyWordProgressMap(existingProgresses);
 
         List<StudyWordProgress> reviewCandidates = existingProgresses.stream()
                 .filter(progress -> isDueOn(progress, taskDate))
@@ -1264,6 +1276,32 @@ public class StudyPlanService {
                         .thenComparingInt(task -> safeInt(task.getTotalFocusSeconds()))
                         .thenComparing(StudyDayTask::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(StudyDayTask::getId, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    private Optional<StudyWordProgress> findStudyWordProgress(Long studentStudyPlanId, Long metaWordId) {
+        return selectPreferredStudyWordProgress(
+                studyWordProgressRepository.findByStudentStudyPlanIdAndMetaWordId(studentStudyPlanId, metaWordId));
+    }
+
+    private Map<Long, StudyWordProgress> buildStudyWordProgressMap(List<StudyWordProgress> studyWordProgresses) {
+        return studyWordProgresses.stream()
+                .collect(Collectors.toMap(
+                        StudyWordProgress::getMetaWordId,
+                        progress -> progress,
+                        this::selectPreferredStudyWordProgress));
+    }
+
+    private Optional<StudyWordProgress> selectPreferredStudyWordProgress(List<StudyWordProgress> studyWordProgresses) {
+        return studyWordProgresses.stream()
+                .sorted(Comparator.comparingInt((StudyWordProgress progress) -> safeInt(progress.getTotalReviews())).reversed()
+                        .thenComparing(StudyWordProgress::getMasteryLevel, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(StudyWordProgress::getLastReviewAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(StudyWordProgress::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .findFirst();
+    }
+
+    private StudyWordProgress selectPreferredStudyWordProgress(StudyWordProgress left, StudyWordProgress right) {
+        return selectPreferredStudyWordProgress(List.of(left, right)).orElse(left);
     }
 
     private Optional<StudyDayTaskItem> findStudyDayTaskItem(Long studyDayTaskId, Long metaWordId) {

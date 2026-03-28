@@ -1170,7 +1170,6 @@ function App() {
       {canManageWorkspace ? (
         <StudyPlanManagementModal
           isOpen={showStudyPlanModal}
-          dictionaries={dictionaries}
           classrooms={availableClassrooms}
           onClose={() => setShowStudyPlanModal(false)}
         />

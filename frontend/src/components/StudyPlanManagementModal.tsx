@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { studyPlanApi } from '../api';
+import { dictionaryApi, studyPlanApi } from '../api';
 import type {
   Classroom,
   CreateStudyPlanPayload,
@@ -12,7 +12,6 @@ import type {
 
 interface StudyPlanManagementModalProps {
   isOpen: boolean;
-  dictionaries: Dictionary[];
   classrooms: Classroom[];
   onClose: () => void;
 }
@@ -94,13 +93,12 @@ function taskStatusLabel(status: StudyPlanStudentSummary['todayStatus']) {
 }
 
 function buildInitialFormState(
-  dictionaries: Dictionary[],
   classrooms: Classroom[],
 ): StudyPlanFormState {
   return {
     name: '',
     description: '',
-    dictionaryId: dictionaries[0]?.id ?? '',
+    dictionaryId: '',
     classroomIds: classrooms[0] ? [classrooms[0].id] : [],
     startDate: formatDateInput(),
     endDate: '',
@@ -121,7 +119,6 @@ function buildInitialFormState(
 
 export function StudyPlanManagementModal({
   isOpen,
-  dictionaries,
   classrooms,
   onClose,
 }: StudyPlanManagementModalProps) {
@@ -132,12 +129,14 @@ export function StudyPlanManagementModal({
   const [attention, setAttention] = useState<StudyPlanStudentAttention | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadingAvailableDictionaries, setLoadingAvailableDictionaries] = useState(false);
   const [creating, setCreating] = useState(false);
   const [publishingPlanId, setPublishingPlanId] = useState<number | null>(null);
   const [attentionLoadingStudentId, setAttentionLoadingStudentId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [form, setForm] = useState<StudyPlanFormState>(() => buildInitialFormState(dictionaries, classrooms));
+  const [form, setForm] = useState<StudyPlanFormState>(() => buildInitialFormState(classrooms));
+  const [availableDictionaries, setAvailableDictionaries] = useState<Dictionary[]>([]);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
   const classroomNameMap = new Map(classrooms.map((classroom) => [classroom.id, classroom.name]));
@@ -200,11 +199,66 @@ export function StudyPlanManagementModal({
       return;
     }
 
-    setForm(buildInitialFormState(dictionaries, classrooms));
+    setForm(buildInitialFormState(classrooms));
     setAttention(null);
     setSuccessMessage(null);
     void loadPlans();
-  }, [classrooms, dictionaries, isOpen]);
+  }, [classrooms, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (form.classroomIds.length === 0) {
+      setAvailableDictionaries([]);
+      setForm((current) => (
+        current.dictionaryId === ''
+          ? current
+          : { ...current, dictionaryId: '' }
+      ));
+      return;
+    }
+
+    let active = true;
+    setLoadingAvailableDictionaries(true);
+
+    void dictionaryApi.getAll(form.classroomIds)
+      .then((nextDictionaries) => {
+        if (!active) {
+          return;
+        }
+        setAvailableDictionaries(nextDictionaries);
+        setForm((current) => {
+          if (
+            current.dictionaryId !== ''
+            && nextDictionaries.some((dictionary) => dictionary.id === current.dictionaryId)
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            dictionaryId: nextDictionaries[0]?.id ?? '',
+          };
+        });
+      })
+      .catch((loadError) => {
+        if (!active) {
+          return;
+        }
+        setAvailableDictionaries([]);
+        setError(loadError instanceof Error ? loadError.message : '加载关联辞书失败');
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingAvailableDictionaries(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.classroomIds, isOpen]);
 
   if (!isOpen) {
     return null;
@@ -218,12 +272,12 @@ export function StudyPlanManagementModal({
   };
 
   const toggleClassroom = (classroomId: number) => {
-    updateForm(
-      'classroomIds',
-      form.classroomIds.includes(classroomId)
-        ? form.classroomIds.filter((id) => id !== classroomId)
-        : [...form.classroomIds, classroomId],
-    );
+    setForm((current) => ({
+      ...current,
+      classroomIds: current.classroomIds.includes(classroomId)
+        ? current.classroomIds.filter((id) => id !== classroomId)
+        : [...current.classroomIds, classroomId],
+    }));
   };
 
   const handleCreate = async (event: React.FormEvent) => {
@@ -275,7 +329,7 @@ export function StudyPlanManagementModal({
         idleTimeoutSeconds: form.idleTimeoutSeconds,
       });
 
-      setForm(buildInitialFormState(dictionaries, classrooms));
+      setForm(buildInitialFormState(classrooms));
       setSuccessMessage(`计划「${createdPlan.name}」已创建，现在可以直接发布给班级。`);
       await loadPlans(createdPlan.id);
     } catch (createError) {
@@ -368,28 +422,8 @@ export function StudyPlanManagementModal({
               </div>
 
               <div className="form__group">
-                <label htmlFor="studyPlanDictionary" className="form__label">关联辞书</label>
-                <select
-                  id="studyPlanDictionary"
-                  className="form__select"
-                  value={form.dictionaryId}
-                  onChange={(event) => updateForm('dictionaryId', Number(event.target.value))}
-                  disabled={creating || dictionaries.length === 0}
-                >
-                  {dictionaries.length === 0 ? (
-                    <option value="">暂无可用辞书</option>
-                  ) : (
-                    dictionaries.map((dictionary) => (
-                      <option key={dictionary.id} value={dictionary.id}>
-                        {dictionary.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div className="form__group">
                 <span className="form__label">目标班级</span>
+                <p className="form__hint">先选班级，再从这些班级共同关联的辞书里选择。多个班级会自动取交集。</p>
                 {classrooms.length === 0 ? (
                   <div className="study-plan-empty">还没有可用班级，请先去“班级管理”创建班级。</div>
                 ) : (
@@ -416,6 +450,31 @@ export function StudyPlanManagementModal({
                     })}
                   </div>
                 )}
+              </div>
+
+              <div className="form__group">
+                <label htmlFor="studyPlanDictionary" className="form__label">关联辞书</label>
+                <select
+                  id="studyPlanDictionary"
+                  className="form__select"
+                  value={form.dictionaryId}
+                  onChange={(event) => updateForm('dictionaryId', Number(event.target.value))}
+                  disabled={creating || loadingAvailableDictionaries || form.classroomIds.length === 0 || availableDictionaries.length === 0}
+                >
+                  {form.classroomIds.length === 0 ? (
+                    <option value="">请先选择目标班级</option>
+                  ) : loadingAvailableDictionaries ? (
+                    <option value="">正在加载可用辞书...</option>
+                  ) : availableDictionaries.length === 0 ? (
+                    <option value="">所选班级暂无共同关联辞书</option>
+                  ) : (
+                    availableDictionaries.map((dictionary) => (
+                      <option key={dictionary.id} value={dictionary.id}>
+                        {dictionary.name}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
               <div className="form__row">
@@ -612,7 +671,7 @@ export function StudyPlanManagementModal({
                 <button
                   type="submit"
                   className="btn btn--primary"
-                  disabled={creating || dictionaries.length === 0 || classrooms.length === 0}
+                  disabled={creating || loadingAvailableDictionaries || form.dictionaryId === '' || classrooms.length === 0}
                 >
                   {creating ? '创建中...' : '创建计划'}
                 </button>

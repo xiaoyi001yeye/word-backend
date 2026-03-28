@@ -139,7 +139,7 @@ class DictionaryWordServiceTest {
         private Integer lastUpdatedWordCount;
 
         private RecordingDictionaryService() {
-            super(null, null, null);
+            super(null, null, null, null, null, null);
         }
 
         @Override

@@ -156,7 +156,12 @@ export const authApi = {
 };
 
 export const dictionaryApi = {
-  getAll: () => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries`),
+  getAll: (classroomIds?: number[]) => {
+    const query = classroomIds && classroomIds.length > 0
+      ? `?${classroomIds.map((classroomId) => `classroomIds=${classroomId}`).join('&')}`
+      : '';
+    return fetchJson<Dictionary[]>(`${API_BASE}/dictionaries${query}`);
+  },
   getById: (id: number) => fetchJson<Dictionary>(`${API_BASE}/dictionaries/${id}`),
   getByCategory: (category: string) => fetchJson<Dictionary[]>(`${API_BASE}/dictionaries/category/${category}`),
   create: (dictionary: Omit<Dictionary, 'id'>) => fetchJson<Dictionary>(`${API_BASE}/dictionaries`, {

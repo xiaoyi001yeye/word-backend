@@ -1,4 +1,4 @@
-FROM maven:3.9.11-eclipse-temurin-17 AS builder
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
 WORKDIR /workspace
 
@@ -8,7 +8,7 @@ COPY src ./src
 
 RUN mvn -q -s settings.xml -Dmaven.repo.local=/workspace/maven-repo -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
