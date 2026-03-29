@@ -8,8 +8,8 @@ import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
 import com.example.words.service.AccessControlService;
 import com.example.words.service.BooksImportJobService;
+import com.example.words.service.ClassroomDictionaryAssignmentService;
 import com.example.words.service.CurrentUserService;
-import com.example.words.service.ClassroomService;
 import com.example.words.service.DictionaryAssignmentService;
 import com.example.words.service.DictionaryService;
 import java.util.List;
@@ -34,22 +34,22 @@ public class DictionaryController {
     private final DictionaryService dictionaryService;
     private final CurrentUserService currentUserService;
     private final DictionaryAssignmentService dictionaryAssignmentService;
+    private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final AccessControlService accessControlService;
-    private final ClassroomService classroomService;
     private final BooksImportJobService booksImportJobService;
 
     public DictionaryController(
             DictionaryService dictionaryService,
             CurrentUserService currentUserService,
             DictionaryAssignmentService dictionaryAssignmentService,
+            ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
             AccessControlService accessControlService,
-            ClassroomService classroomService,
             BooksImportJobService booksImportJobService) {
         this.dictionaryService = dictionaryService;
         this.currentUserService = currentUserService;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
+        this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.accessControlService = accessControlService;
-        this.classroomService = classroomService;
         this.booksImportJobService = booksImportJobService;
     }
 
@@ -131,12 +131,11 @@ public class DictionaryController {
         Dictionary dictionary = dictionaryService.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + id));
 
-        List<Long> studentIds = classroomService.getStudentIdsForClassrooms(request.getClassroomIds(), actor).stream().toList();
-        for (Long studentId : studentIds) {
-            accessControlService.ensureCanAssignDictionaryToStudent(actor, dictionary, studentId);
-        }
-
-        int assignedCount = dictionaryAssignmentService.assignDictionaryToStudents(dictionary, actor, studentIds);
+        int assignedCount = classroomDictionaryAssignmentService.assignDictionaryToClassrooms(
+                dictionary.getId(),
+                request.getClassroomIds(),
+                actor
+        );
         return ResponseEntity.ok(Map.of(
                 "message", "Dictionary assigned to classrooms successfully",
                 "dictionaryId", id,

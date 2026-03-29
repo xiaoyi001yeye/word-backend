@@ -1,9 +1,12 @@
 package com.example.words.controller;
 
+import com.example.words.dto.AssignDictionariesRequest;
 import com.example.words.dto.ClassroomResponse;
 import com.example.words.dto.CreateClassroomRequest;
 import com.example.words.dto.UpdateClassroomRequest;
 import com.example.words.dto.UserResponse;
+import com.example.words.model.Dictionary;
+import com.example.words.service.ClassroomDictionaryAssignmentService;
 import com.example.words.service.ClassroomService;
 import com.example.words.service.CurrentUserService;
 import jakarta.validation.Valid;
@@ -27,10 +30,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClassroomController {
 
     private final ClassroomService classroomService;
+    private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final CurrentUserService currentUserService;
 
-    public ClassroomController(ClassroomService classroomService, CurrentUserService currentUserService) {
+    public ClassroomController(
+            ClassroomService classroomService,
+            ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
+            CurrentUserService currentUserService) {
         this.classroomService = classroomService;
+        this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.currentUserService = currentUserService;
     }
 
@@ -90,10 +98,46 @@ public class ClassroomController {
         return ResponseEntity.ok(classroomService.getStudentsForClassroom(id, currentUserService.getCurrentUser()));
     }
 
+    @GetMapping("/{id}/dictionaries")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<List<Dictionary>> getClassroomDictionaries(@PathVariable Long id) {
+        return ResponseEntity.ok(
+                classroomDictionaryAssignmentService.findDictionariesForClassroom(id, currentUserService.getCurrentUser())
+        );
+    }
+
+    @PostMapping("/{id}/dictionaries")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Map<String, Object>> assignDictionariesToClassroom(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignDictionariesRequest request) {
+        int assignedCount = classroomDictionaryAssignmentService.assignDictionariesToClassroom(
+                id,
+                request.getDictionaryIds(),
+                currentUserService.getCurrentUser()
+        );
+        return ResponseEntity.ok(Map.of(
+                "message", "Dictionaries assigned to classroom successfully",
+                "classroomId", id,
+                "assignedCount", assignedCount
+        ));
+    }
+
     @PostMapping("/{id}/students/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<Void> addStudentToClassroom(@PathVariable Long id, @PathVariable Long studentId) {
         classroomService.addStudentToClassroom(id, studentId, currentUserService.getCurrentUser());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/dictionaries/{dictionaryId}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Void> removeDictionaryFromClassroom(@PathVariable Long id, @PathVariable Long dictionaryId) {
+        classroomDictionaryAssignmentService.removeDictionaryFromClassroom(
+                id,
+                dictionaryId,
+                currentUserService.getCurrentUser()
+        );
         return ResponseEntity.noContent().build();
     }
 

@@ -1,20 +1,16 @@
 package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 
 import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
-import com.example.words.model.ClassroomMember;
 import com.example.words.model.Dictionary;
-import com.example.words.model.DictionaryAssignment;
 import com.example.words.model.ResourceScopeType;
 import com.example.words.model.UserRole;
-import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
-import com.example.words.repository.DictionaryAssignmentRepository;
 import com.example.words.repository.DictionaryRepository;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,16 +29,13 @@ class DictionaryServiceTest {
     private DictionaryAssignmentService dictionaryAssignmentService;
 
     @Mock
+    private ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
+
+    @Mock
     private AccessControlService accessControlService;
 
     @Mock
-    private DictionaryAssignmentRepository dictionaryAssignmentRepository;
-
-    @Mock
     private ClassroomRepository classroomRepository;
-
-    @Mock
-    private ClassroomMemberRepository classroomMemberRepository;
 
     private DictionaryService dictionaryService;
 
@@ -51,15 +44,14 @@ class DictionaryServiceTest {
         dictionaryService = new DictionaryService(
                 dictionaryRepository,
                 dictionaryAssignmentService,
+                classroomDictionaryAssignmentService,
                 accessControlService,
-                dictionaryAssignmentRepository,
-                classroomRepository,
-                classroomMemberRepository
+                classroomRepository
         );
     }
 
     @Test
-    void findVisibleDictionariesForClassroomsShouldReturnSingleClassroomCommonDictionaries() {
+    void findVisibleDictionariesForClassroomsShouldReturnSingleClassroomAssignedDictionaries() {
         AppUser teacher = new AppUser();
         teacher.setId(7L);
         teacher.setRole(UserRole.TEACHER);
@@ -71,17 +63,10 @@ class DictionaryServiceTest {
 
         when(dictionaryRepository.findAll()).thenReturn(List.of(dictionary1, dictionary2, dictionary3));
         when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
-        when(classroomMemberRepository.findByClassroomIdIn(List.of(100L))).thenReturn(List.of(
-                new ClassroomMember(1L, 100L, 11L, null),
-                new ClassroomMember(2L, 100L, 12L, null)
-        ));
-        when(dictionaryAssignmentRepository.findByStudentIdIn(anyCollection())).thenReturn(List.of(
-                new DictionaryAssignment(1L, 1L, 11L, 7L, null),
-                new DictionaryAssignment(2L, 2L, 11L, 7L, null),
-                new DictionaryAssignment(3L, 1L, 12L, 7L, null),
-                new DictionaryAssignment(4L, 2L, 12L, 7L, null),
-                new DictionaryAssignment(5L, 3L, 12L, 7L, null)
-        ));
+        when(classroomDictionaryAssignmentService.intersectAssignedDictionaryIdsForClassrooms(List.of(100L)))
+                .thenReturn(new LinkedHashSet<>(List.of(1L, 2L)));
+        when(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForTeacher(7L))
+                .thenReturn(new LinkedHashSet<>(List.of(1L, 2L)));
 
         List<Dictionary> result = dictionaryService.findVisibleDictionariesForClassrooms(List.of(100L), teacher);
 
@@ -103,26 +88,31 @@ class DictionaryServiceTest {
         when(dictionaryRepository.findAll()).thenReturn(List.of(dictionary1, dictionary2, dictionary3));
         when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom1));
         when(classroomRepository.findById(101L)).thenReturn(Optional.of(classroom2));
-        when(classroomMemberRepository.findByClassroomIdIn(List.of(100L, 101L))).thenReturn(List.of(
-                new ClassroomMember(1L, 100L, 11L, null),
-                new ClassroomMember(2L, 100L, 12L, null),
-                new ClassroomMember(3L, 101L, 21L, null),
-                new ClassroomMember(4L, 101L, 22L, null)
-        ));
-        when(dictionaryAssignmentRepository.findByStudentIdIn(anyCollection())).thenReturn(List.of(
-                new DictionaryAssignment(1L, 1L, 11L, 7L, null),
-                new DictionaryAssignment(2L, 2L, 11L, 7L, null),
-                new DictionaryAssignment(3L, 1L, 12L, 7L, null),
-                new DictionaryAssignment(4L, 2L, 12L, 7L, null),
-                new DictionaryAssignment(5L, 3L, 12L, 7L, null),
-                new DictionaryAssignment(6L, 2L, 21L, 7L, null),
-                new DictionaryAssignment(7L, 3L, 21L, 7L, null),
-                new DictionaryAssignment(8L, 2L, 22L, 7L, null)
-        ));
+        when(classroomDictionaryAssignmentService.intersectAssignedDictionaryIdsForClassrooms(List.of(100L, 101L)))
+                .thenReturn(new LinkedHashSet<>(List.of(2L)));
+        when(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForTeacher(7L))
+                .thenReturn(new LinkedHashSet<>(List.of(1L, 2L, 3L)));
 
         List<Dictionary> result = dictionaryService.findVisibleDictionariesForClassrooms(List.of(100L, 101L), teacher);
 
         assertEquals(List.of(2L), result.stream().map(Dictionary::getId).toList());
+    }
+
+    @Test
+    void findAssignedDictionariesForStudentShouldIncludeDirectAndClassroomAssignments() {
+        Dictionary dictionary1 = dictionary(1L, "高考核心", ResourceScopeType.SYSTEM);
+        Dictionary dictionary2 = dictionary(2L, "高考进阶", ResourceScopeType.SYSTEM);
+        Dictionary dictionary3 = dictionary(3L, "阅读专项", ResourceScopeType.SYSTEM);
+
+        when(dictionaryRepository.findAll()).thenReturn(List.of(dictionary1, dictionary2, dictionary3));
+        when(dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(88L))
+                .thenReturn(new LinkedHashSet<>(List.of(1L)));
+        when(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForStudent(88L))
+                .thenReturn(new LinkedHashSet<>(List.of(2L, 3L)));
+
+        List<Dictionary> result = dictionaryService.findAssignedDictionariesForStudent(88L);
+
+        assertEquals(List.of(1L, 2L, 3L), result.stream().map(Dictionary::getId).toList());
     }
 
     private Dictionary dictionary(Long id, String name, ResourceScopeType scopeType) {

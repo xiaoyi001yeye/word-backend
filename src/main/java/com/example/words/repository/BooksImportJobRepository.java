@@ -4,6 +4,8 @@ import com.example.words.model.BooksImportJob;
 import com.example.words.model.BooksImportJobStatus;
 import java.util.Collection;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,4 +15,6 @@ public interface BooksImportJobRepository extends JpaRepository<BooksImportJob, 
     boolean existsByStatusIn(Collection<BooksImportJobStatus> statuses);
 
     Optional<BooksImportJob> findTopByOrderByCreatedAtDesc();
+
+    Page<BooksImportJob> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

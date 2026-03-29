@@ -6,6 +6,7 @@ import type {
     BooksImportJobResponse,
     ClassroomResponse,
     Dictionary,
+    DictionaryWordEntryResponse,
     LoginResponse,
     PaginatedResponse,
     QuoteResponse,
@@ -140,12 +141,27 @@ export const api = {
     deleteClassroom: (classroomId: number) =>
         request<{ message: string; id: number }>(`/api/classrooms/${classroomId}`, { method: "DELETE" }),
     getClassroomStudents: (classroomId: number) => request<UserResponse[]>(`/api/classrooms/${classroomId}/students`),
+    getClassroomDictionaries: (classroomId: number) =>
+        request<Dictionary[]>(`/api/classrooms/${classroomId}/dictionaries`),
+    assignDictionariesToClassroom: (classroomId: number, dictionaryIds: number[]) =>
+        request<{ message: string; classroomId: number; assignedCount: number }>(`/api/classrooms/${classroomId}/dictionaries`, {
+            method: "POST",
+            body: { dictionaryIds },
+        }),
+    removeDictionaryFromClassroom: (classroomId: number, dictionaryId: number) =>
+        request<void>(`/api/classrooms/${classroomId}/dictionaries/${dictionaryId}`, { method: "DELETE" }),
     addStudentToClassroom: (classroomId: number, studentId: number) =>
         request<void>(`/api/classrooms/${classroomId}/students/${studentId}`, { method: "POST" }),
     removeStudentFromClassroom: (classroomId: number, studentId: number) =>
         request<void>(`/api/classrooms/${classroomId}/students/${studentId}`, { method: "DELETE" }),
 
     listDictionaries: () => request<Dictionary[]>("/api/dictionaries"),
+    listDictionaryEntriesPage: (
+        dictionaryId: number,
+        params: { page?: number; size?: number; keyword?: string; sortBy?: string; sortDir?: string },
+    ) => request<PaginatedResponse<DictionaryWordEntryResponse>>(
+        `/api/dictionary-words/dictionary/${dictionaryId}/entries${buildQueryString(params)}`,
+    ),
     createDictionary: (payload: { name: string; category?: string; scopeType?: string | null }) =>
         request<Dictionary>("/api/dictionaries", { method: "POST", body: payload }),
     assignDictionaryToClassrooms: (dictionaryId: number, classroomIds: number[]) =>
@@ -166,6 +182,8 @@ export const api = {
 
     createImportBatch: () => request<BooksImportJobResponse>("/api/books-import/batches", { method: "POST" }),
     getLatestImportBatch: () => request<BooksImportJobResponse>("/api/books-import/batches/latest"),
+    listImportBatchesPage: (params: { page?: number; size?: number }) =>
+        request<PaginatedResponse<BooksImportJobResponse>>(`/api/books-import/batches/page${buildQueryString(params)}`),
     getImportBatch: (batchId: string) => request<BooksImportJobResponse>(`/api/books-import/batches/${batchId}`),
     getImportBatchFiles: (batchId: string) =>
         request<BooksImportBatchFileResponse[]>(`/api/books-import/batches/${batchId}/files`),
@@ -181,4 +199,5 @@ export const api = {
         request<BooksImportJobResponse>(`/api/books-import/batches/${batchId}/publish`, { method: "POST" }),
     discardImportBatch: (batchId: string) =>
         request<BooksImportJobResponse>(`/api/books-import/batches/${batchId}/discard`, { method: "POST" }),
+    deleteImportBatch: (batchId: string) => request<void>(`/api/books-import/batches/${batchId}`, { method: "DELETE" }),
 };

@@ -76,9 +76,11 @@ public class DictionaryWordController {
             @PathVariable Long dictionaryId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String keyword) {
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "entryOrder") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
         ensureCanViewDictionary(dictionaryId);
-        return dictionaryWordService.findEntriesByDictionaryId(dictionaryId, page, size, keyword);
+        return dictionaryWordService.findEntriesByDictionaryId(dictionaryId, page, size, keyword, sortBy, sortDir);
     }
 
     @GetMapping("/word/{metaWordId}")

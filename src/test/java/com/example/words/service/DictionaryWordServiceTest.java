@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
@@ -147,6 +148,30 @@ class DictionaryWordServiceTest {
         verifyNoInteractions(metaWordRepository);
     }
 
+    @Test
+    void findEntriesByDictionaryIdShouldNormalizeKeywordAndSortParameters() {
+        when(dictionaryWordRepository.findEntriesPage(
+                eq(7L),
+                eq("%app%"),
+                eq("entryOrder"),
+                eq("asc"),
+                any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        dictionaryWordService.findEntriesByDictionaryId(7L, 0, 0, "  App  ", "unknown", "invalid");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(dictionaryWordRepository).findEntriesPage(
+                eq(7L),
+                eq("%app%"),
+                eq("entryOrder"),
+                eq("asc"),
+                pageableCaptor.capture()
+        );
+        assertEquals(0, pageableCaptor.getValue().getPageNumber());
+        assertEquals(1, pageableCaptor.getValue().getPageSize());
+    }
+
     private static final class RecordingDictionaryService extends DictionaryService {
 
         private Long lastIncrementDictionaryId;
@@ -156,7 +181,7 @@ class DictionaryWordServiceTest {
         private Integer lastUpdatedEntryCount;
 
         private RecordingDictionaryService() {
-            super(null, null, null, null, null, null);
+            super(null, null, null, null, null);
         }
 
         @Override

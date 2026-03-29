@@ -208,6 +208,25 @@ public class BooksImportJobService {
         return getJob(batchId);
     }
 
+    public void deleteBatch(String batchId) {
+        BooksImportJob batch = getJobEntity(batchId);
+        if (ACTIVE_STATUSES.contains(batch.getStatus())) {
+            throw new ConflictException("Active batch cannot be deleted");
+        }
+
+        List<String> republishedDictionaryNames = findRepublishedDictionaryNames(batchId);
+        if (!republishedDictionaryNames.isEmpty()) {
+            throw new ConflictException("Batch cannot be deleted because newer batches already republished: "
+                    + String.join(", ", republishedDictionaryNames));
+        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            deletePublishedDictionaries(batchId);
+            deleteBatchCreatedMetaWords(batchId);
+            booksImportJobRepository.deleteById(batchId);
+        });
+    }
+
     public BooksImportJobResponse getJob(String jobId) {
         return toResponse(getJobEntity(jobId));
     }
@@ -216,6 +235,11 @@ public class BooksImportJobService {
         BooksImportJob job = booksImportJobRepository.findTopByOrderByCreatedAtDesc()
                 .orElseThrow(() -> new ResourceNotFoundException("No books import batch found"));
         return toResponse(job);
+    }
+
+    public Page<BooksImportJobResponse> getJobsPage(int page, int size) {
+        Pageable pageable = buildPageable(page, size);
+        return booksImportJobRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toResponse);
     }
 
     public List<BooksImportBatchFileResponse> getFiles(String batchId) {
@@ -1271,6 +1295,90 @@ public class BooksImportJobService {
                     LocalDateTime.now()
             );
         }
+    }
+
+    private List<String> findRepublishedDictionaryNames(String batchId) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT later.dictionary_name
+                        FROM import_publish_logs later
+                        JOIN (
+                            SELECT dictionary_name,
+                                   MAX(COALESCE(finished_at, started_at)) AS published_at
+                            FROM import_publish_logs
+                            WHERE batch_id = ?
+                            GROUP BY dictionary_name
+                        ) current_publish
+                          ON current_publish.dictionary_name = later.dictionary_name
+                        WHERE later.batch_id <> ?
+                          AND COALESCE(later.finished_at, later.started_at) > current_publish.published_at
+                        ORDER BY later.dictionary_name
+                        """,
+                String.class,
+                batchId,
+                batchId
+        );
+    }
+
+    private void deletePublishedDictionaries(String batchId) {
+        List<Long> dictionaryIds = jdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT dictionary_id
+                        FROM import_publish_logs
+                        WHERE batch_id = ?
+                          AND dictionary_id IS NOT NULL
+                        """,
+                Long.class,
+                batchId
+        );
+        if (dictionaryIds.isEmpty()) {
+            return;
+        }
+        dictionaryRepository.deleteAllByIdInBatch(dictionaryIds);
+        dictionaryRepository.flush();
+    }
+
+    private void deleteBatchCreatedMetaWords(String batchId) {
+        jdbcTemplate.update(
+                """
+                        DELETE FROM meta_words m
+                        WHERE m.normalized_word IN (
+                            SELECT DISTINCT c.normalized_word
+                            FROM import_meta_word_candidates c
+                            WHERE c.batch_id = ?
+                              AND c.matched_meta_word_id IS NULL
+                              AND c.merge_status IN (?, ?)
+                        )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM dictionary_words dw
+                              WHERE dw.meta_word_id = m.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM exam_questions eq
+                              WHERE eq.meta_word_id = m.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM study_day_task_items sdti
+                              WHERE sdti.meta_word_id = m.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM study_word_progresses swp
+                              WHERE swp.meta_word_id = m.id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM study_records sr
+                              WHERE sr.meta_word_id = m.id
+                          )
+                        """,
+                batchId,
+                ImportMetaWordCandidateStatus.AUTO_CREATE.name(),
+                ImportMetaWordCandidateStatus.MANUALLY_RESOLVED.name()
+        );
     }
 
     private Dictionary publishSingleDictionary(

@@ -22,9 +22,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/features/auth/auth-context";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import type { ClassroomResponse, PaginatedResponse, UserResponse } from "@/types/api";
+import type { ClassroomResponse, Dictionary, PaginatedResponse, UserResponse } from "@/types/api";
 
 interface ClassroomOptionsData {
+    dictionaries: Dictionary[];
     teachers: UserResponse[];
     students: UserResponse[];
 }
@@ -47,6 +48,7 @@ export function ClassroomsPage() {
     const [sortDir, setSortDir] = createSignal<"asc" | "desc">("desc");
     const [currentPage, setCurrentPage] = createSignal(1);
     const [selectedClassroomId, setSelectedClassroomId] = createSignal<number | null>(null);
+    const [selectedDictionaryId, setSelectedDictionaryId] = createSignal("");
     const [selectedStudentId, setSelectedStudentId] = createSignal("");
     const [form, setForm] = createStore(createDefaultForm());
 
@@ -57,12 +59,14 @@ export function ClassroomsPage() {
                 return null;
             }
 
-            const [students, allUsers] = await Promise.all([
+            const [students, dictionaries, allUsers] = await Promise.all([
                 api.listStudents(),
+                api.listDictionaries(),
                 user.role === "ADMIN" ? api.listUsers() : Promise.resolve<UserResponse[]>([]),
             ]);
 
             return {
+                dictionaries,
                 teachers: user.role === "ADMIN" ? allUsers.filter((item) => item.role === "TEACHER") : [],
                 students,
             };
@@ -103,6 +107,16 @@ export function ClassroomsPage() {
         },
     );
 
+    const [classroomDictionaries, { refetch: refetchDictionaries }] = createResource(
+        selectedClassroomId,
+        async (classroomId): Promise<Dictionary[]> => {
+            if (!classroomId) {
+                return [];
+            }
+            return api.getClassroomDictionaries(classroomId);
+        },
+    );
+
     const currentClassrooms = createMemo(() => classroomsPage()?.content ?? []);
     const selectedClassroom = createMemo(() => {
         const classroomId = selectedClassroomId();
@@ -135,10 +149,16 @@ export function ClassroomsPage() {
         }
     });
 
+    createEffect(() => {
+        selectedClassroomId();
+        setSelectedStudentId("");
+        setSelectedDictionaryId("");
+    });
+
     const mutateAndRefresh = async (
         runner: () => Promise<unknown>,
         successMessage: string,
-        options?: { refreshMembers?: boolean },
+        options?: { refreshMembers?: boolean; refreshDictionaries?: boolean },
     ) => {
         setFeedback("");
         await runner();
@@ -146,6 +166,9 @@ export function ClassroomsPage() {
         await refetchClassrooms();
         if (options?.refreshMembers) {
             await refetchMembers();
+        }
+        if (options?.refreshDictionaries) {
+            await refetchDictionaries();
         }
     };
 
@@ -188,7 +211,7 @@ export function ClassroomsPage() {
             <PageHeader
                 eyebrow="Classrooms"
                 title="班级管理"
-                description="班级列表支持分页、搜索和排序，学生维护收敛到详情面板里。"
+                description="班级列表支持分页、搜索和排序，学生与词书维护统一收敛到详情面板里。"
                 actions={
                     <div class="flex flex-wrap items-center gap-3">
                         <Button onClick={() => setIsCreateDialogOpen(true)}>
@@ -364,22 +387,94 @@ export function ClassroomsPage() {
                         fallback={<EmptyState title="未选中班级" description="从上方列表选择一个班级后，在这里维护学生成员。" />}
                     >
                         {(classroom) => (
-                            <Card>
-                                <CardHeader>
-                                    <div class="flex flex-wrap items-start justify-between gap-4">
-                                        <div>
-                                            <CardTitle>{classroom().name}</CardTitle>
+                                <Card>
+                                    <CardHeader>
+                                        <div class="flex flex-wrap items-start justify-between gap-4">
+                                            <div>
+                                                <CardTitle>{classroom().name}</CardTitle>
                                             <CardDescription>{classroom().description || "暂无班级说明"}</CardDescription>
                                         </div>
                                         <div class="rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
                                             负责老师：<span class="font-medium text-foreground">{classroom().teacherName}</span>
                                         </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent class="space-y-5">
-                                    <div class="grid gap-3 md:grid-cols-[1fr_auto]">
-                                        <select
-                                            class="h-11 rounded-lg border border-input bg-background/70 px-3 text-sm"
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent class="space-y-5">
+                                        <div class="space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <p class="text-sm font-medium text-foreground">班级词书</p>
+                                                <Badge variant="outline">{classroomDictionaries()?.length || 0} 本</Badge>
+                                            </div>
+                                            <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+                                                <select
+                                                    class="h-11 rounded-lg border border-input bg-background/70 px-3 text-sm"
+                                                    value={selectedDictionaryId()}
+                                                    onChange={(event) => setSelectedDictionaryId(event.currentTarget.value)}
+                                                >
+                                                    <option value="">选择词书加入班级</option>
+                                                    <For each={optionsData()?.dictionaries || []}>
+                                                        {(dictionaryOption) => (
+                                                            <option value={dictionaryOption.id}>{dictionaryOption.name}</option>
+                                                        )}
+                                                    </For>
+                                                </select>
+                                                <Button
+                                                    onClick={() => {
+                                                        const dictionaryId = selectedDictionaryId();
+                                                        if (!dictionaryId) {
+                                                            return;
+                                                        }
+                                                        void mutateAndRefresh(
+                                                            () =>
+                                                                api.assignDictionariesToClassroom(
+                                                                    classroom().id,
+                                                                    [Number(dictionaryId)],
+                                                                ),
+                                                            `已将词书加入 ${classroom().name}。`,
+                                                            { refreshDictionaries: true },
+                                                        ).then(() => setSelectedDictionaryId(""));
+                                                    }}
+                                                >
+                                                    添加词书
+                                                </Button>
+                                            </div>
+                                            <Show
+                                                when={(classroomDictionaries() || []).length > 0}
+                                                fallback={<p class="text-sm text-muted-foreground">该班级还没有关联词书。</p>}
+                                            >
+                                                <div class="flex flex-wrap gap-2">
+                                                    <For each={classroomDictionaries() || []}>
+                                                        {(dictionaryItem) => (
+                                                            <div class="flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-1.5 text-sm">
+                                                                <span>{dictionaryItem.name}</span>
+                                                                <button
+                                                                    class="text-muted-foreground transition hover:text-destructive"
+                                                                    onClick={() =>
+                                                                        void mutateAndRefresh(
+                                                                            () =>
+                                                                                api.removeDictionaryFromClassroom(
+                                                                                    classroom().id,
+                                                                                    dictionaryItem.id,
+                                                                                ),
+                                                                            `已将 ${dictionaryItem.name} 从 ${classroom().name} 移除。`,
+                                                                            { refreshDictionaries: true },
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </Show>
+                                        </div>
+
+                                        <div class="h-px bg-border/60" />
+
+                                        <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+                                            <select
+                                                class="h-11 rounded-lg border border-input bg-background/70 px-3 text-sm"
                                             value={selectedStudentId()}
                                             onChange={(event) => setSelectedStudentId(event.currentTarget.value)}
                                         >

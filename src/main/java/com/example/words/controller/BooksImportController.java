@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,6 +44,13 @@ public class BooksImportController {
     @GetMapping("/latest")
     public ResponseEntity<BooksImportJobResponse> getLatestBatch() {
         return ResponseEntity.ok(booksImportJobService.getLatestJob());
+    }
+
+    @GetMapping("/page")
+    public ResponseEntity<Page<BooksImportJobResponse>> getBatchesPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(booksImportJobService.getJobsPage(page, size));
     }
 
     @GetMapping("/{batchId}")
@@ -97,6 +105,12 @@ public class BooksImportController {
     @PostMapping("/{batchId}/discard")
     public ResponseEntity<BooksImportJobResponse> discard(@PathVariable String batchId) {
         return ResponseEntity.ok(booksImportJobService.discard(batchId));
+    }
+
+    @DeleteMapping("/{batchId}")
+    public ResponseEntity<Void> deleteBatch(@PathVariable String batchId) {
+        booksImportJobService.deleteBatch(batchId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping(value = "/{batchId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

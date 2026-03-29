@@ -1,4 +1,4 @@
-import { For, Show, type JSX } from "solid-js";
+import { For, type JSX } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import {
     BookCopy,
@@ -115,30 +115,6 @@ export function AppShell(props: AppShellProps) {
                 </aside>
 
                 <main class="space-y-6 rounded-[32px] border border-border/60 bg-white/70 p-4 shadow-haze backdrop-blur md:p-6">
-                    <div class="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border/60 bg-background/70 px-5 py-4">
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.22em] text-muted-foreground">Word Atelier Admin</p>
-                            <p class="mt-2 font-display text-2xl font-semibold tracking-tight text-foreground">
-                                {location.pathname === "/" ? "运营总览" : "后台编排台"}
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <Show when={auth.user()}>
-                                <div class="text-right">
-                                    <p class="text-sm font-medium text-foreground">{auth.user()?.displayName}</p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {auth.user()?.email || auth.user()?.username}
-                                    </p>
-                                </div>
-                            </Show>
-                            <div class="h-12 w-12 rounded-2xl bg-[linear-gradient(135deg,_#f4b266,_#2f7d74)] p-[1px]">
-                                <div class="flex h-full w-full items-center justify-center rounded-2xl bg-[#f8fbfb] font-display text-lg font-semibold text-[#0f2730]">
-                                    {auth.user()?.displayName?.slice(0, 1) ?? "A"}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     {props.children}
                 </main>
             </div>

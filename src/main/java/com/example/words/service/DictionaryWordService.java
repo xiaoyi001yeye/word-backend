@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -77,11 +78,21 @@ public class DictionaryWordService {
         return metaWordRepository.findByDictionaryId(dictionaryId, pageable);
     }
 
-    public Page<DictionaryWordEntryResponse> findEntriesByDictionaryId(Long dictionaryId, int page, int size, String keyword) {
-        Pageable pageable = PageRequest.of(page - 1, size);
-        Page<DictionaryWord> entryPage = keyword == null || keyword.trim().isEmpty()
-                ? dictionaryWordRepository.findPageByDictionaryIdOrderByDisplayOrder(dictionaryId, pageable)
-                : dictionaryWordRepository.findPageByDictionaryIdAndKeywordOrderByDisplayOrder(dictionaryId, keyword.trim(), pageable);
+    public Page<DictionaryWordEntryResponse> findEntriesByDictionaryId(
+            Long dictionaryId,
+            int page,
+            int size,
+            String keyword,
+            String sortBy,
+            String sortDir) {
+        Pageable pageable = PageRequest.of(Math.max(page, 1) - 1, Math.max(size, 1));
+        Page<DictionaryWord> entryPage = dictionaryWordRepository.findEntriesPage(
+                dictionaryId,
+                normalizeKeywordPattern(keyword),
+                normalizeSortBy(sortBy),
+                normalizeSortDir(sortDir),
+                pageable
+        );
         return toEntryResponsePage(entryPage);
     }
 
@@ -367,6 +378,34 @@ public class DictionaryWordService {
     private int nextEntryOrder(Long dictionaryId, Long chapterTagId) {
         Integer maxOrder = dictionaryWordRepository.findMaxEntryOrderByDictionaryIdAndChapterTagId(dictionaryId, chapterTagId);
         return (maxOrder == null ? 0 : maxOrder) + 1;
+    }
+
+    private String normalizeKeywordPattern(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmed = keyword.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return "%" + trimmed + "%";
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return "entryOrder";
+        }
+        return switch (sortBy) {
+            case "word" -> "word";
+            case "translation" -> "translation";
+            case "chapter" -> "chapter";
+            case "entryOrder" -> "entryOrder";
+            default -> "entryOrder";
+        };
+    }
+
+    private String normalizeSortDir(String sortDir) {
+        return "desc".equalsIgnoreCase(sortDir) ? "desc" : "asc";
     }
 
     private void refreshDictionaryCounts(Long dictionaryId) {

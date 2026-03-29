@@ -73,6 +73,19 @@ export interface Dictionary {
     updatedAt?: string | null;
 }
 
+export interface DictionaryWordEntryResponse {
+    entryId: number;
+    dictionaryId: number;
+    metaWordId: number;
+    word?: string | null;
+    translation?: string | null;
+    phonetic?: string | null;
+    definition?: string | null;
+    chapterTagId?: number | null;
+    chapterDisplayPath?: string | null;
+    entryOrder?: number | null;
+}
+
 export interface ClassroomResponse {
     id: number;
     name: string;

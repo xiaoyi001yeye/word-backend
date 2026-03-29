@@ -5,9 +5,10 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -64,6 +65,53 @@ public interface DictionaryWordRepository extends JpaRepository<DictionaryWord, 
             @Param("keyword") String keyword,
             Pageable pageable);
 
+    @Query(value = """
+            SELECT dw
+            FROM DictionaryWord dw
+            JOIN MetaWord m ON dw.metaWordId = m.id
+            LEFT JOIN Tag t ON dw.chapterTagId = t.id
+            WHERE dw.dictionaryId = :dictionaryId
+              AND (
+                    :keywordPattern IS NULL
+                    OR LOWER(m.word) LIKE :keywordPattern
+                    OR LOWER(COALESCE(m.translation, '')) LIKE :keywordPattern
+                    OR LOWER(COALESCE(m.definition, '')) LIKE :keywordPattern
+                    OR LOWER(COALESCE(t.pathName, '')) LIKE :keywordPattern
+              )
+            ORDER BY
+                CASE WHEN :sortBy = 'word' AND :sortDir = 'asc' THEN LOWER(m.word) END ASC,
+                CASE WHEN :sortBy = 'word' AND :sortDir = 'desc' THEN LOWER(m.word) END DESC,
+                CASE WHEN :sortBy = 'translation' AND :sortDir = 'asc' THEN LOWER(COALESCE(m.translation, '')) END ASC,
+                CASE WHEN :sortBy = 'translation' AND :sortDir = 'desc' THEN LOWER(COALESCE(m.translation, '')) END DESC,
+                CASE WHEN :sortBy = 'chapter' AND :sortDir = 'asc' THEN LOWER(COALESCE(t.pathName, '')) END ASC,
+                CASE WHEN :sortBy = 'chapter' AND :sortDir = 'desc' THEN LOWER(COALESCE(t.pathName, '')) END DESC,
+                CASE WHEN :sortBy = 'entryOrder' AND :sortDir = 'asc' THEN COALESCE(t.sortKey, '') END ASC,
+                CASE WHEN :sortBy = 'entryOrder' AND :sortDir = 'desc' THEN COALESCE(t.sortKey, '') END DESC,
+                CASE WHEN :sortBy = 'entryOrder' AND :sortDir = 'asc' THEN dw.entryOrder END ASC,
+                CASE WHEN :sortBy = 'entryOrder' AND :sortDir = 'desc' THEN dw.entryOrder END DESC,
+                dw.id ASC
+            """,
+            countQuery = """
+                    SELECT COUNT(dw)
+                    FROM DictionaryWord dw
+                    JOIN MetaWord m ON dw.metaWordId = m.id
+                    LEFT JOIN Tag t ON dw.chapterTagId = t.id
+                    WHERE dw.dictionaryId = :dictionaryId
+                      AND (
+                            :keywordPattern IS NULL
+                            OR LOWER(m.word) LIKE :keywordPattern
+                            OR LOWER(COALESCE(m.translation, '')) LIKE :keywordPattern
+                            OR LOWER(COALESCE(m.definition, '')) LIKE :keywordPattern
+                            OR LOWER(COALESCE(t.pathName, '')) LIKE :keywordPattern
+                      )
+                    """)
+    Page<DictionaryWord> findEntriesPage(
+            @Param("dictionaryId") Long dictionaryId,
+            @Param("keywordPattern") String keywordPattern,
+            @Param("sortBy") String sortBy,
+            @Param("sortDir") String sortDir,
+            Pageable pageable);
+
     List<DictionaryWord> findByMetaWordId(Long metaWordId);
 
     Optional<DictionaryWord> findByDictionaryIdAndMetaWordId(Long dictionaryId, Long metaWordId);
@@ -82,5 +130,7 @@ public interface DictionaryWordRepository extends JpaRepository<DictionaryWord, 
             @Param("dictionaryId") Long dictionaryId,
             @Param("chapterTagId") Long chapterTagId);
 
-    void deleteByDictionaryId(Long dictionaryId);
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM DictionaryWord dw WHERE dw.dictionaryId = :dictionaryId")
+    int deleteByDictionaryId(@Param("dictionaryId") Long dictionaryId);
 }

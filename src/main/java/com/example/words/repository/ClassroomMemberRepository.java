@@ -13,6 +13,10 @@ public interface ClassroomMemberRepository extends JpaRepository<ClassroomMember
 
     List<ClassroomMember> findByClassroomIdIn(Collection<Long> classroomIds);
 
+    List<ClassroomMember> findByStudentId(Long studentId);
+
+    List<ClassroomMember> findByStudentIdIn(Collection<Long> studentIds);
+
     boolean existsByClassroomIdAndStudentId(Long classroomId, Long studentId);
 
     boolean existsByClassroomIdInAndStudentId(Collection<Long> classroomIds, Long studentId);

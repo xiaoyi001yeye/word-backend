@@ -27,6 +27,7 @@ import type {
 } from "@/types/api";
 
 const RUNNING_STATUSES = new Set<BooksImportJobStatus>(["PENDING", "SCANNING", "STAGING", "AUTO_MERGING", "PUBLISHING"]);
+const TASK_PAGE_SIZE = 10;
 const FILE_PAGE_SIZE = 20;
 
 const jobStatusLabel: Record<BooksImportJobStatus, string> = {
@@ -61,6 +62,29 @@ const calcPercent = (completed?: number | null, total?: number | null) => {
 };
 
 const isAutoRefreshStatus = (status?: BooksImportJobStatus | null) => Boolean(status && RUNNING_STATUSES.has(status));
+const canDeleteBatch = (status?: BooksImportJobStatus | null) => Boolean(status && !RUNNING_STATUSES.has(status));
+
+const jobBadgeVariant = (
+    status?: BooksImportJobStatus | null,
+): "warning" | "success" | "destructive" | "outline" => {
+    switch (status) {
+        case "PENDING":
+        case "SCANNING":
+        case "STAGING":
+        case "AUTO_MERGING":
+        case "PUBLISHING":
+            return "warning";
+        case "SUCCEEDED":
+        case "READY_TO_PUBLISH":
+            return "success";
+        case "FAILED":
+        case "CANCELLED":
+        case "DISCARDED":
+            return "destructive";
+        default:
+            return "outline";
+    }
+};
 
 const batchActionDescription = (job?: BooksImportJobResponse | null) => {
     if (!job) {
@@ -99,6 +123,7 @@ export function ImportCenterPage() {
     const [feedback, setFeedback] = createSignal("");
     const isAdmin = createMemo(() => auth.user()?.role === "ADMIN");
     const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
+    const [taskPage, setTaskPage] = createSignal(1);
     const [filePage, setFilePage] = createSignal(1);
     const [lastRefreshedAt, setLastRefreshedAt] = createSignal<string | null>(null);
 
@@ -113,6 +138,20 @@ export function ImportCenterPage() {
                 setSelectedBatchId(batch.jobId);
             }
             return batch;
+        },
+    );
+
+    const [batchTasksPage, { refetch: refetchTasksPage }] = createResource(
+        () => ({ user: auth.user(), page: taskPage() }),
+        async ({ user, page }) => {
+            if (!user || user.role !== "ADMIN") {
+                return null;
+            }
+            const result = await api.listImportBatchesPage({ page, size: TASK_PAGE_SIZE });
+            if (!selectedBatchId() && result.content.length > 0) {
+                setSelectedBatchId(result.content[0].jobId);
+            }
+            return result;
         },
     );
 
@@ -150,6 +189,11 @@ export function ImportCenterPage() {
         },
     );
 
+    const selectedTask = createMemo(
+        () => batchTasksPage()?.content.find((job) => job.jobId === selectedBatchId()) ?? null,
+    );
+    const activeJob = createMemo(() => batchDetails()?.job ?? selectedTask() ?? latestBatch() ?? null);
+
     createEffect(() => {
         selectedBatchId();
         setFilePage(1);
@@ -157,13 +201,14 @@ export function ImportCenterPage() {
 
     createEffect(() => {
         const batchId = selectedBatchId();
-        const status = batchDetails()?.job.status;
+        const status = activeJob()?.status;
         if (!batchId || !isAutoRefreshStatus(status)) {
             return;
         }
 
         const timer = window.setInterval(() => {
             void refetchLatest();
+            void refetchTasksPage();
             void refetchDetails();
             void refetchFilesPage();
         }, 3000);
@@ -176,12 +221,36 @@ export function ImportCenterPage() {
         setFeedback(successMessage);
         setSelectedBatchId(batch.jobId);
         await refetchLatest();
+        await refetchTasksPage();
         await refetchDetails();
         await refetchFilesPage();
     };
 
-    const fileProgress = createMemo(() => calcPercent(batchDetails()?.job.processedFiles, batchDetails()?.job.totalFiles));
-    const rowProgress = createMemo(() => calcPercent(batchDetails()?.job.processedRows, batchDetails()?.job.totalRows));
+    const deleteBatch = async (batchId: string) => {
+        const confirmed = window.confirm("删除后会移除这个导入任务，以及它发布的辞书数据。这个操作不能恢复，确认继续吗？");
+        if (!confirmed) {
+            return;
+        }
+
+        if (selectedBatchId() === batchId) {
+            setSelectedBatchId(null);
+        }
+
+        await api.deleteImportBatch(batchId);
+        setFeedback("导入任务已删除，对应导入数据已清理。");
+
+        const tasks = await refetchTasksPage();
+        if (taskPage() > 1 && (tasks?.content.length ?? 0) === 0) {
+            setTaskPage((page) => Math.max(1, page - 1));
+        }
+
+        await refetchLatest();
+        await refetchDetails();
+        await refetchFilesPage();
+    };
+
+    const fileProgress = createMemo(() => calcPercent(activeJob()?.processedFiles, activeJob()?.totalFiles));
+    const rowProgress = createMemo(() => calcPercent(activeJob()?.processedRows, activeJob()?.totalRows));
     const unresolvedConflicts = createMemo(
         () => batchDetails()?.conflicts.filter((item) => !item.resolution).length ?? 0,
     );
@@ -194,6 +263,16 @@ export function ImportCenterPage() {
         const end = start + current.numberOfElements - 1;
         return `第 ${start}-${end} 条，共 ${current.totalElements} 个文件`;
     });
+    const taskPageSummary = createMemo(() => {
+        const current = batchTasksPage();
+        if (!current || current.totalElements === 0) {
+            return "暂无导入任务";
+        }
+        const start = current.number * current.size + 1;
+        const end = start + current.numberOfElements - 1;
+        return `第 ${start}-${end} 条，共 ${current.totalElements} 个任务`;
+    });
+    const taskTotalPages = createMemo(() => Math.max(1, batchTasksPage()?.totalPages ?? 1));
     const fileTotalPages = createMemo(() => Math.max(1, batchFilesPage()?.totalPages ?? 1));
 
     if (!isAdmin()) {
@@ -217,6 +296,7 @@ export function ImportCenterPage() {
                             variant="outline"
                             onClick={() => {
                                 void refetchLatest();
+                                void refetchTasksPage();
                                 void refetchDetails();
                                 void refetchFilesPage();
                             }}
@@ -233,6 +313,98 @@ export function ImportCenterPage() {
             <Show when={feedback()}>
                 <Alert class="border-success/20 bg-success/10 text-success">{feedback()}</Alert>
             </Show>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>导入任务</CardTitle>
+                    <CardDescription>每次开始导入都会生成一条任务记录。点击某一行，可以切换查看该批次的详情。</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Show
+                        when={(batchTasksPage()?.content.length ?? 0) > 0}
+                        fallback={<EmptyState title="暂无导入任务" description="点击右上角“开始导入”后，这里会按表格记录每次任务。" />}
+                    >
+                        <Table>
+                            <TableRoot>
+                                <TableHead>
+                                    <tr>
+                                        <TableHeaderCell>批次 ID</TableHeaderCell>
+                                        <TableHeaderCell>创建时间</TableHeaderCell>
+                                        <TableHeaderCell>状态</TableHeaderCell>
+                                        <TableHeaderCell>文件进度</TableHeaderCell>
+                                        <TableHeaderCell>数据进度</TableHeaderCell>
+                                        <TableHeaderCell>冲突 / 错误</TableHeaderCell>
+                                        <TableHeaderCell>操作</TableHeaderCell>
+                                    </tr>
+                                </TableHead>
+                                <TableBody>
+                                    <For each={batchTasksPage()?.content || []}>
+                                        {(job: BooksImportJobResponse) => (
+                                            <TableRow
+                                                class={selectedBatchId() === job.jobId ? "cursor-pointer bg-primary/5" : "cursor-pointer hover:bg-muted/30"}
+                                                onClick={() => setSelectedBatchId(job.jobId)}
+                                            >
+                                                <TableCell class="font-medium text-foreground">{job.jobId}</TableCell>
+                                                <TableCell>{formatDateTime(job.createdAt)}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={jobBadgeVariant(job.status)}>
+                                                        {jobStatusLabel[job.status]}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {formatNumber(job.processedFiles)} / {formatNumber(job.totalFiles)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {formatNumber(job.processedRows)} / {formatNumber(job.totalRows)}
+                                                </TableCell>
+                                                <TableCell class="max-w-[320px] text-sm text-muted-foreground">
+                                                    {job.errorMessage
+                                                        ? job.errorMessage
+                                                        : `冲突 ${formatNumber(job.conflictCount)} 个`}
+                                                </TableCell>
+                                                <TableCell onClick={(event) => event.stopPropagation()}>
+                                                    <Button
+                                                        disabled={!canDeleteBatch(job.status)}
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => void deleteBatch(job.jobId)}
+                                                    >
+                                                        删除
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </For>
+                                </TableBody>
+                            </TableRoot>
+                        </Table>
+                        <div class="mt-5 flex flex-col gap-3 border-t border-border/60 pt-4 md:flex-row md:items-center md:justify-between">
+                            <p class="text-sm text-muted-foreground">{taskPageSummary()}</p>
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    disabled={taskPage() === 1}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setTaskPage((page) => Math.max(1, page - 1))}
+                                >
+                                    上一页
+                                </Button>
+                                <span class="min-w-[88px] text-center text-sm text-muted-foreground">
+                                    {taskPage()} / {taskTotalPages()}
+                                </span>
+                                <Button
+                                    disabled={taskPage() === taskTotalPages()}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setTaskPage((page) => Math.min(taskTotalPages(), page + 1))}
+                                >
+                                    下一页
+                                </Button>
+                            </div>
+                        </div>
+                    </Show>
+                </CardContent>
+            </Card>
 
             <div class="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
                 <Card>
@@ -272,14 +444,14 @@ export function ImportCenterPage() {
                     <CardHeader>
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <CardTitle>{batchDetails()?.job.jobId || latestBatch()?.jobId || "当前批次"}</CardTitle>
-                                <CardDescription>{batchActionDescription(batchDetails()?.job ?? latestBatch())}</CardDescription>
+                                <CardTitle>{activeJob()?.jobId || "当前批次"}</CardTitle>
+                                <CardDescription>{batchActionDescription(activeJob())}</CardDescription>
                             </div>
                             <div class="flex flex-wrap gap-2">
                                 <Show when={batchDetails()}>
                                     {(details) => (
                                         <>
-                                            <Badge variant={isAutoRefreshStatus(details().job.status) ? "warning" : "outline"}>
+                                            <Badge variant={jobBadgeVariant(details().job.status)}>
                                                 {jobStatusLabel[details().job.status]}
                                             </Badge>
                                             <Show
@@ -341,11 +513,11 @@ export function ImportCenterPage() {
                     </CardHeader>
                     <CardContent class="space-y-5">
                         <Show
-                            when={latestBatch() || batchDetails()}
+                            when={activeJob()}
                             fallback={<EmptyState title="还没有导入批次" description="点击右上角“开始导入”即可发起一次辞书导入。" />}
                         >
                             <>
-                                <Show when={isAutoRefreshStatus(batchDetails()?.job.status)}>
+                                <Show when={isAutoRefreshStatus(activeJob()?.status)}>
                                     <Alert class="border-primary/20 bg-primary/8 text-foreground">
                                         当前批次正在处理中，页面每 3 秒自动刷新一次。
                                     </Alert>
@@ -355,13 +527,13 @@ export function ImportCenterPage() {
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4">
                                         <p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">状态</p>
                                         <p class="mt-2 text-sm font-medium text-foreground">
-                                            {batchDetails()?.job.status ? jobStatusLabel[batchDetails()!.job.status] : "未开始"}
+                                            {activeJob()?.status ? jobStatusLabel[activeJob()!.status] : "未开始"}
                                         </p>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4">
                                         <p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">当前文件</p>
                                         <p class="mt-2 text-sm font-medium text-foreground">
-                                            {batchDetails()?.job.currentFile || "暂无"}
+                                            {activeJob()?.currentFile || "暂无"}
                                         </p>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4">
@@ -371,7 +543,7 @@ export function ImportCenterPage() {
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4">
                                         <p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">错误信息</p>
                                         <p class="mt-2 text-sm font-medium text-foreground">
-                                            {batchDetails()?.job.errorMessage || "无"}
+                                            {activeJob()?.errorMessage || "无"}
                                         </p>
                                     </div>
                                 </div>
@@ -381,37 +553,37 @@ export function ImportCenterPage() {
                                         <div class="flex items-center justify-between gap-3">
                                             <p class="text-sm font-medium text-foreground">文件处理进度</p>
                                             <p class="text-sm text-muted-foreground">
-                                                {formatNumber(batchDetails()?.job.processedFiles)} / {formatNumber(batchDetails()?.job.totalFiles)}
+                                                {formatNumber(activeJob()?.processedFiles)} / {formatNumber(activeJob()?.totalFiles)}
                                             </p>
                                         </div>
                                         <Progress class="mt-3" value={fileProgress()} />
                                         <p class="mt-3 text-sm text-muted-foreground">
-                                            失败文件：{formatNumber(batchDetails()?.job.failedFiles)}
+                                            失败文件：{formatNumber(activeJob()?.failedFiles)}
                                         </p>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4">
                                         <div class="flex items-center justify-between gap-3">
                                             <p class="text-sm font-medium text-foreground">数据处理进度</p>
                                             <p class="text-sm text-muted-foreground">
-                                                {formatNumber(batchDetails()?.job.processedRows)} / {formatNumber(batchDetails()?.job.totalRows)}
+                                                {formatNumber(activeJob()?.processedRows)} / {formatNumber(activeJob()?.totalRows)}
                                             </p>
                                         </div>
                                         <Progress class="mt-3" value={rowProgress()} />
                                         <p class="mt-3 text-sm text-muted-foreground">
-                                            成功 {formatNumber(batchDetails()?.job.successRows)} 行，失败 {formatNumber(batchDetails()?.job.failedRows)} 行
+                                            成功 {formatNumber(activeJob()?.successRows)} 行，失败 {formatNumber(activeJob()?.failedRows)} 行
                                         </p>
                                     </div>
                                 </div>
 
                                 <div class="grid gap-4 md:grid-cols-4">
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4 text-sm">
-                                        导入词书：<span class="font-medium">{formatNumber(batchDetails()?.job.importedDictionaryCount)}</span>
+                                        导入词书：<span class="font-medium">{formatNumber(activeJob()?.importedDictionaryCount)}</span>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4 text-sm">
-                                        导入单词：<span class="font-medium">{formatNumber(batchDetails()?.job.importedWordCount)}</span>
+                                        导入单词：<span class="font-medium">{formatNumber(activeJob()?.importedWordCount)}</span>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4 text-sm">
-                                        冲突数：<span class="font-medium">{formatNumber(batchDetails()?.job.conflictCount)}</span>
+                                        冲突数：<span class="font-medium">{formatNumber(activeJob()?.conflictCount)}</span>
                                     </div>
                                     <div class="rounded-2xl border border-border/70 bg-background/60 p-4 text-sm">
                                         未解决冲突：<span class="font-medium">{formatNumber(unresolvedConflicts())}</span>

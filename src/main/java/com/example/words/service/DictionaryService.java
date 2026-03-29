@@ -3,22 +3,16 @@ package com.example.words.service;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
-import com.example.words.model.ClassroomMember;
 import com.example.words.model.Dictionary;
-import com.example.words.model.DictionaryAssignment;
 import com.example.words.model.DictionaryCreationType;
 import com.example.words.model.ResourceScopeType;
 import com.example.words.model.UserRole;
-import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
-import com.example.words.repository.DictionaryAssignmentRepository;
 import com.example.words.repository.DictionaryRepository;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -35,24 +29,21 @@ public class DictionaryService {
 
     private final DictionaryRepository dictionaryRepository;
     private final DictionaryAssignmentService dictionaryAssignmentService;
+    private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final AccessControlService accessControlService;
-    private final DictionaryAssignmentRepository dictionaryAssignmentRepository;
     private final ClassroomRepository classroomRepository;
-    private final ClassroomMemberRepository classroomMemberRepository;
 
     public DictionaryService(
             DictionaryRepository dictionaryRepository,
             DictionaryAssignmentService dictionaryAssignmentService,
+            ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
             AccessControlService accessControlService,
-            DictionaryAssignmentRepository dictionaryAssignmentRepository,
-            ClassroomRepository classroomRepository,
-            ClassroomMemberRepository classroomMemberRepository) {
+            ClassroomRepository classroomRepository) {
         this.dictionaryRepository = dictionaryRepository;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
+        this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.accessControlService = accessControlService;
-        this.dictionaryAssignmentRepository = dictionaryAssignmentRepository;
         this.classroomRepository = classroomRepository;
-        this.classroomMemberRepository = classroomMemberRepository;
     }
 
     public List<Dictionary> findAll() {
@@ -66,14 +57,19 @@ public class DictionaryService {
         }
 
         if (actor.getRole() == UserRole.TEACHER) {
+            Set<Long> assignedDictionaryIds = classroomDictionaryAssignmentService.getAssignedDictionaryIdsForTeacher(actor.getId());
             return dictionaries.stream()
                     .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
                             || actor.getId().equals(dictionary.getOwnerUserId())
-                            || actor.getId().equals(dictionary.getCreatedBy()))
+                            || actor.getId().equals(dictionary.getCreatedBy())
+                            || assignedDictionaryIds.contains(dictionary.getId()))
                     .toList();
         }
 
-        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId());
+        Set<Long> assignedDictionaryIds = new LinkedHashSet<>(
+                dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId())
+        );
+        assignedDictionaryIds.addAll(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId()));
         return dictionaries.stream()
                 .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
                         || assignedDictionaryIds.contains(dictionary.getId()))
@@ -81,7 +77,10 @@ public class DictionaryService {
     }
 
     public List<Dictionary> findAssignedDictionariesForStudent(Long studentId) {
-        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId);
+        Set<Long> assignedDictionaryIds = new LinkedHashSet<>(
+                dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId)
+        );
+        assignedDictionaryIds.addAll(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId));
         return dictionaryRepository.findAll().stream()
                 .filter(dictionary -> assignedDictionaryIds.contains(dictionary.getId()))
                 .toList();
@@ -94,8 +93,9 @@ public class DictionaryService {
         }
 
         List<Classroom> classrooms = resolveVisibleClassrooms(classroomIds, actor);
-        Map<Long, List<Long>> classroomStudentIds = buildClassroomStudentIds(classrooms);
-        Set<Long> dictionaryIds = intersectDictionaryIdsAcrossClassrooms(classroomStudentIds);
+        Set<Long> dictionaryIds = classroomDictionaryAssignmentService.intersectAssignedDictionaryIdsForClassrooms(
+                classrooms.stream().map(Classroom::getId).toList()
+        );
         if (dictionaryIds.isEmpty()) {
             return List.of();
         }
@@ -318,85 +318,5 @@ public class DictionaryService {
             classrooms.add(classroom);
         }
         return classrooms;
-    }
-
-    private Map<Long, List<Long>> buildClassroomStudentIds(List<Classroom> classrooms) {
-        List<Long> classroomIds = classrooms.stream()
-                .map(Classroom::getId)
-                .toList();
-        Map<Long, List<Long>> classroomStudentIds = new LinkedHashMap<>();
-        for (Long classroomId : classroomIds) {
-            classroomStudentIds.put(classroomId, new ArrayList<>());
-        }
-
-        for (ClassroomMember member : classroomMemberRepository.findByClassroomIdIn(classroomIds)) {
-            classroomStudentIds.computeIfAbsent(member.getClassroomId(), ignored -> new ArrayList<>())
-                    .add(member.getStudentId());
-        }
-        return classroomStudentIds;
-    }
-
-    private Set<Long> intersectDictionaryIdsAcrossClassrooms(Map<Long, List<Long>> classroomStudentIds) {
-        Set<Long> intersection = null;
-        Set<Long> allStudentIds = classroomStudentIds.values().stream()
-                .flatMap(Collection::stream)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        Map<Long, Set<Long>> studentDictionaryIds = buildStudentDictionaryIds(allStudentIds);
-
-        for (List<Long> studentIds : classroomStudentIds.values()) {
-            Set<Long> classroomIntersection = intersectDictionaryIdsForStudents(studentIds, studentDictionaryIds);
-            if (classroomIntersection.isEmpty()) {
-                return Set.of();
-            }
-            if (intersection == null) {
-                intersection = new LinkedHashSet<>(classroomIntersection);
-            } else {
-                intersection.retainAll(classroomIntersection);
-            }
-            if (intersection.isEmpty()) {
-                return Set.of();
-            }
-        }
-
-        return intersection == null ? Set.of() : intersection;
-    }
-
-    private Map<Long, Set<Long>> buildStudentDictionaryIds(Set<Long> studentIds) {
-        Map<Long, Set<Long>> studentDictionaryIds = new LinkedHashMap<>();
-        for (Long studentId : studentIds) {
-            studentDictionaryIds.put(studentId, new LinkedHashSet<>());
-        }
-
-        if (studentIds.isEmpty()) {
-            return studentDictionaryIds;
-        }
-
-        for (DictionaryAssignment assignment : dictionaryAssignmentRepository.findByStudentIdIn(studentIds)) {
-            studentDictionaryIds.computeIfAbsent(assignment.getStudentId(), ignored -> new LinkedHashSet<>())
-                    .add(assignment.getDictionaryId());
-        }
-
-        return studentDictionaryIds;
-    }
-
-    private Set<Long> intersectDictionaryIdsForStudents(List<Long> studentIds, Map<Long, Set<Long>> studentDictionaryIds) {
-        if (studentIds.isEmpty()) {
-            return Set.of();
-        }
-
-        Set<Long> intersection = null;
-        for (Long studentId : studentIds) {
-            Set<Long> dictionaryIds = studentDictionaryIds.getOrDefault(studentId, Set.of());
-            if (intersection == null) {
-                intersection = new LinkedHashSet<>(dictionaryIds);
-            } else {
-                intersection.retainAll(dictionaryIds);
-            }
-            if (intersection.isEmpty()) {
-                return Set.of();
-            }
-        }
-
-        return intersection == null ? Set.of() : intersection;
     }
 }
