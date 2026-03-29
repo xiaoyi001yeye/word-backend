@@ -12,12 +12,18 @@ import com.example.words.model.UserStatus;
 import com.example.words.repository.AppUserRepository;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserService {
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -60,6 +66,15 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public Page<UserResponse> findPage(int page, int size, UserRole role, String name) {
+        Pageable pageable = buildPageable(page, size);
+        Specification<AppUser> specification = Specification.where(roleEquals(role))
+                .and(displayNameContains(name));
+        return appUserRepository.findAll(specification, pageable)
+                .map(UserResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public UserResponse findById(Long id) {
         return UserResponse.from(getUserEntity(id));
     }
@@ -89,5 +104,28 @@ public class UserService {
             return null;
         }
         return value.trim();
+    }
+
+    private Pageable buildPageable(int page, int size) {
+        int normalizedPage = Math.max(page, 1) - 1;
+        int normalizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        return PageRequest.of(normalizedPage, normalizedSize, Sort.by(Sort.Direction.DESC, "id"));
+    }
+
+    private Specification<AppUser> roleEquals(UserRole role) {
+        if (role == null) {
+            return null;
+        }
+        return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("role"), role);
+    }
+
+    private Specification<AppUser> displayNameContains(String name) {
+        String normalizedName = trimToNull(name);
+        if (normalizedName == null) {
+            return null;
+        }
+        String keyword = "%" + normalizedName.toLowerCase(Locale.ROOT) + "%";
+        return (root, query, criteriaBuilder) ->
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("displayName")), keyword);
     }
 }

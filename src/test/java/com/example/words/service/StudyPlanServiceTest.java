@@ -2,15 +2,18 @@ package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 import com.example.words.dto.CreateStudyPlanRequest;
 import com.example.words.dto.RecordStudyRequest;
 import com.example.words.dto.StudyPlanResponse;
 import com.example.words.dto.StudyTaskResponse;
+import com.example.words.exception.BadRequestException;
 import com.example.words.model.AppUser;
 import com.example.words.model.AttentionState;
 import com.example.words.model.Classroom;
@@ -173,6 +176,8 @@ class StudyPlanServiceTest {
         Classroom classroom2 = new Classroom(101L, "二班", null, 7L, null, null);
 
         when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryService.findVisibleDictionariesForClassrooms(List.of(100L, 101L), teacher))
+                .thenReturn(List.of(dictionary));
         when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom1));
         when(classroomRepository.findById(101L)).thenReturn(Optional.of(classroom2));
         when(studyPlanRepository.save(any(StudyPlan.class))).thenAnswer(invocation -> {
@@ -190,8 +195,56 @@ class StudyPlanServiceTest {
         assertEquals(StudyPlanStatus.DRAFT, response.getStatus());
         assertEquals(List.of(100L, 101L), response.getClassroomIds());
         assertEquals(List.of(0, 1, 2, 4), response.getReviewIntervals());
-        verify(studyPlanClassroomRepository).save(any(StudyPlanClassroom.class));
+        verify(studyPlanClassroomRepository, times(2)).save(any(StudyPlanClassroom.class));
         verify(studyPlanRepository).save(any(StudyPlan.class));
+    }
+
+    @Test
+    void createStudyPlanShouldRejectDictionaryOutsideSelectedClassroomIntersection() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        CreateStudyPlanRequest request = new CreateStudyPlanRequest(
+                "高一春季计划",
+                "按遗忘曲线推进",
+                10L,
+                List.of(100L, 101L),
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 4, 30),
+                "Asia/Shanghai",
+                20,
+                40,
+                ReviewMode.EBBINGHAUS,
+                List.of(0, 1, 2, 4),
+                BigDecimal.valueOf(100),
+                LocalTime.of(21, 30),
+                true,
+                3,
+                120,
+                60,
+                15
+        );
+
+        Dictionary dictionary = new Dictionary();
+        dictionary.setId(10L);
+        dictionary.setName("高考词汇");
+
+        Classroom classroom1 = new Classroom(100L, "一班", null, 7L, null, null);
+        Classroom classroom2 = new Classroom(101L, "二班", null, 7L, null, null);
+
+        when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryService.findVisibleDictionariesForClassrooms(List.of(100L, 101L), teacher))
+                .thenReturn(List.of());
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom1));
+        when(classroomRepository.findById(101L)).thenReturn(Optional.of(classroom2));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> studyPlanService.createStudyPlan(request, teacher)
+        );
+
+        assertEquals("dictionaryId is not associated with all selected classrooms", exception.getMessage());
     }
 
     @Test
@@ -250,11 +303,11 @@ class StudyPlanServiceTest {
         when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateOrderByCreatedAtAsc(200L, today)).thenReturn(List.of());
         when(studyWordProgressRepository.findByStudentStudyPlanId(200L))
                 .thenReturn(List.of(dueProgress, futureProgress), generatedProgresses);
-        when(dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(10L)).thenReturn(List.of(
-                new DictionaryWord(1L, 10L, 1L, null),
-                new DictionaryWord(2L, 10L, 2L, null),
-                new DictionaryWord(3L, 10L, 3L, null),
-                new DictionaryWord(4L, 10L, 4L, null)
+        when(dictionaryWordRepository.findByDictionaryIdOrderByDisplayOrder(10L)).thenReturn(List.of(
+                new DictionaryWord(1L, 10L, 1L, (java.time.LocalDateTime) null),
+                new DictionaryWord(2L, 10L, 2L, (java.time.LocalDateTime) null),
+                new DictionaryWord(3L, 10L, 3L, (java.time.LocalDateTime) null),
+                new DictionaryWord(4L, 10L, 4L, (java.time.LocalDateTime) null)
         ));
         when(studyWordProgressRepository.saveAll(any())).thenAnswer(invocation -> {
             List<StudyWordProgress> progressList = invocation.getArgument(0);
@@ -361,7 +414,8 @@ class StudyPlanServiceTest {
         when(dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(10L, 3L)).thenReturn(true);
         when(studyRecordRepository.findByStudentStudyPlanIdAndTaskDate(200L, today))
                 .thenAnswer(invocation -> savedRecordRef.get() == null ? List.of() : List.of(savedRecordRef.get()));
-        when(studyWordProgressRepository.findByStudentStudyPlanIdAndMetaWordId(200L, 3L)).thenReturn(Optional.of(studyWordProgress));
+        when(studyWordProgressRepository.findByStudentStudyPlanIdAndMetaWordId(200L, 3L))
+                .thenReturn(List.of(studyWordProgress));
         when(studyWordProgressRepository.save(any(StudyWordProgress.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(studyRecordRepository.save(any(StudyRecord.class))).thenAnswer(invocation -> {
             StudyRecord studyRecord = invocation.getArgument(0);
@@ -377,13 +431,6 @@ class StudyPlanServiceTest {
             savedDailyStatRef.set(dailyStat);
             return dailyStat;
         });
-        when(dictionaryWordRepository.findByDictionaryIdOrderByIdAsc(10L)).thenReturn(List.of(
-                new DictionaryWord(1L, 10L, 1L, null),
-                new DictionaryWord(2L, 10L, 2L, null),
-                new DictionaryWord(3L, 10L, 3L, null),
-                new DictionaryWord(4L, 10L, 4L, null)
-        ));
-        when(studyWordProgressRepository.countByStudentStudyPlanIdAndLastReviewAtIsNotNull(200L)).thenReturn(1L);
         when(studentAttentionDailyStatRepository.findByStudentStudyPlanIdOrderByTaskDateDesc(200L))
                 .thenAnswer(invocation -> savedDailyStatRef.get() == null ? List.of() : List.of(savedDailyStatRef.get()));
         when(studyDayTaskItemRepository.findByStudyDayTaskIdOrderByTaskOrderAsc(300L)).thenReturn(List.of(studyDayTaskItem));
@@ -410,6 +457,134 @@ class StudyPlanServiceTest {
         assertEquals(22, savedDailyStatRef.get().getTotalFocusSeconds());
         verify(studyRecordRepository).save(any(StudyRecord.class));
         verify(studentAttentionDailyStatRepository).save(any(StudentAttentionDailyStat.class));
+    }
+
+    @Test
+    void recordStudyShouldPreferMostAdvancedProgressWhenDuplicateRowsExist() {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        AtomicReference<StudyRecord> savedRecordRef = new AtomicReference<>();
+        AtomicReference<StudentAttentionDailyStat> savedDailyStatRef = new AtomicReference<>();
+        AtomicReference<StudyWordProgress> savedProgressRef = new AtomicReference<>();
+
+        AppUser student = new AppUser();
+        student.setId(20L);
+        student.setRole(UserRole.STUDENT);
+
+        StudyPlan studyPlan = new StudyPlan();
+        studyPlan.setId(55L);
+        studyPlan.setTeacherId(7L);
+        studyPlan.setDictionaryId(10L);
+        studyPlan.setName("春季计划");
+        studyPlan.setTimezone("Asia/Shanghai");
+        studyPlan.setStartDate(today.minusDays(1));
+        studyPlan.setDailyNewCount(2);
+        studyPlan.setDailyReviewLimit(2);
+        studyPlan.setReviewIntervalsJson("[0,1,2]");
+        studyPlan.setDailyDeadlineTime(LocalTime.of(21, 30));
+        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+        studyPlan.setMinFocusSecondsPerWord(3);
+        studyPlan.setMaxFocusSecondsPerWord(120);
+        studyPlan.setLongStayWarningSeconds(60);
+
+        StudentStudyPlan studentStudyPlan = new StudentStudyPlan();
+        studentStudyPlan.setId(200L);
+        studentStudyPlan.setStudyPlanId(55L);
+        studentStudyPlan.setStudentId(20L);
+        studentStudyPlan.setStatus(StudentStudyPlanStatus.ACTIVE);
+
+        StudyDayTask studyDayTask = new StudyDayTask();
+        studyDayTask.setId(300L);
+        studyDayTask.setStudentStudyPlanId(200L);
+        studyDayTask.setTaskDate(today);
+        studyDayTask.setNewCount(1);
+        studyDayTask.setReviewCount(0);
+        studyDayTask.setOverdueCount(0);
+        studyDayTask.setCompletedCount(0);
+        studyDayTask.setStatus(StudyDayTaskStatus.NOT_STARTED);
+        studyDayTask.setDeadlineAt(today.atTime(21, 30));
+
+        StudyDayTaskItem studyDayTaskItem = new StudyDayTaskItem();
+        studyDayTaskItem.setId(400L);
+        studyDayTaskItem.setStudyDayTaskId(300L);
+        studyDayTaskItem.setMetaWordId(3L);
+        studyDayTaskItem.setTaskType(StudyTaskType.NEW_LEARN);
+        studyDayTaskItem.setTaskOrder(1);
+
+        StudyWordProgress staleProgress = new StudyWordProgress();
+        staleProgress.setId(500L);
+        staleProgress.setStudentStudyPlanId(200L);
+        staleProgress.setMetaWordId(3L);
+        staleProgress.setAssignedDate(today.minusDays(2));
+        staleProgress.setPhase(0);
+        staleProgress.setTotalReviews(0);
+        staleProgress.setStatus(StudyWordProgressStatus.NEW);
+
+        StudyWordProgress preferredProgress = new StudyWordProgress();
+        preferredProgress.setId(501L);
+        preferredProgress.setStudentStudyPlanId(200L);
+        preferredProgress.setMetaWordId(3L);
+        preferredProgress.setAssignedDate(today.minusDays(2));
+        preferredProgress.setPhase(2);
+        preferredProgress.setTotalReviews(3);
+        preferredProgress.setMasteryLevel(BigDecimal.valueOf(55));
+        preferredProgress.setLastReviewAt(today.minusDays(1).atTime(10, 0));
+        preferredProgress.setStatus(StudyWordProgressStatus.REVIEWING);
+
+        when(studentStudyPlanRepository.findById(200L)).thenReturn(Optional.of(studentStudyPlan));
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateBeforeOrderByTaskDateAsc(200L, today))
+                .thenReturn(List.of());
+        when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateOrderByCreatedAtAsc(200L, today))
+                .thenReturn(List.of(studyDayTask));
+        when(studyDayTaskItemRepository.findByStudyDayTaskIdAndMetaWordIdOrderByCreatedAtAsc(300L, 3L))
+                .thenReturn(List.of(studyDayTaskItem));
+        when(dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(10L, 3L)).thenReturn(true);
+        when(studyRecordRepository.findByStudentStudyPlanIdAndTaskDate(200L, today))
+                .thenAnswer(invocation -> savedRecordRef.get() == null ? List.of() : List.of(savedRecordRef.get()));
+        when(studyWordProgressRepository.findByStudentStudyPlanIdAndMetaWordId(200L, 3L))
+                .thenReturn(List.of(staleProgress, preferredProgress));
+        when(studyWordProgressRepository.save(any(StudyWordProgress.class))).thenAnswer(invocation -> {
+            StudyWordProgress savedProgress = invocation.getArgument(0);
+            savedProgressRef.set(savedProgress);
+            return savedProgress;
+        });
+        when(studyRecordRepository.save(any(StudyRecord.class))).thenAnswer(invocation -> {
+            StudyRecord studyRecord = invocation.getArgument(0);
+            savedRecordRef.set(studyRecord);
+            return studyRecord;
+        });
+        when(studyDayTaskItemRepository.save(any(StudyDayTaskItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(studyDayTaskItemRepository.countByStudyDayTaskIdAndCompletedAtIsNotNull(300L)).thenReturn(1L);
+        when(studentAttentionDailyStatRepository.findByStudentStudyPlanIdAndTaskDateOrderByCreatedAtAsc(200L, today))
+                .thenReturn(List.of());
+        when(studentAttentionDailyStatRepository.save(any(StudentAttentionDailyStat.class))).thenAnswer(invocation -> {
+            StudentAttentionDailyStat dailyStat = invocation.getArgument(0);
+            savedDailyStatRef.set(dailyStat);
+            return dailyStat;
+        });
+        when(studentAttentionDailyStatRepository.findByStudentStudyPlanIdOrderByTaskDateDesc(200L))
+                .thenAnswer(invocation -> savedDailyStatRef.get() == null ? List.of() : List.of(savedDailyStatRef.get()));
+        when(studyDayTaskItemRepository.findByStudyDayTaskIdOrderByTaskOrderAsc(300L)).thenReturn(List.of(studyDayTaskItem));
+        when(studyWordProgressRepository.findByStudentStudyPlanId(200L)).thenReturn(List.of(staleProgress, preferredProgress));
+
+        RecordStudyRequest request = new RecordStudyRequest(
+                3L,
+                StudyActionType.LEARN,
+                StudyRecordResult.CORRECT,
+                26,
+                22,
+                4,
+                5,
+                AttentionState.FOCUSED
+        );
+
+        StudyTaskResponse response = studyPlanService.recordStudy(200L, request, student);
+
+        assertEquals(StudyDayTaskStatus.COMPLETED, response.getStatus());
+        assertNotNull(savedProgressRef.get());
+        assertEquals(501L, savedProgressRef.get().getId());
+        assertNotNull(savedRecordRef.get());
+        assertEquals(2, savedRecordRef.get().getStageBefore());
     }
 
     private MetaWord metaWord(Long id, String word) {

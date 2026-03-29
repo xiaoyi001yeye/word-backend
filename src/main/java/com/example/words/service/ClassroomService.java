@@ -15,14 +15,21 @@ import com.example.words.repository.ClassroomRepository;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClassroomService {
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ClassroomRepository classroomRepository;
     private final ClassroomMemberRepository classroomMemberRepository;
@@ -46,6 +53,22 @@ public class ClassroomService {
         return classrooms.stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ClassroomResponse> findVisibleClassroomsPage(
+            AppUser actor,
+            int page,
+            int size,
+            String keyword,
+            String sortBy,
+            String sortDir) {
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Specification<Classroom> specification = Specification.<Classroom>where(visibleTo(actor))
+                .and(keywordLike(keyword));
+
+        return classroomRepository.findAll(specification, pageable)
+                .map(this::toResponse);
     }
 
     @Transactional
@@ -211,5 +234,43 @@ public class ClassroomService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
+        int normalizedPage = Math.max(page, 1) - 1;
+        int normalizedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return PageRequest.of(normalizedPage, normalizedSize, Sort.by(direction, normalizeSortBy(sortBy)));
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return "createdAt";
+        }
+        return switch (sortBy) {
+            case "name" -> "name";
+            case "updatedAt" -> "updatedAt";
+            case "createdAt" -> "createdAt";
+            default -> "createdAt";
+        };
+    }
+
+    private Specification<Classroom> visibleTo(AppUser actor) {
+        if (actor.getRole() == UserRole.ADMIN) {
+            return null;
+        }
+        return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("teacherId"), actor.getId());
+    }
+
+    private Specification<Classroom> keywordLike(String keyword) {
+        String normalizedKeyword = trimToNull(keyword);
+        if (normalizedKeyword == null) {
+            return null;
+        }
+        String pattern = "%" + normalizedKeyword.toLowerCase(Locale.ROOT) + "%";
+        return (root, query, criteriaBuilder) -> criteriaBuilder.or(
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), pattern)
+        );
     }
 }

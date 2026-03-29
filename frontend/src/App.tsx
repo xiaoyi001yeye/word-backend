@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   authApi,
+  booksImportApi,
   classroomApi,
   clearStoredLoginQuote,
   clearStoredToken,
@@ -17,6 +18,9 @@ import {
   userApi,
 } from './api';
 import type {
+  BooksImportBatchFile,
+  BooksImportConflict,
+  BooksImportJob,
   Classroom,
   Dictionary,
   Exam,
@@ -46,11 +50,26 @@ import './App.css';
 
 type MobilePanel = 'library' | 'words';
 
+type ImportConflictDraft = {
+  finalWord: string;
+  finalDefinition: string;
+  finalDifficulty: string;
+  comment: string;
+};
+
 const FALLBACK_LOGIN_QUOTE: FamousQuote = {
   text: 'Learning never exhausts the mind.',
   translation: '学习从不会使头脑疲惫。',
   author: 'Leonardo da Vinci',
 };
+
+function redirectToAdminPortal() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.location.replace('/admin/');
+}
 
 function App() {
   const [authChecking, setAuthChecking] = useState(true);
@@ -90,8 +109,11 @@ function App() {
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
   const [dictionaryForAssignment, setDictionaryForAssignment] = useState<Dictionary | null>(null);
-  const [isImportingDictionaries, setIsImportingDictionaries] = useState(false);
-  const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [booksImportJob, setBooksImportJob] = useState<BooksImportJob | null>(null);
+  const [booksImportFiles, setBooksImportFiles] = useState<BooksImportBatchFile[]>([]);
+  const [booksImportConflicts, setBooksImportConflicts] = useState<BooksImportConflict[]>([]);
+  const [conflictDrafts, setConflictDrafts] = useState<Record<number, ImportConflictDraft>>({});
+  const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   const [examLoading, setExamLoading] = useState(false);
   const [examError, setExamError] = useState<string | null>(null);
@@ -139,6 +161,10 @@ function App() {
     setDictionaryForAdd(null);
     setDictionaryForCsvImport(null);
     setDictionaryForAssignment(null);
+    setBooksImportJob(null);
+    setBooksImportFiles([]);
+    setBooksImportConflicts([]);
+    setConflictDrafts({});
     setImportFeedback(null);
     setExamLoading(false);
     setExamError(null);
@@ -180,6 +206,10 @@ function App() {
       try {
         const user = await authApi.me();
         if (mounted) {
+          if (user.role === 'ADMIN') {
+            redirectToAdminPortal();
+            return;
+          }
           setCurrentUser(user);
           setAuthError(null);
         }
@@ -296,7 +326,6 @@ function App() {
         ? await studentApi.getMyDictionaries()
         : await dictionaryApi.getAll();
       setDictionaries(nextDictionaries);
-      setImportFeedback(null);
     } catch (error) {
       console.error('Failed to load dictionaries:', error);
       setImportFeedback({
@@ -314,6 +343,168 @@ function App() {
     }
     loadDictionaries();
   }, [currentUser, loadDictionaries]);
+
+  const activeBooksImportStatuses = useMemo<BooksImportJob['status'][]>(() => [
+    'PENDING',
+    'SCANNING',
+    'STAGING',
+    'AUTO_MERGING',
+    'PUBLISHING',
+  ], []);
+
+  const loadBatchFiles = useCallback(async (batchId: string) => {
+    try {
+      const files = await booksImportApi.getBatchFiles(batchId);
+      setBooksImportFiles(files);
+    } catch (error) {
+      console.error('Failed to load books import files:', error);
+    }
+  }, []);
+
+  const loadBatchConflicts = useCallback(async (batchId: string) => {
+    try {
+      const conflicts = await booksImportApi.getConflicts(batchId, false);
+      setBooksImportConflicts(conflicts);
+      setConflictDrafts((current) => {
+        const nextDrafts = { ...current };
+        conflicts.forEach((conflict) => {
+          if (nextDrafts[conflict.id]) {
+            return;
+          }
+          const importedPayload = conflict.importedPayload ?? {};
+          nextDrafts[conflict.id] = {
+            finalWord: typeof importedPayload.word === 'string' ? importedPayload.word : conflict.displayWord,
+            finalDefinition: typeof importedPayload.definition === 'string' ? importedPayload.definition : '',
+            finalDifficulty: typeof importedPayload.difficulty === 'number' ? String(importedPayload.difficulty) : '',
+            comment: '',
+          };
+        });
+        return nextDrafts;
+      });
+    } catch (error) {
+      console.error('Failed to load books import conflicts:', error);
+      setBooksImportConflicts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser || !canImportSystemDictionaries) {
+      setBooksImportJob(null);
+      setBooksImportFiles([]);
+      setBooksImportConflicts([]);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadLatestImportJob = async () => {
+      try {
+        const latestJob = await booksImportApi.getLatestBatch();
+        if (mounted) {
+          setBooksImportJob(latestJob);
+          void loadBatchFiles(latestJob.jobId);
+          if (latestJob.status === 'WAITING_REVIEW' || latestJob.status === 'READY_TO_PUBLISH' || latestJob.status === 'SUCCEEDED') {
+            void loadBatchConflicts(latestJob.jobId);
+          } else {
+            setBooksImportConflicts([]);
+          }
+        }
+      } catch {
+        if (mounted) {
+          setBooksImportJob(null);
+          setBooksImportFiles([]);
+          setBooksImportConflicts([]);
+        }
+      }
+    };
+
+    void loadLatestImportJob();
+
+    return () => {
+      mounted = false;
+    };
+  }, [canImportSystemDictionaries, currentUser, loadBatchConflicts, loadBatchFiles]);
+
+  useEffect(() => {
+    if (!booksImportJob || !activeBooksImportStatuses.includes(booksImportJob.status)) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const pollImportJob = async () => {
+      try {
+        const [nextJob, files] = await Promise.all([
+          booksImportApi.getBatch(booksImportJob.jobId),
+          booksImportApi.getBatchFiles(booksImportJob.jobId),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        setBooksImportJob(nextJob);
+        setBooksImportFiles(files);
+
+        if (nextJob.status === 'SUCCEEDED') {
+          await loadDictionaries();
+          const conflicts = await booksImportApi.getConflicts(nextJob.jobId, false).catch(() => []);
+          if (!cancelled) {
+            setBooksImportConflicts(conflicts);
+            setImportFeedback({
+              type: 'success',
+              message: `发布完成，已替换 ${nextJob.importedDictionaryCount ?? 0} 本辞书，累计 ${nextJob.importedWordCount ?? 0} 行已落库。`,
+            });
+          }
+          return;
+        }
+
+        if (nextJob.status === 'WAITING_REVIEW' || nextJob.status === 'READY_TO_PUBLISH') {
+          const conflicts = await booksImportApi.getConflicts(nextJob.jobId, false).catch(() => []);
+          if (!cancelled) {
+            setBooksImportConflicts(conflicts);
+          }
+        }
+
+        if (nextJob.status === 'FAILED') {
+          setImportFeedback({
+            type: 'error',
+            message: nextJob.errorMessage || '导入失败，请查看任务状态。',
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setImportFeedback({
+            type: 'error',
+            message: error instanceof Error ? error.message : '刷新导入状态失败',
+          });
+        }
+      }
+    };
+
+    void pollImportJob();
+    const timerId = window.setInterval(() => {
+      void pollImportJob();
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [activeBooksImportStatuses, booksImportJob, loadDictionaries]);
+
+  useEffect(() => {
+    if (!booksImportJob) {
+      setBooksImportFiles([]);
+      setBooksImportConflicts([]);
+      return;
+    }
+    void loadBatchFiles(booksImportJob.jobId);
+    if (booksImportJob.status === 'WAITING_REVIEW' || booksImportJob.status === 'READY_TO_PUBLISH' || booksImportJob.status === 'SUCCEEDED') {
+      void loadBatchConflicts(booksImportJob.jobId);
+      return;
+    }
+    setBooksImportConflicts([]);
+  }, [booksImportJob?.jobId, booksImportJob?.status, loadBatchConflicts, loadBatchFiles]);
 
   useEffect(() => {
     if (!selectedDictionary && dictionaries.length > 0 && !isSearching) {
@@ -411,6 +602,62 @@ function App() {
     : selectedDictionary?.category || '选择一本辞书开始浏览';
   const activeWordCount = isSearching ? totalWords : selectedDictionary?.wordCount || totalWords;
   const displayedQuote = loginQuote ?? FALLBACK_LOGIN_QUOTE;
+  const isImportingDictionaries = booksImportJob ? activeBooksImportStatuses.includes(booksImportJob.status) : false;
+  const importProcessedFiles = booksImportJob?.processedFiles ?? 0;
+  const importTotalFiles = booksImportJob?.totalFiles ?? 0;
+  const importProgressPercent = importTotalFiles > 0
+    ? Math.min(100, Math.round((importProcessedFiles / importTotalFiles) * 100))
+    : booksImportJob && ['STAGED', 'WAITING_REVIEW', 'READY_TO_PUBLISH', 'PUBLISHING', 'SUCCEEDED'].includes(booksImportJob.status)
+      ? 100
+      : 0;
+  const importStatusLabel = booksImportJob?.status === 'SUCCEEDED'
+    ? '已发布'
+    : booksImportJob?.status === 'FAILED'
+      ? '失败'
+      : booksImportJob?.status === 'PUBLISHING'
+        ? '发布中'
+        : booksImportJob?.status === 'READY_TO_PUBLISH'
+          ? '可发布'
+          : booksImportJob?.status === 'WAITING_REVIEW'
+            ? '待处理冲突'
+            : booksImportJob?.status === 'AUTO_MERGING'
+              ? '自动合并中'
+              : booksImportJob?.status === 'STAGED'
+                ? '已入暂存区'
+                : booksImportJob?.status === 'STAGING'
+                  ? '导入中'
+                  : booksImportJob?.status === 'SCANNING'
+                    ? '扫描文件中'
+                    : booksImportJob?.status === 'PENDING'
+                      ? '排队中'
+                      : booksImportJob?.status === 'DISCARDED'
+                        ? '已废弃'
+                        : booksImportJob?.status === 'CANCELLED'
+                          ? '已取消'
+                          : null;
+  const currentImportFileLabel = booksImportJob?.currentFile
+    || (booksImportJob?.status === 'SUCCEEDED'
+      ? '本次发布已完成'
+      : booksImportJob?.status === 'FAILED'
+        ? '任务已终止'
+        : booksImportJob?.status === 'READY_TO_PUBLISH'
+          ? '等待人工发布'
+          : booksImportJob?.status === 'WAITING_REVIEW'
+            ? '等待人工处理冲突'
+            : booksImportJob?.status === 'STAGED'
+              ? '全部文件已完成暂存'
+        : '等待开始');
+  const canStartAutoMerge = booksImportJob?.status === 'STAGED' || booksImportJob?.status === 'WAITING_REVIEW' || booksImportJob?.status === 'READY_TO_PUBLISH';
+  const canPublishBatch = booksImportJob?.status === 'READY_TO_PUBLISH';
+  const canDiscardBatch = Boolean(booksImportJob && !activeBooksImportStatuses.includes(booksImportJob.status) && booksImportJob.status !== 'DISCARDED');
+  const readImportPayloadText = (payload: Record<string, unknown> | null | undefined, key: string) => {
+    const value = payload?.[key];
+    return typeof value === 'string' ? value : '';
+  };
+  const readImportPayloadNumber = (payload: Record<string, unknown> | null | undefined, key: string) => {
+    const value = payload?.[key];
+    return typeof value === 'number' ? value : null;
+  };
 
   const canManageDictionary = useCallback((dictionary: Dictionary) => {
     if (!currentUser) {
@@ -435,6 +682,10 @@ function App() {
       storeToken(response.token);
       storeLoginQuote(response.quote);
       setLoginQuote(response.quote);
+      if (response.user.role === 'ADMIN') {
+        redirectToAdminPortal();
+        return;
+      }
       setCurrentUser(response.user);
       resetWorkspace();
     } catch (error) {
@@ -481,24 +732,147 @@ function App() {
       return;
     }
 
-    setIsImportingDictionaries(true);
     setImportFeedback(null);
     try {
-      const result = await dictionaryApi.importDictionaries();
-      await loadDictionaries();
+      const job = await booksImportApi.createBatch();
+      setBooksImportJob(job);
+      setBooksImportFiles([]);
+      setBooksImportConflicts([]);
       setImportFeedback({
-        type: 'success',
-        message: `导入完成，本次新增 ${result.count} 本辞书。`,
+        type: 'info',
+        message: '导入批次已创建，文件会先进入 staging。',
       });
     } catch (error) {
+      if (error instanceof Error && error.message.includes('already running')) {
+        try {
+          const latestJob = await booksImportApi.getLatestBatch();
+          setBooksImportJob(latestJob);
+          await loadBatchFiles(latestJob.jobId);
+          setImportFeedback({
+            type: 'info',
+            message: '已有导入批次正在执行，已切换到当前进度。',
+          });
+          return;
+        } catch {
+          // Ignore fallback lookup errors and keep the original conflict message below.
+        }
+      }
       setImportFeedback({
         type: 'error',
         message: error instanceof Error ? error.message : '导入失败',
       });
-    } finally {
-      setIsImportingDictionaries(false);
     }
-  }, [canImportSystemDictionaries, isImportingDictionaries, loadDictionaries]);
+  }, [canImportSystemDictionaries, isImportingDictionaries, loadBatchFiles]);
+
+  const handleStartAutoMerge = useCallback(async () => {
+    if (!booksImportJob) {
+      return;
+    }
+    try {
+      const nextJob = await booksImportApi.startAutoMerge(booksImportJob.jobId);
+      setBooksImportJob(nextJob);
+      setImportFeedback({
+        type: 'info',
+        message: '自动合并已启动，系统正在生成候选和冲突清单。',
+      });
+    } catch (error) {
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '启动自动合并失败',
+      });
+    }
+  }, [booksImportJob]);
+
+  const handlePublishBatch = useCallback(async () => {
+    if (!booksImportJob) {
+      return;
+    }
+    try {
+      const nextJob = await booksImportApi.publish(booksImportJob.jobId);
+      setBooksImportJob(nextJob);
+      setImportFeedback({
+        type: 'info',
+        message: '发布已启动，系统正在替换正式词条。',
+      });
+    } catch (error) {
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '发布失败',
+      });
+    }
+  }, [booksImportJob]);
+
+  const handleDiscardBatch = useCallback(async () => {
+    if (!booksImportJob || !window.confirm('确定要废弃当前导入批次吗？staging 和冲突数据会被清空。')) {
+      return;
+    }
+    try {
+      const nextJob = await booksImportApi.discard(booksImportJob.jobId);
+      setBooksImportJob(nextJob);
+      setBooksImportFiles([]);
+      setBooksImportConflicts([]);
+      setImportFeedback({
+        type: 'info',
+        message: '导入批次已废弃。',
+      });
+    } catch (error) {
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '废弃批次失败',
+      });
+    }
+  }, [booksImportJob]);
+
+  const handleConflictDraftChange = useCallback((conflictId: number, patch: Partial<ImportConflictDraft>) => {
+    setConflictDrafts((current) => ({
+      ...current,
+      [conflictId]: {
+        ...(current[conflictId] ?? {
+          finalWord: '',
+          finalDefinition: '',
+          finalDifficulty: '',
+          comment: '',
+        }),
+        ...patch,
+      },
+    }));
+  }, []);
+
+  const handleResolveConflict = useCallback(async (
+    conflict: BooksImportConflict,
+    resolution: 'KEEP_EXISTING' | 'USE_IMPORTED' | 'MANUAL' | 'IGNORE',
+  ) => {
+    if (!booksImportJob) {
+      return;
+    }
+    const draft = conflictDrafts[conflict.id];
+    try {
+      await booksImportApi.resolveConflict(booksImportJob.jobId, conflict.id, {
+        resolution,
+        finalWord: resolution === 'MANUAL' ? draft?.finalWord?.trim() || undefined : undefined,
+        finalDefinition: resolution === 'MANUAL' ? draft?.finalDefinition?.trim() || undefined : undefined,
+        finalDifficulty: resolution === 'MANUAL' && draft?.finalDifficulty
+          ? Number(draft.finalDifficulty)
+          : undefined,
+        comment: draft?.comment?.trim() || undefined,
+      });
+      const [nextJob, conflicts] = await Promise.all([
+        booksImportApi.getBatch(booksImportJob.jobId),
+        booksImportApi.getConflicts(booksImportJob.jobId, false),
+      ]);
+      setBooksImportJob(nextJob);
+      setBooksImportConflicts(conflicts);
+      setImportFeedback({
+        type: 'success',
+        message: `冲突 ${conflict.displayWord} 已处理。`,
+      });
+    } catch (error) {
+      setImportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '处理冲突失败',
+      });
+    }
+  }, [booksImportJob, conflictDrafts]);
 
   const handleSearchClear = useCallback(() => {
     setIsSearching(false);
@@ -695,7 +1069,9 @@ function App() {
                 onClick={handleImportDictionaries}
                 disabled={isImportingDictionaries}
               >
-                {isImportingDictionaries ? '导入中...' : '导入 books'}
+                {isImportingDictionaries
+                  ? `导入中 ${importProcessedFiles}/${importTotalFiles || '?'}`
+                  : '导入 books'}
               </button>
             )}
             <button className="add-dictionary-btn" onClick={() => setShowCreateModal(true)}>
@@ -729,6 +1105,180 @@ function App() {
             : '选择一本辞书后，右侧会同步单词、考试与详情工作区。'}
         </p>
       </div>
+
+      {booksImportJob && (
+        <div className={`sidebar__import-status sidebar__import-status--${booksImportJob.status.toLowerCase()}`}>
+          <div className="sidebar__import-status-head">
+            <div>
+              <p className="sidebar__import-status-eyebrow">Books Import</p>
+              <strong className="sidebar__import-status-title">{importStatusLabel}</strong>
+            </div>
+            <span className="sidebar__import-status-badge">
+              {importProcessedFiles}/{importTotalFiles || '?'}
+            </span>
+          </div>
+
+          <div className="sidebar__import-progress-track">
+            <div
+              className="sidebar__import-progress-bar"
+              style={{ width: `${importProgressPercent}%` }}
+            />
+          </div>
+
+          <div className="sidebar__import-status-grid">
+            <span>当前文件</span>
+            <strong title={booksImportJob.currentFile || undefined}>
+              {currentImportFileLabel}
+            </strong>
+            <span>总行数</span>
+            <strong>{booksImportJob.totalRows ?? 0}</strong>
+            <span>失败文件</span>
+            <strong>{booksImportJob.failedFiles ?? 0}</strong>
+            <span>已暂存行数</span>
+            <strong>{booksImportJob.successRows ?? booksImportJob.importedWordCount ?? 0}</strong>
+            <span>候选词数</span>
+            <strong>{booksImportJob.candidateCount ?? 0}</strong>
+            <span>未处理冲突</span>
+            <strong>{booksImportJob.conflictCount ?? 0}</strong>
+            <span>涉及辞书</span>
+            <strong>{booksImportJob.importedDictionaryCount ?? 0}</strong>
+          </div>
+
+          <div className="sidebar__import-actions">
+            <button
+              className="sidebar__import-action"
+              onClick={handleStartAutoMerge}
+              disabled={!canStartAutoMerge || isImportingDictionaries}
+            >
+              自动合并
+            </button>
+            <button
+              className="sidebar__import-action"
+              onClick={handlePublishBatch}
+              disabled={!canPublishBatch || isImportingDictionaries}
+            >
+              发布
+            </button>
+            <button
+              className="sidebar__import-action sidebar__import-action--ghost"
+              onClick={handleDiscardBatch}
+              disabled={!canDiscardBatch}
+            >
+              废弃
+            </button>
+          </div>
+
+          {booksImportFiles.length > 0 && (
+            <div className="sidebar__import-section">
+              <div className="sidebar__import-section-head">
+                <span>文件进度</span>
+                <strong>{booksImportFiles.length}</strong>
+              </div>
+              <div className="sidebar__import-file-list">
+                {booksImportFiles.map((file) => (
+                  <div key={file.id} className={`sidebar__import-file sidebar__import-file--${file.status.toLowerCase()}`}>
+                    <div>
+                      <strong title={file.fileName}>{file.dictionaryName}</strong>
+                      <p>{file.fileName}</p>
+                    </div>
+                    <div className="sidebar__import-file-meta">
+                      <span>{file.status}</span>
+                      <span>{file.successRows ?? 0}/{file.rowCount ?? 0}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {booksImportConflicts.length > 0 && (
+            <div className="sidebar__import-section">
+              <div className="sidebar__import-section-head">
+                <span>待处理冲突</span>
+                <strong>{booksImportConflicts.length}</strong>
+              </div>
+              <div className="sidebar__import-conflict-list">
+                {booksImportConflicts.map((conflict) => {
+                  const draft = conflictDrafts[conflict.id];
+                  return (
+                    <div key={conflict.id} className="sidebar__import-conflict">
+                      <div className="sidebar__import-conflict-head">
+                        <div>
+                          <strong>{conflict.displayWord}</strong>
+                          <p>{conflict.conflictType}</p>
+                        </div>
+                        <span>{conflict.dictionaryNames.join(' / ')}</span>
+                      </div>
+
+                      <div className="sidebar__import-conflict-compare">
+                        <div>
+                          <span>正式库</span>
+                          <strong>{readImportPayloadText(conflict.existingPayload, 'definition') || '暂无'}</strong>
+                        </div>
+                        <div>
+                          <span>导入值</span>
+                          <strong>{readImportPayloadText(conflict.importedPayload, 'definition') || '暂无'}</strong>
+                        </div>
+                      </div>
+
+                      <div className="sidebar__import-conflict-form">
+                        <input
+                          type="text"
+                          placeholder="最终单词"
+                          value={draft?.finalWord ?? ''}
+                          onChange={(event) => handleConflictDraftChange(conflict.id, { finalWord: event.target.value })}
+                        />
+                        <input
+                          type="text"
+                          placeholder="最终释义"
+                          value={draft?.finalDefinition ?? ''}
+                          onChange={(event) => handleConflictDraftChange(conflict.id, { finalDefinition: event.target.value })}
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          placeholder="难度"
+                          value={draft?.finalDifficulty ?? ''}
+                          onChange={(event) => handleConflictDraftChange(conflict.id, { finalDifficulty: event.target.value })}
+                        />
+                        <input
+                          type="text"
+                          placeholder="备注"
+                          value={draft?.comment ?? ''}
+                          onChange={(event) => handleConflictDraftChange(conflict.id, { comment: event.target.value })}
+                        />
+                      </div>
+
+                      <div className="sidebar__import-conflict-actions">
+                        <button type="button" onClick={() => handleResolveConflict(conflict, 'KEEP_EXISTING')}>
+                          保留正式值
+                        </button>
+                        <button type="button" onClick={() => handleResolveConflict(conflict, 'USE_IMPORTED')}>
+                          使用导入值
+                        </button>
+                        <button type="button" onClick={() => handleResolveConflict(conflict, 'MANUAL')}>
+                          手工解决
+                        </button>
+                        <button type="button" onClick={() => handleResolveConflict(conflict, 'IGNORE')}>
+                          忽略
+                        </button>
+                      </div>
+
+                      {readImportPayloadNumber(conflict.existingPayload, 'difficulty') !== readImportPayloadNumber(conflict.importedPayload, 'difficulty') && (
+                        <p className="sidebar__import-conflict-note">
+                          难度差异: 正式库 {readImportPayloadNumber(conflict.existingPayload, 'difficulty') ?? '-'} /
+                          导入值 {readImportPayloadNumber(conflict.importedPayload, 'difficulty') ?? '-'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && dictionaries.length === 0 ? (
         <div className="sidebar__loading">
@@ -1170,7 +1720,6 @@ function App() {
       {canManageWorkspace ? (
         <StudyPlanManagementModal
           isOpen={showStudyPlanModal}
-          dictionaries={dictionaries}
           classrooms={availableClassrooms}
           onClose={() => setShowStudyPlanModal(false)}
         />

@@ -1,18 +1,24 @@
 package com.example.words.service;
 
 import java.io.BufferedReader;
+import com.example.words.dto.MetaWordDetailResponse;
+import com.example.words.dto.MetaWordDictionaryReferenceDto;
 import com.example.words.model.Dictionary;
 import com.example.words.model.DictionaryCreationType;
+import com.example.words.model.DictionaryWord;
 import com.example.words.model.MetaWord;
 import com.example.words.model.Phonetic;
 import com.example.words.model.PartOfSpeech;
 import com.example.words.model.Definition;
 import com.example.words.model.ExampleSentence;
+import com.example.words.dto.MetaWordReferenceLocationDto;
 import com.example.words.dto.MetaWordSearchRequest;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.dto.PhoneticDto;
 import com.example.words.repository.MetaWordRepository;
+import com.example.words.repository.TagRepository;
+import com.example.words.util.WordNormalizationUtils;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +37,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -53,16 +60,25 @@ public class MetaWordService {
     private final MetaWordRepository metaWordRepository;
     private final DictionaryService dictionaryService;
     private final DictionaryWordService dictionaryWordService;
+    private final TagRepository tagRepository;
+    private final CurrentUserService currentUserService;
+    private final AccessControlService accessControlService;
     private final TransactionTemplate transactionTemplate;
 
     public MetaWordService(
             MetaWordRepository metaWordRepository,
             DictionaryService dictionaryService,
             DictionaryWordService dictionaryWordService,
+            TagRepository tagRepository,
+            CurrentUserService currentUserService,
+            AccessControlService accessControlService,
             PlatformTransactionManager transactionManager) {
         this.metaWordRepository = metaWordRepository;
         this.dictionaryService = dictionaryService;
         this.dictionaryWordService = dictionaryWordService;
+        this.tagRepository = tagRepository;
+        this.currentUserService = currentUserService;
+        this.accessControlService = accessControlService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -74,8 +90,17 @@ public class MetaWordService {
         return metaWordRepository.findById(id);
     }
 
+    public Optional<MetaWordDetailResponse> findDetailById(Long id) {
+        return metaWordRepository.findById(id).map(this::toDetailResponse);
+    }
+
     public Optional<MetaWord> findByWord(String word) {
-        return metaWordRepository.findByWord(word);
+        String normalizedWord = WordNormalizationUtils.normalize(word);
+        if (normalizedWord == null || normalizedWord.isEmpty()) {
+            return Optional.empty();
+        }
+        return metaWordRepository.findByNormalizedWord(normalizedWord)
+                .or(() -> metaWordRepository.findByWord(word));
     }
 
     public List<MetaWord> findByDifficulty(Integer difficulty) {
@@ -93,7 +118,7 @@ public class MetaWordService {
 
     @Transactional
     public MetaWord saveIfNotExists(String word, String phonetic, String definition, String partOfSpeech) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -103,7 +128,7 @@ public class MetaWordService {
     
     @Transactional
     public MetaWord saveIfNotExists(String word, Phonetic phoneticDetail, java.util.List<PartOfSpeech> partOfSpeechDetail) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             MetaWord metaWord = existing.get();
             // Update with new detailed information
@@ -121,7 +146,7 @@ public class MetaWordService {
 
     @Transactional
     public MetaWord saveWordIfNotExists(String word) {
-        Optional<MetaWord> existing = metaWordRepository.findByWord(word);
+        Optional<MetaWord> existing = metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word));
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -143,11 +168,16 @@ public class MetaWordService {
     }
 
     public BooksImportResult importBooksData() {
+        return importBooksData(BooksImportProgressListener.NOOP);
+    }
+
+    public BooksImportResult importBooksData(BooksImportProgressListener progressListener) {
         resetImportData();
 
         java.io.File dir = new java.io.File(BOOKS_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
             log.error("Directory not found: {}", BOOKS_DIR);
+            progressListener.onFilesDiscovered(0);
             return new BooksImportResult(0, 0);
         }
 
@@ -157,10 +187,12 @@ public class MetaWordService {
         });
         if (files == null || files.length == 0) {
             log.warn("No importable files found in directory: {}", BOOKS_DIR);
+            progressListener.onFilesDiscovered(0);
             return new BooksImportResult(0, 0);
         }
 
         Arrays.sort(files, Comparator.comparing(java.io.File::getName));
+        progressListener.onFilesDiscovered(files.length);
 
         long startTime = System.currentTimeMillis();
         log.info("Starting import from {} files", files.length);
@@ -168,12 +200,23 @@ public class MetaWordService {
         Map<String, Long> wordCache = createWordCache();
         int totalWordCount = 0;
         int importedDictionaryCount = 0;
+        int processedFiles = 0;
         for (java.io.File file : files) {
+            progressListener.onFileStarted(file.getName(), processedFiles, files.length);
             ImportFileResult result = importFromFile(file, wordCache);
             if (result.success()) {
                 importedDictionaryCount++;
                 totalWordCount += result.wordCount();
             }
+            processedFiles++;
+            progressListener.onFileCompleted(
+                    file.getName(),
+                    processedFiles,
+                    files.length,
+                    importedDictionaryCount,
+                    totalWordCount,
+                    result.success()
+            );
         }
 
         long elapsedTime = System.currentTimeMillis() - startTime;
@@ -321,7 +364,6 @@ public class MetaWordService {
             }
 
             int inserted = dictionaryWordService.saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
-            dictionaryService.incrementWordCount(dictionaryId, inserted);
             return inserted;
         });
         return insertedCount != null ? insertedCount : 0;
@@ -346,7 +388,6 @@ public class MetaWordService {
             }
 
             int inserted = dictionaryWordService.saveAllBatchIgnoringDuplicates(dictionaryId, metaWordIds);
-            dictionaryService.incrementWordCount(dictionaryId, inserted);
             return inserted;
         });
         return insertedCount != null ? insertedCount : 0;
@@ -360,6 +401,7 @@ public class MetaWordService {
         }
 
         MetaWord metaWord = metaWordRepository.findByWord(row.word())
+                .or(() -> metaWordRepository.findByNormalizedWord(cacheKey))
                 .orElseGet(() -> {
                     MetaWord newMetaWord = new MetaWord();
                     newMetaWord.setWord(row.word());
@@ -382,7 +424,9 @@ public class MetaWordService {
             metaWord = metaWordRepository.findById(cachedId).orElse(null);
         }
         if (metaWord == null) {
-            metaWord = metaWordRepository.findByWord(word).orElse(null);
+            metaWord = metaWordRepository.findByNormalizedWord(cacheKey)
+                    .or(() -> metaWordRepository.findByWord(word))
+                    .orElse(null);
         }
 
         boolean shouldSave = false;
@@ -439,7 +483,7 @@ public class MetaWordService {
     }
 
     private String normalizeWordKey(String word) {
-        return word.toLowerCase(Locale.ROOT);
+        return WordNormalizationUtils.normalize(word);
     }
 
     private Phonetic convertPhoneticDto(PhoneticDto dto) {
@@ -522,6 +566,66 @@ public class MetaWordService {
             } else {
                 return metaWordRepository.findAll(pageable);
             }
+        }
+    }
+
+    private MetaWordDetailResponse toDetailResponse(MetaWord metaWord) {
+        List<DictionaryWord> dictionaryWords = dictionaryWordService.findByMetaWordId(metaWord.getId());
+        Map<Long, Dictionary> visibleDictionaries = new LinkedHashMap<>();
+        for (DictionaryWord dictionaryWord : dictionaryWords) {
+            Dictionary dictionary = dictionaryService.findById(dictionaryWord.getDictionaryId()).orElse(null);
+            if (dictionary == null) {
+                continue;
+            }
+            if (!canView(dictionary)) {
+                continue;
+            }
+            visibleDictionaries.put(dictionary.getId(), dictionary);
+        }
+
+        Map<Long, com.example.words.model.Tag> tagMap = new LinkedHashMap<>();
+        for (com.example.words.model.Tag tag : tagRepository.findAllById(dictionaryWords.stream()
+                .map(DictionaryWord::getChapterTagId)
+                .filter(java.util.Objects::nonNull)
+                .toList())) {
+            tagMap.put(tag.getId(), tag);
+        }
+
+        Map<Long, MetaWordDictionaryReferenceDto> references = new LinkedHashMap<>();
+        for (DictionaryWord dictionaryWord : dictionaryWords) {
+            Dictionary dictionary = visibleDictionaries.get(dictionaryWord.getDictionaryId());
+            if (dictionary == null) {
+                continue;
+            }
+            MetaWordDictionaryReferenceDto reference = references.computeIfAbsent(dictionary.getId(), key ->
+                    new MetaWordDictionaryReferenceDto(dictionary.getId(), dictionary.getName(), new ArrayList<>()));
+            com.example.words.model.Tag tag = tagMap.get(dictionaryWord.getChapterTagId());
+            reference.getLocations().add(new MetaWordReferenceLocationDto(
+                    dictionaryWord.getChapterTagId(),
+                    tag == null ? null : tag.getPathName(),
+                    dictionaryWord.getEntryOrder()
+            ));
+        }
+
+        return new MetaWordDetailResponse(
+                metaWord.getId(),
+                metaWord.getWord(),
+                metaWord.getPhonetic(),
+                metaWord.getDefinition(),
+                metaWord.getPartOfSpeech(),
+                metaWord.getExampleSentence(),
+                metaWord.getTranslation(),
+                metaWord.getDifficulty(),
+                new ArrayList<>(references.values())
+        );
+    }
+
+    private boolean canView(Dictionary dictionary) {
+        try {
+            accessControlService.ensureCanViewDictionary(currentUserService.getCurrentUser(), dictionary);
+            return true;
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return false;
         }
     }
 

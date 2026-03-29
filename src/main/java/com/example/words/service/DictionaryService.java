@@ -1,19 +1,25 @@
 package com.example.words.service;
 
+import com.example.words.exception.ResourceNotFoundException;
+import com.example.words.model.AppUser;
+import com.example.words.model.Classroom;
 import com.example.words.model.Dictionary;
 import com.example.words.model.DictionaryCreationType;
 import com.example.words.model.ResourceScopeType;
-import com.example.words.model.AppUser;
 import com.example.words.model.UserRole;
+import com.example.words.repository.ClassroomRepository;
 import com.example.words.repository.DictionaryRepository;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Optional;
 
 @Service
 public class DictionaryService {
@@ -23,15 +29,21 @@ public class DictionaryService {
 
     private final DictionaryRepository dictionaryRepository;
     private final DictionaryAssignmentService dictionaryAssignmentService;
+    private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final AccessControlService accessControlService;
+    private final ClassroomRepository classroomRepository;
 
     public DictionaryService(
             DictionaryRepository dictionaryRepository,
             DictionaryAssignmentService dictionaryAssignmentService,
-            AccessControlService accessControlService) {
+            ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
+            AccessControlService accessControlService,
+            ClassroomRepository classroomRepository) {
         this.dictionaryRepository = dictionaryRepository;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
+        this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.accessControlService = accessControlService;
+        this.classroomRepository = classroomRepository;
     }
 
     public List<Dictionary> findAll() {
@@ -45,14 +57,19 @@ public class DictionaryService {
         }
 
         if (actor.getRole() == UserRole.TEACHER) {
+            Set<Long> assignedDictionaryIds = classroomDictionaryAssignmentService.getAssignedDictionaryIdsForTeacher(actor.getId());
             return dictionaries.stream()
                     .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
                             || actor.getId().equals(dictionary.getOwnerUserId())
-                            || actor.getId().equals(dictionary.getCreatedBy()))
+                            || actor.getId().equals(dictionary.getCreatedBy())
+                            || assignedDictionaryIds.contains(dictionary.getId()))
                     .toList();
         }
 
-        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId());
+        Set<Long> assignedDictionaryIds = new LinkedHashSet<>(
+                dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId())
+        );
+        assignedDictionaryIds.addAll(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForStudent(actor.getId()));
         return dictionaries.stream()
                 .filter(dictionary -> dictionary.getScopeType() == ResourceScopeType.SYSTEM
                         || assignedDictionaryIds.contains(dictionary.getId()))
@@ -60,9 +77,31 @@ public class DictionaryService {
     }
 
     public List<Dictionary> findAssignedDictionariesForStudent(Long studentId) {
-        Set<Long> assignedDictionaryIds = dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId);
+        Set<Long> assignedDictionaryIds = new LinkedHashSet<>(
+                dictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId)
+        );
+        assignedDictionaryIds.addAll(classroomDictionaryAssignmentService.getAssignedDictionaryIdsForStudent(studentId));
         return dictionaryRepository.findAll().stream()
                 .filter(dictionary -> assignedDictionaryIds.contains(dictionary.getId()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Dictionary> findVisibleDictionariesForClassrooms(Collection<Long> classroomIds, AppUser actor) {
+        if (classroomIds == null || classroomIds.isEmpty()) {
+            return findVisibleDictionaries(actor);
+        }
+
+        List<Classroom> classrooms = resolveVisibleClassrooms(classroomIds, actor);
+        Set<Long> dictionaryIds = classroomDictionaryAssignmentService.intersectAssignedDictionaryIdsForClassrooms(
+                classrooms.stream().map(Classroom::getId).toList()
+        );
+        if (dictionaryIds.isEmpty()) {
+            return List.of();
+        }
+
+        return findVisibleDictionaries(actor).stream()
+                .filter(dictionary -> dictionaryIds.contains(dictionary.getId()))
                 .toList();
     }
 
@@ -152,6 +191,22 @@ public class DictionaryService {
     public void updateWordCount(Long dictionaryId, int wordCount) {
         dictionaryRepository.findById(dictionaryId).ifPresent(dictionary -> {
             dictionary.setWordCount(wordCount);
+            if (dictionary.getEntryCount() == null) {
+                dictionary.setEntryCount(wordCount);
+            }
+            dictionaryRepository.save(dictionary);
+        });
+    }
+
+    @Transactional
+    public void updateCounts(Long dictionaryId, int wordCount, int entryCount) {
+        dictionaryRepository.updateCounts(dictionaryId, wordCount, entryCount);
+    }
+
+    @Transactional
+    public void updateEntryCount(Long dictionaryId, int entryCount) {
+        dictionaryRepository.findById(dictionaryId).ifPresent(dictionary -> {
+            dictionary.setEntryCount(entryCount);
             dictionaryRepository.save(dictionary);
         });
     }
@@ -247,5 +302,21 @@ public class DictionaryService {
             return "考博";
         }
         return "其他";
+    }
+
+    private List<Classroom> resolveVisibleClassrooms(Collection<Long> classroomIds, AppUser actor) {
+        List<Classroom> classrooms = new ArrayList<>();
+        for (Long classroomId : classroomIds.stream().distinct().toList()) {
+            Classroom classroom = classroomRepository.findById(classroomId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Classroom not found: " + classroomId));
+            if (actor.getRole() == UserRole.TEACHER && !actor.getId().equals(classroom.getTeacherId())) {
+                throw new AccessDeniedException("You do not have permission to manage classroom " + classroom.getId());
+            }
+            if (actor.getRole() == UserRole.STUDENT) {
+                throw new AccessDeniedException("Students cannot filter dictionaries by classroom");
+            }
+            classrooms.add(classroom);
+        }
+        return classrooms;
     }
 }

@@ -36,6 +36,82 @@ export interface Dictionary {
   updatedAt?: string;
 }
 
+export type BooksImportJobStatus =
+  | 'PENDING'
+  | 'SCANNING'
+  | 'STAGING'
+  | 'STAGED'
+  | 'AUTO_MERGING'
+  | 'WAITING_REVIEW'
+  | 'READY_TO_PUBLISH'
+  | 'PUBLISHING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'DISCARDED';
+
+export interface BooksImportJob {
+  jobId: string;
+  status: BooksImportJobStatus;
+  batchType?: string;
+  totalFiles?: number;
+  processedFiles?: number;
+  failedFiles?: number;
+  totalRows?: number;
+  processedRows?: number;
+  successRows?: number;
+  failedRows?: number;
+  importedDictionaryCount?: number;
+  importedWordCount?: number;
+  currentFile?: string | null;
+  candidateCount?: number;
+  conflictCount?: number;
+  errorMessage?: string | null;
+  createdBy?: number | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  publishStartedAt?: string | null;
+  publishFinishedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export type BooksImportBatchFileStatus = 'PENDING' | 'STAGING' | 'STAGED' | 'FAILED';
+
+export interface BooksImportBatchFile {
+  id: number;
+  batchId: string;
+  fileName: string;
+  dictionaryName: string;
+  status: BooksImportBatchFileStatus;
+  rowCount?: number;
+  successRows?: number;
+  failedRows?: number;
+  durationMs?: number | null;
+  errorMessage?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export type BooksImportConflictType = 'FIELD_CONFLICT' | 'MULTI_SOURCE_CONFLICT' | 'NORMALIZATION_COLLISION';
+
+export type BooksImportConflictResolution = 'KEEP_EXISTING' | 'USE_IMPORTED' | 'MANUAL' | 'IGNORE';
+
+export interface BooksImportConflict {
+  id: number;
+  candidateId?: number | null;
+  normalizedWord: string;
+  displayWord: string;
+  conflictType: BooksImportConflictType;
+  dictionaryNames: string[];
+  resolution?: BooksImportConflictResolution | null;
+  existingPayload?: Record<string, unknown> | null;
+  importedPayload?: Record<string, unknown> | null;
+  resolvedPayload?: Record<string, unknown> | null;
+  comment?: string | null;
+  resolvedAt?: string | null;
+}
+
 export interface Classroom {
   id: number;
   name: string;

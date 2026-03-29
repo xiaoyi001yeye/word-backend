@@ -57,7 +57,7 @@ class ExamServiceTest {
 
     @BeforeEach
     void setUp() {
-        dictionaryService = new DictionaryService(dictionaryRepository, null, null);
+        dictionaryService = new DictionaryService(dictionaryRepository, null, null, null, null);
         examService = new ExamService(
                 examRepository,
                 examQuestionRepository,

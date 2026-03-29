@@ -12,12 +12,15 @@ import org.springframework.stereotype.Service;
 public class AccessControlService {
 
     private final DictionaryAssignmentService dictionaryAssignmentService;
+    private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final TeacherStudentService teacherStudentService;
 
     public AccessControlService(
             DictionaryAssignmentService dictionaryAssignmentService,
+            ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
             TeacherStudentService teacherStudentService) {
         this.dictionaryAssignmentService = dictionaryAssignmentService;
+        this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.teacherStudentService = teacherStudentService;
     }
 
@@ -42,14 +45,19 @@ public class AccessControlService {
         if (actor.getRole() == UserRole.TEACHER) {
             if (dictionary.getScopeType() == ResourceScopeType.SYSTEM
                     || actor.getId().equals(dictionary.getOwnerUserId())
-                    || actor.getId().equals(dictionary.getCreatedBy())) {
+                    || actor.getId().equals(dictionary.getCreatedBy())
+                    || classroomDictionaryAssignmentService.isDictionaryAssignedToTeacherClassrooms(
+                            dictionary.getId(),
+                            actor.getId()
+                    )) {
                 return;
             }
         }
 
         if (actor.getRole() == UserRole.STUDENT) {
             if (dictionary.getScopeType() == ResourceScopeType.SYSTEM
-                    || dictionaryAssignmentService.isDictionaryAssignedToStudent(dictionary.getId(), actor.getId())) {
+                    || dictionaryAssignmentService.isDictionaryAssignedToStudent(dictionary.getId(), actor.getId())
+                    || classroomDictionaryAssignmentService.isDictionaryAssignedToStudent(dictionary.getId(), actor.getId())) {
                 return;
             }
         }

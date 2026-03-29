@@ -10,13 +10,20 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
 
     Optional<MetaWord> findByWord(String word);
 
+    Optional<MetaWord> findByNormalizedWord(String normalizedWord);
+
     boolean existsByWord(String word);
+
+    boolean existsByNormalizedWord(String normalizedWord);
+
+    List<MetaWord> findByNormalizedWordIn(Collection<String> normalizedWords);
 
     List<MetaWord> findByDifficulty(Integer difficulty);
 
@@ -33,7 +40,12 @@ public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
     @Query("""
             SELECT m
             FROM MetaWord m
-            WHERE LOWER(m.word) LIKE CONCAT(LOWER(:keyword), '%')
+            WHERE (
+                LOWER(m.word) LIKE CONCAT(LOWER(:keyword), '%')
+                OR LOWER(COALESCE(m.translation, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(COALESCE(m.definition, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(COALESCE(m.phonetic, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+            )
               AND NOT EXISTS (
                 SELECT dw.id
                 FROM DictionaryWord dw
@@ -41,7 +53,12 @@ public interface MetaWordRepository extends JpaRepository<MetaWord, Long> {
                   AND dw.metaWordId = m.id
               )
             ORDER BY
-              CASE WHEN LOWER(m.word) = LOWER(:keyword) THEN 0 ELSE 1 END,
+              CASE
+                WHEN LOWER(m.word) = LOWER(:keyword) THEN 0
+                WHEN LOWER(m.word) LIKE CONCAT(LOWER(:keyword), '%') THEN 1
+                WHEN LOWER(COALESCE(m.translation, '')) LIKE CONCAT('%', LOWER(:keyword), '%') THEN 2
+                ELSE 3
+              END,
               LENGTH(m.word),
               LOWER(m.word)
             """)
