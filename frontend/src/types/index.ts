@@ -140,6 +140,81 @@ export interface User {
   lastLoginAt?: string | null;
 }
 
+export type AiConfigStatus = 'ENABLED' | 'DISABLED';
+
+export interface AiConfig {
+  id: number;
+  providerName: string;
+  apiUrl: string;
+  apiKeyMasked: string;
+  modelName: string;
+  status: AiConfigStatus;
+  isDefault: boolean;
+  remark?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface CreateAiConfigPayload {
+  providerName: string;
+  apiUrl: string;
+  apiKey: string;
+  modelName: string;
+  status: AiConfigStatus;
+  isDefault: boolean;
+  remark?: string;
+}
+
+export interface UpdateAiConfigPayload {
+  providerName: string;
+  apiUrl: string;
+  apiKey?: string;
+  modelName: string;
+  status: AiConfigStatus;
+  isDefault: boolean;
+  remark?: string;
+}
+
+export interface AiConfigTestResponse {
+  configId: number;
+  providerName: string;
+  modelName: string;
+  success: boolean;
+  reply: string;
+}
+
+export interface AiChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatPayload {
+  configId: number;
+  messages: AiChatMessage[];
+}
+
+export interface AiChatResponse {
+  configId: number;
+  providerName: string;
+  modelName: string;
+  reply: string;
+}
+
+export interface GenerateReadingPayload {
+  configId?: number;
+  topic: string;
+  wordCount: number;
+  difficulty: string;
+}
+
+export interface GenerateReadingResponse {
+  configId: number;
+  providerName: string;
+  modelName: string;
+  title: string;
+  content: string;
+}
+
 export interface FamousQuote {
   text: string;
   translation: string;

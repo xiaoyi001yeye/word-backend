@@ -1,5 +1,6 @@
 package com.example.words.service;
 
+import com.example.words.model.AiConfig;
 import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
 import com.example.words.model.Exam;
@@ -35,6 +36,12 @@ public class AccessControlService {
             return;
         }
         throw new AccessDeniedException("You can only access your own user profile");
+    }
+
+    public void ensureCanManageAiConfig(AppUser actor, AiConfig config) {
+        if (!actor.getId().equals(config.getUserId())) {
+            throw new AccessDeniedException("You do not have permission to access this AI config");
+        }
     }
 
     public void ensureCanViewDictionary(AppUser actor, Dictionary dictionary) {

@@ -1,6 +1,7 @@
 import { For, type JSX } from "solid-js";
 import { A, useLocation, useNavigate } from "@solidjs/router";
 import {
+    Bot,
     BookCopy,
     CalendarRange,
     DatabaseZap,
@@ -35,6 +36,7 @@ export function AppShell(props: AppShellProps) {
         const items: NavItem[] = [
             { href: "/", label: "总览", icon: LayoutDashboard, roles: ["ADMIN", "TEACHER"] },
             { href: "/users", label: "用户管理", icon: Users, roles: ["ADMIN", "TEACHER"] },
+            { href: "/ai-configs", label: "AI 配置", icon: Bot, roles: ["ADMIN"] },
             { href: "/classrooms", label: "班级管理", icon: School, roles: ["ADMIN", "TEACHER"] },
             { href: "/dictionaries", label: "词书资源", icon: BookCopy, roles: ["ADMIN", "TEACHER"] },
             { href: "/study-plans", label: "学习计划", icon: CalendarRange, roles: ["ADMIN", "TEACHER"] },

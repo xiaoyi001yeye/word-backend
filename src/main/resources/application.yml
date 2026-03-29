@@ -58,3 +58,10 @@ security:
   jwt:
     secret: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     expiration-hours: 24
+
+ai:
+  config:
+    encryption-key: ${AI_CONFIG_ENCRYPTION_KEY:}
+  http:
+    connect-timeout-ms: 3000
+    read-timeout-ms: 30000

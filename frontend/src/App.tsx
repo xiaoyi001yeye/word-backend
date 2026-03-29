@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  aiConfigApi,
   authApi,
   booksImportApi,
   classroomApi,
@@ -18,6 +19,7 @@ import {
   userApi,
 } from './api';
 import type {
+  AiConfig,
   BooksImportBatchFile,
   BooksImportConflict,
   BooksImportJob,
@@ -31,6 +33,7 @@ import type {
   User,
 } from './types';
 import { AddWordListModal } from './components/AddWordListModal';
+import { AiConfigManagementModal } from './components/AiConfigManagementModal';
 import { CreateDictionaryModal } from './components/CreateDictionaryModal';
 import { CreateExamModal } from './components/CreateExamModal';
 import { CsvImportModal } from './components/CsvImportModal';
@@ -106,6 +109,7 @@ function App() {
   const [showClassManagementModal, setShowClassManagementModal] = useState(false);
   const [showAssignDictionaryModal, setShowAssignDictionaryModal] = useState(false);
   const [showStudyPlanModal, setShowStudyPlanModal] = useState(false);
+  const [showAiConfigModal, setShowAiConfigModal] = useState(false);
   const [dictionaryForAdd, setDictionaryForAdd] = useState<Dictionary | null>(null);
   const [dictionaryForCsvImport, setDictionaryForCsvImport] = useState<Dictionary | null>(null);
   const [dictionaryForAssignment, setDictionaryForAssignment] = useState<Dictionary | null>(null);
@@ -158,6 +162,7 @@ function App() {
     setShowClassManagementModal(false);
     setShowAssignDictionaryModal(false);
     setShowStudyPlanModal(false);
+    setShowAiConfigModal(false);
     setDictionaryForAdd(null);
     setDictionaryForCsvImport(null);
     setDictionaryForAssignment(null);
@@ -1030,6 +1035,14 @@ function App() {
     setAvailableClassrooms(classrooms);
   }, []);
 
+  const handleAiConfigsChanged = useCallback(async (_configs?: AiConfig[]) => {
+    try {
+      await aiConfigApi.list();
+    } catch {
+      // Ignore refresh failures here; the modal handles its own feedback.
+    }
+  }, []);
+
   if (authChecking) {
     return (
       <div className="auth-loading">
@@ -1464,6 +1477,12 @@ function App() {
               >
                 学习计划
               </button>
+              <button
+                className="exam-history-btn"
+                onClick={() => setShowAiConfigModal(true)}
+              >
+                AI 配置
+              </button>
               {isAdmin && (
                 <button
                   className="exam-history-btn"
@@ -1727,6 +1746,17 @@ function App() {
         <StudentStudyPlanModal
           isOpen={showStudyPlanModal}
           onClose={() => setShowStudyPlanModal(false)}
+        />
+      )}
+
+      {(isTeacher || isStudent) && (
+        <AiConfigManagementModal
+          isOpen={showAiConfigModal}
+          actorRole={currentUser.role as 'TEACHER' | 'STUDENT'}
+          onClose={() => {
+            setShowAiConfigModal(false);
+            void handleAiConfigsChanged();
+          }}
         />
       )}
     </div>

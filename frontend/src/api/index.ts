@@ -1,8 +1,14 @@
 import type {
+  AiChatPayload,
+  AiChatResponse,
+  AiConfig,
+  AiConfigStatus,
+  AiConfigTestResponse,
   BooksImportBatchFile,
   BooksImportConflict,
   BooksImportJob,
   Classroom,
+  CreateAiConfigPayload,
   CreateStudyPlanPayload,
   Dictionary,
   DictionaryWord,
@@ -16,6 +22,8 @@ import type {
   MetaWordEntry,
   Page,
   RecordStudyPayload,
+  GenerateReadingPayload,
+  GenerateReadingResponse,
   StudentAttentionDailyStat,
   StudentStudyPlanSummary,
   StudyPlan,
@@ -23,6 +31,7 @@ import type {
   StudyPlanStudentAttention,
   StudyPlanStudentSummary,
   StudyTask,
+  UpdateAiConfigPayload,
   User,
 } from '../types';
 
@@ -302,6 +311,53 @@ export const examApi = {
   submit: (examId: number, answers: ExamAnswer[]) => fetchJson<ExamSubmissionResult>(`${API_BASE}/exams/${examId}/submit`, {
     method: 'POST',
     body: JSON.stringify({ answers }),
+  }),
+};
+
+export const aiConfigApi = {
+  list: (params?: { status?: AiConfigStatus; providerName?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) {
+      searchParams.set('status', params.status);
+    }
+    if (params?.providerName) {
+      searchParams.set('providerName', params.providerName);
+    }
+    const query = searchParams.toString();
+    return fetchJson<AiConfig[]>(`${API_BASE}/ai-configs${query ? `?${query}` : ''}`);
+  },
+  getById: (id: number) => fetchJson<AiConfig>(`${API_BASE}/ai-configs/${id}`),
+  create: (payload: CreateAiConfigPayload) => fetchJson<AiConfig>(`${API_BASE}/ai-configs`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  update: (id: number, payload: UpdateAiConfigPayload) => fetchJson<AiConfig>(`${API_BASE}/ai-configs/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
+  remove: (id: number) => fetchJson<void>(`${API_BASE}/ai-configs/${id}`, {
+    method: 'DELETE',
+  }),
+  updateStatus: (id: number, status: AiConfigStatus) => fetchJson<AiConfig>(`${API_BASE}/ai-configs/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  }),
+  setDefault: (id: number) => fetchJson<AiConfig>(`${API_BASE}/ai-configs/${id}/default`, {
+    method: 'PATCH',
+  }),
+  test: (id: number) => fetchJson<AiConfigTestResponse>(`${API_BASE}/ai-configs/${id}/test`, {
+    method: 'POST',
+  }),
+};
+
+export const aiApi = {
+  chat: (payload: AiChatPayload) => fetchJson<AiChatResponse>(`${API_BASE}/ai/chat`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  generateReading: (payload: GenerateReadingPayload) => fetchJson<GenerateReadingResponse>(`${API_BASE}/ai/generate-reading`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   }),
 };
 
