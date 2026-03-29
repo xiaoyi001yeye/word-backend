@@ -86,6 +86,35 @@ export interface DictionaryWordEntryResponse {
     entryOrder?: number | null;
 }
 
+export interface MetaWordSuggestionResponse {
+    id: number;
+    word: string;
+    phonetic?: string | null;
+    definition?: string | null;
+    partOfSpeech?: string | null;
+    exampleSentence?: string | null;
+    translation?: string | null;
+    difficulty?: number | null;
+}
+
+export interface MetaWordEntryPayload {
+    word: string;
+    translation?: string;
+    partOfSpeech?: string;
+    phonetic?: string;
+    definition?: string;
+    exampleSentence?: string;
+    difficulty?: number;
+}
+
+export interface WordListProcessResult {
+    total: number;
+    existed: number;
+    created: number;
+    added: number;
+    failed: number;
+}
+
 export interface ClassroomResponse {
     id: number;
     name: string;

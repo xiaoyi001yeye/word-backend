@@ -8,12 +8,15 @@ import type {
     Dictionary,
     DictionaryWordEntryResponse,
     LoginResponse,
+    MetaWordEntryPayload,
+    MetaWordSuggestionResponse,
     PaginatedResponse,
     QuoteResponse,
     StudyPlanOverviewResponse,
     StudyPlanResponse,
     StudyPlanStudentSummaryResponse,
     UserResponse,
+    WordListProcessResult,
 } from "@/types/api";
 
 export class ApiError extends Error {
@@ -162,6 +165,22 @@ export const api = {
     ) => request<PaginatedResponse<DictionaryWordEntryResponse>>(
         `/api/dictionary-words/dictionary/${dictionaryId}/entries${buildQueryString(params)}`,
     ),
+    listDictionaryMetaWordSuggestions: (
+        dictionaryId: number,
+        params: { keyword: string; limit?: number },
+        signal?: AbortSignal,
+    ) =>
+        request<MetaWordSuggestionResponse[]>(
+            `/api/dictionary-words/dictionary/${dictionaryId}/meta-word-suggestions${buildQueryString(params)}`,
+            { signal },
+        ),
+    addDictionaryWord: (dictionaryId: number, metaWordId: number) =>
+        request<void>(`/api/dictionary-words/${dictionaryId}/${metaWordId}`, { method: "POST" }),
+    addDictionaryWordList: (dictionaryId: number, words: MetaWordEntryPayload[]) =>
+        request<WordListProcessResult>(`/api/dictionary-words/${dictionaryId}/words/list`, {
+            method: "POST",
+            body: { words },
+        }),
     createDictionary: (payload: { name: string; category?: string; scopeType?: string | null }) =>
         request<Dictionary>("/api/dictionaries", { method: "POST", body: payload }),
     assignDictionaryToClassrooms: (dictionaryId: number, classroomIds: number[]) =>

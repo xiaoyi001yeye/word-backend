@@ -1,6 +1,8 @@
 package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,6 +13,7 @@ import static org.mockito.Mockito.when;
 import com.example.words.exception.ConflictException;
 import com.example.words.model.BooksImportJob;
 import com.example.words.model.BooksImportJobStatus;
+import com.example.words.model.ImportMetaWordCandidateStatus;
 import com.example.words.repository.BooksImportJobRepository;
 import com.example.words.repository.DictionaryRepository;
 import com.example.words.repository.DictionaryWordRepository;
@@ -34,7 +37,6 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 @ExtendWith(MockitoExtension.class)
 class BooksImportJobServiceTest {
 
-    @Mock
     private ObjectMapper objectMapper;
 
     @Mock
@@ -74,6 +76,7 @@ class BooksImportJobServiceTest {
 
     @BeforeEach
     void setUp() {
+        objectMapper = new ObjectMapper();
         booksImportJobService = new BooksImportJobService(
                 objectMapper,
                 booksImportJobRepository,
@@ -120,6 +123,69 @@ class BooksImportJobServiceTest {
         verify(dictionaryRepository).flush();
         verify(jdbcTemplate).update(anyString(), eq("batch-1"), eq("AUTO_CREATE"), eq("MANUALLY_RESOLVED"));
         verify(booksImportJobRepository).deleteById("batch-1");
+    }
+
+    @Test
+    void candidateAccumulatorShouldKeepFirstSeenMetaWordForDuplicateSpellings() {
+        BooksImportJobService.CandidateAccumulator accumulator = booksImportJobService.new CandidateAccumulator("state");
+        accumulator.add(new BooksImportJobService.StageAggregateRow(
+                "词书A",
+                "state",
+                "state",
+                "first definition",
+                1,
+                null,
+                null
+        ));
+        accumulator.add(new BooksImportJobService.StageAggregateRow(
+                "词书B",
+                "state",
+                "state",
+                "second definition",
+                4,
+                null,
+                null
+        ));
+
+        BooksImportJobService.CandidateDecision decision = accumulator.decide(null);
+
+        assertEquals(ImportMetaWordCandidateStatus.AUTO_CREATE, decision.status());
+        assertEquals("state", decision.displayWord());
+        assertEquals("first definition", decision.definition());
+        assertEquals(1, decision.difficulty());
+        assertEquals(2, decision.sourceCount());
+        assertNull(decision.conflictType());
+    }
+
+    @Test
+    void candidateAccumulatorShouldReuseExistingMetaWordWithoutOverwritingFields() {
+        BooksImportJobService.CandidateAccumulator accumulator = booksImportJobService.new CandidateAccumulator("state");
+        accumulator.add(new BooksImportJobService.StageAggregateRow(
+                "词书A",
+                "state",
+                "state",
+                "incoming definition",
+                4,
+                null,
+                null
+        ));
+
+        BooksImportJobService.ExistingMetaWordSnapshot existing = new BooksImportJobService.ExistingMetaWordSnapshot(
+                10L,
+                "state",
+                "existing definition",
+                2,
+                null,
+                null
+        );
+
+        BooksImportJobService.CandidateDecision decision = accumulator.decide(existing);
+
+        assertEquals(ImportMetaWordCandidateStatus.AUTO_UPDATE, decision.status());
+        assertEquals("state", decision.displayWord());
+        assertEquals("existing definition", decision.definition());
+        assertEquals(2, decision.difficulty());
+        assertNull(decision.conflictType());
     }
 
     private BooksImportJob buildJob(String id, BooksImportJobStatus status) {

@@ -59,7 +59,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.sql.DataSource;
@@ -90,6 +95,7 @@ public class BooksImportJobService {
     private static final String BOOKS_DIR = "/app/books";
     private static final String BATCH_TYPE = "BOOKS_FULL";
     private static final int STAGE_BATCH_SIZE = 500;
+    private static final int STAGE_FILE_PARALLELISM = 8;
     private static final long IMPORT_LOCK_KEY = 2026032801L;
     private static final List<BooksImportJobStatus> ACTIVE_STATUSES = List.of(
             BooksImportJobStatus.PENDING,
@@ -502,31 +508,39 @@ public class BooksImportJobService {
             long failedRows = 0L;
             int processedFiles = 0;
             int failedFiles = 0;
-
-            for (Path file : files) {
-                String fileName = file.getFileName().toString();
-                updateBatchCurrentFile(batchId, fileName, processedFiles, files.size());
-                FileStageResult result = stageFile(batchId, file);
-                processedFiles++;
-                stagedRows += result.successRows();
-                failedRows += result.failedRows();
-                if (!result.success()) {
-                    failedFiles++;
+            ExecutorService stageExecutor = Executors.newFixedThreadPool(Math.min(STAGE_FILE_PARALLELISM, files.size()));
+            try {
+                CompletionService<StagedFileResult> completionService = new ExecutorCompletionService<>(stageExecutor);
+                for (Path file : files) {
+                    completionService.submit(() -> new StagedFileResult(file.getFileName().toString(), stageFile(batchId, file)));
                 }
-                int currentProcessedFiles = processedFiles;
-                int currentFailedFiles = failedFiles;
-                long currentStagedRows = stagedRows;
-                long currentFailedRows = failedRows;
-                updateJob(batchId, job -> {
-                    job.setProcessedFiles(currentProcessedFiles);
-                    job.setFailedFiles(currentFailedFiles);
-                    job.setProcessedRows(currentStagedRows + currentFailedRows);
-                    job.setTotalRows(currentStagedRows + currentFailedRows);
-                    job.setSuccessRows(currentStagedRows);
-                    job.setFailedRows(currentFailedRows);
-                    job.setImportedWordCount(currentStagedRows);
-                    job.setCurrentFile(currentProcessedFiles >= files.size() ? null : fileName);
-                });
+
+                for (int i = 0; i < files.size(); i++) {
+                    StagedFileResult stagedFile = awaitStagedFile(completionService);
+                    FileStageResult result = stagedFile.result();
+                    processedFiles++;
+                    stagedRows += result.successRows();
+                    failedRows += result.failedRows();
+                    if (!result.success()) {
+                        failedFiles++;
+                    }
+                    int currentProcessedFiles = processedFiles;
+                    int currentFailedFiles = failedFiles;
+                    long currentStagedRows = stagedRows;
+                    long currentFailedRows = failedRows;
+                    updateJob(batchId, job -> {
+                        job.setProcessedFiles(currentProcessedFiles);
+                        job.setFailedFiles(currentFailedFiles);
+                        job.setProcessedRows(currentStagedRows + currentFailedRows);
+                        job.setTotalRows(currentStagedRows + currentFailedRows);
+                        job.setSuccessRows(currentStagedRows);
+                        job.setFailedRows(currentFailedRows);
+                        job.setImportedWordCount(currentStagedRows);
+                        job.setCurrentFile(currentProcessedFiles >= files.size() ? null : stagedFile.fileName());
+                    });
+                }
+            } finally {
+                stageExecutor.shutdown();
             }
 
             long finalStagedRows = stagedRows;
@@ -561,9 +575,8 @@ public class BooksImportJobService {
             });
 
             Map<String, ExistingMetaWordSnapshot> existingByNormalizedWord = loadExistingMetaWords(batchId);
+            Map<String, CandidateAccumulator> accumulators = new LinkedHashMap<>();
             List<CandidateInsertRow> candidateBuffer = new ArrayList<>(STAGE_BATCH_SIZE);
-            List<ConflictInsertRow> conflictBuffer = new ArrayList<>(128);
-            CandidateAccumulator[] current = new CandidateAccumulator[1];
 
             jdbcTemplate.query(
                     """
@@ -576,7 +589,7 @@ public class BooksImportJobService {
                                    part_of_speech_detail::text AS part_of_speech_detail
                             FROM book_import_stage
                             WHERE batch_id = ?
-                            ORDER BY normalized_word, dictionary_name, source_row_no
+                            ORDER BY file_name, source_row_no, normalized_word
                             """,
                     rs -> {
                         StageAggregateRow row = new StageAggregateRow(
@@ -588,33 +601,20 @@ public class BooksImportJobService {
                                 rs.getString("phonetic_detail"),
                                 rs.getString("part_of_speech_detail")
                         );
-                        if (current[0] == null || !current[0].normalizedWord().equals(row.normalizedWord())) {
-                            flushAccumulator(batchId, current[0], existingByNormalizedWord, candidateBuffer, conflictBuffer);
-                            current[0] = new CandidateAccumulator(row.normalizedWord());
-                        }
-                        current[0].add(row);
-                        if (candidateBuffer.size() >= STAGE_BATCH_SIZE) {
-                            insertCandidateRows(candidateBuffer);
-                            candidateBuffer.clear();
-                        }
-                        if (conflictBuffer.size() >= 64) {
-                            if (!candidateBuffer.isEmpty()) {
-                                insertCandidateRows(candidateBuffer);
-                                candidateBuffer.clear();
-                            }
-                            insertConflictRows(conflictBuffer);
-                            conflictBuffer.clear();
-                        }
+                        accumulators.computeIfAbsent(row.normalizedWord(), CandidateAccumulator::new).add(row);
                     },
                     batchId
             );
 
-            flushAccumulator(batchId, current[0], existingByNormalizedWord, candidateBuffer, conflictBuffer);
+            for (CandidateAccumulator accumulator : accumulators.values()) {
+                flushAccumulator(batchId, accumulator, existingByNormalizedWord, candidateBuffer);
+                if (candidateBuffer.size() >= STAGE_BATCH_SIZE) {
+                    insertCandidateRows(candidateBuffer);
+                    candidateBuffer.clear();
+                }
+            }
             if (!candidateBuffer.isEmpty()) {
                 insertCandidateRows(candidateBuffer);
-            }
-            if (!conflictBuffer.isEmpty()) {
-                insertConflictRows(conflictBuffer);
             }
 
             refreshBatchCountersAndStatus(batchId, true);
@@ -747,6 +747,22 @@ public class BooksImportJobService {
                     durationMs
             );
             return new FileStageResult(false, 0L, 0L, 0L, errorMessage);
+        }
+    }
+
+    private StagedFileResult awaitStagedFile(CompletionService<StagedFileResult> completionService) {
+        try {
+            return completionService.take().get();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new BadRequestException("Books import staging was interrupted");
+        } catch (ExecutionException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new BadRequestException("Books import staging failed: "
+                    + (cause == null ? ex.getMessage() : cause.getMessage()));
         }
     }
 
@@ -957,8 +973,7 @@ public class BooksImportJobService {
             String batchId,
             CandidateAccumulator accumulator,
             Map<String, ExistingMetaWordSnapshot> existingByNormalizedWord,
-            List<CandidateInsertRow> candidateBuffer,
-            List<ConflictInsertRow> conflictBuffer) {
+            List<CandidateInsertRow> candidateBuffer) {
         if (accumulator == null || accumulator.sourceCount() == 0) {
             return;
         }
@@ -978,18 +993,6 @@ public class BooksImportJobService {
                 existing == null ? null : existing.id(),
                 decision.status() == ImportMetaWordCandidateStatus.PENDING_REVIEW ? null : ImportResolutionSource.AUTO
         ));
-        if (decision.conflictType() != null) {
-            conflictBuffer.add(new ConflictInsertRow(
-                    batchId,
-                    decision.normalizedWord(),
-                    decision.displayWord(),
-                    decision.conflictType(),
-                    String.join(",", accumulator.dictionaryNames()),
-                    existing == null ? null : existing.id(),
-                    decision.existingPayloadJson(),
-                    decision.importedPayloadJson()
-            ));
-        }
     }
 
     private Map<String, ExistingMetaWordSnapshot> loadExistingMetaWords(String batchId) {
@@ -1181,23 +1184,11 @@ public class BooksImportJobService {
                                CURRENT_TIMESTAMP
                         FROM import_meta_word_candidates
                         WHERE batch_id = ?
-                          AND merge_status IN (?, ?, ?)
-                        ON CONFLICT (normalized_word) DO UPDATE
-                        SET word = EXCLUDED.word,
-                            definition = EXCLUDED.definition,
-                            difficulty = EXCLUDED.difficulty,
-                            phonetic_detail = EXCLUDED.phonetic_detail,
-                            part_of_speech_detail = EXCLUDED.part_of_speech_detail,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE meta_words.word IS DISTINCT FROM EXCLUDED.word
-                           OR meta_words.definition IS DISTINCT FROM EXCLUDED.definition
-                           OR meta_words.difficulty IS DISTINCT FROM EXCLUDED.difficulty
-                           OR meta_words.phonetic_detail IS DISTINCT FROM EXCLUDED.phonetic_detail
-                           OR meta_words.part_of_speech_detail IS DISTINCT FROM EXCLUDED.part_of_speech_detail
+                          AND merge_status IN (?, ?)
+                        ON CONFLICT (normalized_word) DO NOTHING
                         """,
                 batchId,
                 ImportMetaWordCandidateStatus.AUTO_CREATE.name(),
-                ImportMetaWordCandidateStatus.AUTO_UPDATE.name(),
                 ImportMetaWordCandidateStatus.MANUALLY_RESOLVED.name()
         );
     }
@@ -1497,14 +1488,6 @@ public class BooksImportJobService {
             }
         }
         return base;
-    }
-
-    private void updateBatchCurrentFile(String batchId, String fileName, int processedFiles, int totalFiles) {
-        updateJob(batchId, job -> {
-            job.setCurrentFile(fileName);
-            job.setProcessedFiles(processedFiles);
-            job.setTotalFiles(totalFiles);
-        });
     }
 
     private void updateBatchFileStatus(
@@ -1826,32 +1809,6 @@ public class BooksImportJobService {
                 .toList();
     }
 
-    private boolean valuesDiffer(String left, String right) {
-        if (right == null || right.isBlank()) {
-            return false;
-        }
-        if (left == null || left.isBlank()) {
-            return false;
-        }
-        return !left.equals(right);
-    }
-
-    private boolean jsonValuesDiffer(String left, String right) {
-        if (right == null || right.isBlank()) {
-            return false;
-        }
-        if (left == null || left.isBlank()) {
-            return false;
-        }
-        try {
-            JsonNode leftNode = objectMapper.readTree(left);
-            JsonNode rightNode = objectMapper.readTree(right);
-            return !leftNode.equals(rightNode);
-        } catch (IOException ex) {
-            return !left.equals(right);
-        }
-    }
-
     private void setNullableString(PreparedStatement ps, int parameterIndex, String value) throws SQLException {
         if (value == null) {
             ps.setNull(parameterIndex, Types.VARCHAR);
@@ -1876,7 +1833,7 @@ public class BooksImportJobService {
             String rawPayloadJson) {
     }
 
-    private record StageAggregateRow(
+    record StageAggregateRow(
             String dictionaryName,
             String normalizedWord,
             String word,
@@ -1911,7 +1868,7 @@ public class BooksImportJobService {
             String importedPayloadJson) {
     }
 
-    private record ExistingMetaWordSnapshot(
+    record ExistingMetaWordSnapshot(
             Long id,
             String word,
             String definition,
@@ -1943,7 +1900,12 @@ public class BooksImportJobService {
             String errorMessage) {
     }
 
-    private record CandidateDecision(
+    private record StagedFileResult(
+            String fileName,
+            FileStageResult result) {
+    }
+
+    record CandidateDecision(
             String normalizedWord,
             String displayWord,
             String definition,
@@ -1963,22 +1925,31 @@ public class BooksImportJobService {
         void close() throws Exception;
     }
 
-    private final class CandidateAccumulator {
+    final class CandidateAccumulator {
 
         private final String normalizedWord;
         private final Set<String> dictionaryNames = new LinkedHashSet<>();
         private final Set<String> words = new LinkedHashSet<>();
         private final Set<String> definitions = new LinkedHashSet<>();
-        private final Set<Integer> difficulties = new LinkedHashSet<>();
-        private final Set<String> phoneticValues = new LinkedHashSet<>();
-        private final Set<String> partOfSpeechValues = new LinkedHashSet<>();
+        private String firstWord;
+        private String firstDefinition;
+        private Integer firstDifficulty;
+        private String firstPhoneticDetailJson;
+        private String firstPartOfSpeechDetailJson;
         private int sourceCount;
 
-        private CandidateAccumulator(String normalizedWord) {
+        CandidateAccumulator(String normalizedWord) {
             this.normalizedWord = normalizedWord;
         }
 
         public void add(StageAggregateRow row) {
+            if (sourceCount == 0) {
+                this.firstWord = row.word();
+                this.firstDefinition = row.definition();
+                this.firstDifficulty = row.difficulty();
+                this.firstPhoneticDetailJson = row.phoneticDetailJson();
+                this.firstPartOfSpeechDetailJson = row.partOfSpeechDetailJson();
+            }
             this.sourceCount++;
             this.dictionaryNames.add(row.dictionaryName());
             if (row.word() != null && !row.word().isBlank()) {
@@ -1986,15 +1957,6 @@ public class BooksImportJobService {
             }
             if (row.definition() != null && !row.definition().isBlank()) {
                 this.definitions.add(row.definition());
-            }
-            if (row.difficulty() != null) {
-                this.difficulties.add(row.difficulty());
-            }
-            if (row.phoneticDetailJson() != null && !row.phoneticDetailJson().isBlank()) {
-                this.phoneticValues.add(row.phoneticDetailJson());
-            }
-            if (row.partOfSpeechDetailJson() != null && !row.partOfSpeechDetailJson().isBlank()) {
-                this.partOfSpeechValues.add(row.partOfSpeechDetailJson());
             }
         }
 
@@ -2011,16 +1973,11 @@ public class BooksImportJobService {
         }
 
         public CandidateDecision decide(ExistingMetaWordSnapshot existing) {
-            String displayWord = words.stream().findFirst().orElse(normalizedWord);
-            String definition = definitions.stream().findFirst().orElse(null);
-            Integer difficulty = difficulties.stream().findFirst().orElse(null);
-            String phoneticDetailJson = phoneticValues.stream().findFirst().orElse(null);
-            String partOfSpeechDetailJson = partOfSpeechValues.stream().findFirst().orElse(null);
-
-            boolean multiSourceConflict = definitions.size() > 1
-                    || difficulties.size() > 1
-                    || phoneticValues.size() > 1
-                    || partOfSpeechValues.size() > 1;
+            String displayWord = trimToNull(firstWord) == null ? normalizedWord : firstWord;
+            String definition = firstDefinition;
+            Integer difficulty = firstDifficulty;
+            String phoneticDetailJson = firstPhoneticDetailJson;
+            String partOfSpeechDetailJson = firstPartOfSpeechDetailJson;
 
             Map<String, Object> importedPayload = new LinkedHashMap<>();
             importedPayload.put("word", displayWord);
@@ -2042,17 +1999,12 @@ public class BooksImportJobService {
                         phoneticDetailJson,
                         partOfSpeechDetailJson,
                         sourceCount,
-                        multiSourceConflict ? ImportMetaWordCandidateStatus.PENDING_REVIEW : ImportMetaWordCandidateStatus.AUTO_CREATE,
-                        multiSourceConflict ? ImportConflictType.MULTI_SOURCE_CONFLICT : null,
+                        ImportMetaWordCandidateStatus.AUTO_CREATE,
+                        null,
                         null,
                         toJsonString(importedPayload)
                 );
             }
-
-            boolean existingConflict = valuesDiffer(existing.definition(), definition)
-                    || (existing.difficulty() != null && difficulty != null && !Objects.equals(existing.difficulty(), difficulty))
-                    || jsonValuesDiffer(existing.phoneticDetailJson(), phoneticDetailJson)
-                    || jsonValuesDiffer(existing.partOfSpeechDetailJson(), partOfSpeechDetailJson);
 
             Map<String, Object> existingPayload = new LinkedHashMap<>();
             existingPayload.put("word", existing.word());
@@ -2060,25 +2012,6 @@ public class BooksImportJobService {
             existingPayload.put("difficulty", existing.difficulty());
             existingPayload.put("phoneticDetail", parseJsonValue(existing.phoneticDetailJson()));
             existingPayload.put("partOfSpeechDetail", parseJsonValue(existing.partOfSpeechDetailJson()));
-
-            if (multiSourceConflict || existingConflict) {
-                ImportConflictType conflictType = multiSourceConflict
-                        ? ImportConflictType.MULTI_SOURCE_CONFLICT
-                        : ImportConflictType.FIELD_CONFLICT;
-                return new CandidateDecision(
-                        normalizedWord,
-                        displayWord,
-                        definition,
-                        difficulty,
-                        phoneticDetailJson,
-                        partOfSpeechDetailJson,
-                        sourceCount,
-                        ImportMetaWordCandidateStatus.PENDING_REVIEW,
-                        conflictType,
-                        toJsonString(existingPayload),
-                        toJsonString(importedPayload)
-                );
-            }
 
             return new CandidateDecision(
                     normalizedWord,

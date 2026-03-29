@@ -16,6 +16,7 @@ import {
     TableRoot,
     TableRow,
 } from "@/components/ui/table";
+import { AddWordListModal } from "@/components/dictionaries/add-word-list-modal";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/features/auth/auth-context";
@@ -71,6 +72,7 @@ export function DictionariesPage() {
     const [entryPage, setEntryPage] = createSignal(1);
     const [dictionaryKeyword, setDictionaryKeyword] = createSignal("");
     const [dictionaryViewMode, setDictionaryViewMode] = createSignal<DictionaryViewMode>("compact");
+    const [isAddWordDialogOpen, setIsAddWordDialogOpen] = createSignal(false);
     const [form, setForm] = createStore(createDefaultForm());
     const [expandedGroups, setExpandedGroups] = createStore<Record<string, boolean>>({});
 
@@ -152,6 +154,19 @@ export function DictionariesPage() {
     const selectedDictionary = createMemo(
         () => pageData()?.dictionaries.find((dictionary) => dictionary.id === selectedDictionaryId()) ?? null,
     );
+    const canManageSelectedDictionary = createMemo(() => {
+        const user = auth.user();
+        const dictionary = selectedDictionary();
+        if (!user || !dictionary) {
+            return false;
+        }
+        if (user.role === "ADMIN") {
+            return true;
+        }
+        return user.role === "TEACHER"
+            && dictionary.scopeType !== "SYSTEM"
+            && dictionary.ownerUserId === user.id;
+    });
 
     const selectedDictionaryEntriesRequest = createMemo(() => {
         const dictionaryId = selectedDictionaryId();
@@ -222,6 +237,7 @@ export function DictionariesPage() {
         setEntryKeyword("");
         setEntrySortBy("entryOrder");
         setEntrySortDir("asc");
+        setIsAddWordDialogOpen(false);
     };
 
     const handleEntryKeywordInput = (value: string) => {
@@ -571,12 +587,47 @@ export function DictionariesPage() {
 
                                     <Card>
                                         <CardHeader class="gap-4">
-                                            <div class="flex flex-wrap items-start justify-between gap-4">
-                                                <div>
-                                                    <CardTitle>词书单词表</CardTitle>
-                                                    <CardDescription>
-                                                        支持按关键词搜索，并可直接点击表头按单词、释义、章节或录入顺序排序。
-                                                    </CardDescription>
+                                            <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                                                <div class="space-y-4">
+                                                    <div>
+                                                        <CardTitle>词书单词表</CardTitle>
+                                                        <CardDescription>
+                                                            支持按关键词搜索，并可直接点击表头按单词、释义、章节或录入顺序排序。
+                                                        </CardDescription>
+                                                    </div>
+                                                    <div class="rounded-2xl border border-dashed border-border/70 bg-background/60 p-4">
+                                                        <div class="flex flex-wrap items-start justify-between gap-3">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-foreground">添加单词</p>
+                                                                <p class="mt-1 text-xs leading-5 text-muted-foreground">
+                                                                    在浮层里按行录入、批量粘贴或直接粘贴 JSON，交互与用户端保持一致。
+                                                                </p>
+                                                            </div>
+                                                            <Badge variant="outline">弹层录入</Badge>
+                                                        </div>
+
+                                                        <Show
+                                                            when={canManageSelectedDictionary()}
+                                                            fallback={
+                                                                <Alert class="mt-4 border-border/80 bg-background/70 text-muted-foreground">
+                                                                    当前词书仅支持查看，不能直接添加单词。教师只能编辑自己创建的非系统词书。
+                                                                </Alert>
+                                                            }
+                                                        >
+                                                            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-background/80 p-4">
+                                                                <div class="space-y-1">
+                                                                    <p class="text-sm font-medium text-foreground">打开添加单词浮层</p>
+                                                                    <p class="text-xs leading-5 text-muted-foreground">
+                                                                        支持快速录入、批量粘贴和 JSON 导入，提交后会自动刷新当前词书单词表。
+                                                                    </p>
+                                                                </div>
+                                                                <Button onClick={() => setIsAddWordDialogOpen(true)}>
+                                                                    <Plus class="h-4 w-4" />
+                                                                    添加单词
+                                                                </Button>
+                                                            </div>
+                                                        </Show>
+                                                    </div>
                                                 </div>
                                                 <div class="w-full xl:w-[360px]">
                                                     <div class="space-y-2">
@@ -713,6 +764,19 @@ export function DictionariesPage() {
                         </Show>
                     </div>
                 </div>
+            </Show>
+
+            <Show when={selectedDictionary()}>
+                {(dictionary) => (
+                    <AddWordListModal
+                        dictionary={dictionary()}
+                        isOpen={isAddWordDialogOpen()}
+                        onClose={() => setIsAddWordDialogOpen(false)}
+                        onSuccess={async () => {
+                            await Promise.all([refetch(), refetchEntries()]);
+                        }}
+                    />
+                )}
             </Show>
 
             <Show when={isCreateDialogOpen()}>
