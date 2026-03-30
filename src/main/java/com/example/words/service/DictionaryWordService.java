@@ -3,6 +3,7 @@ package com.example.words.service;
 import com.example.words.dto.DefinitionDto;
 import com.example.words.dto.DictionaryWordEntryResponse;
 import com.example.words.dto.ExampleSentenceDto;
+import com.example.words.dto.GenerateDictionaryWordWithAiResponse;
 import com.example.words.dto.InflectionDto;
 import com.example.words.dto.MetaWordEntryDto;
 import com.example.words.dto.MetaWordEntryDtoV2;
@@ -30,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -288,6 +290,64 @@ public class DictionaryWordService {
         return new WordListProcessResult(total, existed, created, added, failed);
     }
 
+    @Transactional
+    public GenerateDictionaryWordWithAiResponse saveGeneratedWordV2(
+            Long dictionaryId,
+            Long preferredMetaWordId,
+            Long configId,
+            String providerName,
+            String modelName,
+            MetaWordEntryDtoV2 entry) {
+        if (entry == null || entry.getWord() == null || entry.getWord().trim().isEmpty()) {
+            throw new IllegalArgumentException("Generated word entry must not be empty");
+        }
+
+        int existed = 0;
+        int created = 0;
+        int added = 0;
+
+        MetaWord metaWord = resolveMetaWordForV2Entry(preferredMetaWordId, entry.getWord().trim())
+                .orElseGet(() -> {
+                    MetaWord createdMetaWord = new MetaWord();
+                    createdMetaWord.setWord(entry.getWord().trim());
+                    return createdMetaWord;
+                });
+
+        if (metaWord.getId() == null) {
+            created++;
+        } else {
+            existed++;
+        }
+
+        metaWord.setWord(entry.getWord().trim());
+        updateMetaWordFields(metaWord, entry);
+        MetaWord savedMetaWord = metaWordRepository.save(metaWord);
+
+        if (!dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, savedMetaWord.getId())) {
+            saveIfNotExists(dictionaryId, savedMetaWord.getId());
+            added = 1;
+        }
+
+        return new GenerateDictionaryWordWithAiResponse(
+                dictionaryId,
+                savedMetaWord.getId(),
+                configId,
+                providerName,
+                modelName,
+                savedMetaWord.getWord(),
+                savedMetaWord.getTranslation(),
+                savedMetaWord.getPartOfSpeech(),
+                savedMetaWord.getPhonetic(),
+                savedMetaWord.getDefinition(),
+                savedMetaWord.getExampleSentence(),
+                1,
+                existed,
+                created,
+                added,
+                0
+        );
+    }
+
     public static class WordListProcessResult {
         private final int total;
         private final int existed;
@@ -449,10 +509,88 @@ public class DictionaryWordService {
         }
 
         if (dto.getPartOfSpeech() != null && !dto.getPartOfSpeech().isEmpty()) {
-            metaWord.setPartOfSpeechDetail(convertPartOfSpeechDtos(dto.getPartOfSpeech()));
+            List<PartOfSpeech> partOfSpeechDetail = convertPartOfSpeechDtos(dto.getPartOfSpeech());
+            metaWord.setPartOfSpeechDetail(partOfSpeechDetail);
+            syncFlatMetaWordFields(metaWord, dto, partOfSpeechDetail);
         }
 
         metaWord.setDifficulty(dto.getDifficulty() != null ? dto.getDifficulty() : 2);
+    }
+
+    private Optional<MetaWord> resolveMetaWordForV2Entry(Long preferredMetaWordId, String word) {
+        if (preferredMetaWordId != null) {
+            return metaWordRepository.findById(preferredMetaWordId);
+        }
+        return metaWordRepository.findByNormalizedWord(WordNormalizationUtils.normalize(word))
+                .or(() -> metaWordRepository.findByWord(word));
+    }
+
+    private void syncFlatMetaWordFields(MetaWord metaWord, MetaWordEntryDtoV2 dto, List<PartOfSpeech> partOfSpeechDetail) {
+        if (dto.getPhonetic() != null) {
+            String flattenedPhonetic = firstNonBlank(
+                    dto.getPhonetic().getUk(),
+                    dto.getPhonetic().getUs()
+            );
+            if (flattenedPhonetic != null) {
+                metaWord.setPhonetic(flattenedPhonetic.trim());
+            }
+        }
+
+        if (dto.getPartOfSpeech() != null && !dto.getPartOfSpeech().isEmpty()) {
+            String firstPos = dto.getPartOfSpeech().stream()
+                    .map(PartOfSpeechDto::getPos)
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .findFirst()
+                    .orElse(null);
+            if (firstPos != null) {
+                metaWord.setPartOfSpeech(firstPos);
+            }
+        }
+
+        if (partOfSpeechDetail == null || partOfSpeechDetail.isEmpty()) {
+            return;
+        }
+
+        for (PartOfSpeech partOfSpeech : partOfSpeechDetail) {
+            if (partOfSpeech == null || partOfSpeech.getDefinitions() == null) {
+                continue;
+            }
+            for (Definition definition : partOfSpeech.getDefinitions()) {
+                if (definition == null) {
+                    continue;
+                }
+                if (metaWord.getDefinition() == null && definition.getDefinition() != null && !definition.getDefinition().trim().isEmpty()) {
+                    metaWord.setDefinition(definition.getDefinition().trim());
+                }
+                if (metaWord.getTranslation() == null && definition.getTranslation() != null && !definition.getTranslation().trim().isEmpty()) {
+                    metaWord.setTranslation(definition.getTranslation().trim());
+                }
+                if (metaWord.getExampleSentence() == null && definition.getExampleSentences() != null) {
+                    for (ExampleSentence exampleSentence : definition.getExampleSentences()) {
+                        if (exampleSentence != null
+                                && exampleSentence.getSentence() != null
+                                && !exampleSentence.getSentence().trim().isEmpty()) {
+                            metaWord.setExampleSentence(exampleSentence.getSentence().trim());
+                            break;
+                        }
+                    }
+                }
+                if (metaWord.getDefinition() != null && metaWord.getTranslation() != null && metaWord.getExampleSentence() != null) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private List<PartOfSpeech> convertPartOfSpeechDtos(List<PartOfSpeechDto> dtos) {

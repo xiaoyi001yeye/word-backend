@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +33,7 @@ public class AiGatewayService {
 
     public String generateText(AiConfig config, List<AiChatMessageRequest> messages) {
         String apiKey = aiConfigCryptoService.decrypt(config.getApiKeyEncrypted());
+        String requestUrl = resolveChatCompletionsUrl(config.getApiUrl());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(apiKey);
@@ -44,7 +46,7 @@ public class AiGatewayService {
 
         try {
             ResponseEntity<Map<String, Object>> response = aiRestTemplate.exchange(
-                    config.getApiUrl(),
+                    requestUrl,
                     HttpMethod.POST,
                     new HttpEntity<>(payload, headers),
                     new ParameterizedTypeReference<Map<String, Object>>() {
@@ -67,6 +69,33 @@ public class AiGatewayService {
             ));
         }
         return payload;
+    }
+
+    private String resolveChatCompletionsUrl(String apiUrl) {
+        String normalizedUrl = apiUrl == null ? "" : apiUrl.trim();
+        if (normalizedUrl.isEmpty()) {
+            return normalizedUrl;
+        }
+
+        String normalizedPath = UriComponentsBuilder.fromUriString(normalizedUrl)
+                .build()
+                .getPath();
+        if (normalizedPath != null && normalizedPath.endsWith("/chat/completions")) {
+            return normalizedUrl;
+        }
+
+        if (normalizedPath == null || normalizedPath.isBlank() || "/".equals(normalizedPath)) {
+            normalizedPath = "/chat/completions";
+        } else {
+            normalizedPath = normalizedPath.endsWith("/")
+                    ? normalizedPath + "chat/completions"
+                    : normalizedPath + "/chat/completions";
+        }
+
+        return UriComponentsBuilder.fromUriString(normalizedUrl)
+                .replacePath(normalizedPath)
+                .build(true)
+                .toUriString();
     }
 
     private String extractContent(Map<String, Object> body) {
@@ -124,15 +153,37 @@ public class AiGatewayService {
 
     private RuntimeException translateProviderException(HttpStatusCodeException ex) {
         int statusCode = ex.getStatusCode().value();
+        String providerErrorDetail = extractProviderErrorDetail(ex.getResponseBodyAsString());
         if (statusCode == 401 || statusCode == 403) {
-            return new BadRequestException("AI provider rejected the API key");
+            return new BadRequestException(appendProviderDetail("AI provider rejected the API key", providerErrorDetail));
         }
         if (statusCode == 429) {
-            return new BadGatewayException("AI provider rate limit exceeded");
+            return new BadGatewayException(appendProviderDetail("AI provider rate limit exceeded", providerErrorDetail));
         }
         if (statusCode >= 500) {
-            return new BadGatewayException("AI provider is temporarily unavailable");
+            return new BadGatewayException(appendProviderDetail("AI provider is temporarily unavailable", providerErrorDetail));
         }
-        return new BadRequestException("AI provider request failed");
+        return new BadRequestException(
+                appendProviderDetail("AI provider request failed with status " + statusCode, providerErrorDetail)
+        );
+    }
+
+    private String extractProviderErrorDetail(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return null;
+        }
+
+        String normalized = responseBody.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 240) {
+            return normalized;
+        }
+        return normalized.substring(0, 237) + "...";
+    }
+
+    private String appendProviderDetail(String message, String providerErrorDetail) {
+        if (providerErrorDetail == null || providerErrorDetail.isBlank()) {
+            return message;
+        }
+        return message + ": " + providerErrorDetail;
     }
 }

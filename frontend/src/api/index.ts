@@ -17,6 +17,10 @@ import type {
   ExamHistoryItem,
   ExamSubmissionResult,
   FamousQuote,
+  GenerateDictionaryWordWithAiPayload,
+  GenerateDictionaryWordWithAiResponse,
+  GenerateWordDetailsPayload,
+  GenerateWordDetailsResponse,
   LoginResponse,
   MetaWord,
   MetaWordEntry,
@@ -279,6 +283,11 @@ export const dictionaryWordApi = {
   ),
   getByWord: (metaWordId: number) => fetchJson<DictionaryWord[]>(`${API_BASE}/dictionary-words/word/${metaWordId}`),
   addWord: (dictionaryId: number, metaWordId: number) => fetchJson<DictionaryWord>(`${API_BASE}/dictionary-words/${dictionaryId}/${metaWordId}`, { method: 'POST' }),
+  generateWithAi: (dictionaryId: number, payload: GenerateDictionaryWordWithAiPayload) =>
+    fetchJson<GenerateDictionaryWordWithAiResponse>(`${API_BASE}/dictionary-words/${dictionaryId}/words/ai-generate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   removeByDictionary: (dictionaryId: number) => fetch(`${API_BASE}/dictionary-words/dictionary/${dictionaryId}`, { method: 'DELETE' }),
   addWordList: (dictionaryId: number, words: MetaWordEntry[]) => fetchJson<WordListProcessResult>(`${API_BASE}/dictionary-words/${dictionaryId}/words/list`, {
     method: 'POST',
@@ -352,6 +361,10 @@ export const aiConfigApi = {
 
 export const aiApi = {
   chat: (payload: AiChatPayload) => fetchJson<AiChatResponse>(`${API_BASE}/ai/chat`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  generateWordDetails: (payload: GenerateWordDetailsPayload) => fetchJson<GenerateWordDetailsResponse>(`${API_BASE}/ai/generate-word-details`, {
     method: 'POST',
     body: JSON.stringify(payload),
   }),

@@ -12,6 +12,10 @@ import type {
     CreateAiConfigPayload,
     Dictionary,
     DictionaryWordEntryResponse,
+    GenerateDictionaryWordWithAiPayload,
+    GenerateDictionaryWordWithAiResponse,
+    GenerateWordDetailsPayload,
+    GenerateWordDetailsResponse,
     LoginResponse,
     MetaWordEntryPayload,
     MetaWordSuggestionResponse,
@@ -182,6 +186,11 @@ export const api = {
         ),
     addDictionaryWord: (dictionaryId: number, metaWordId: number) =>
         request<void>(`/api/dictionary-words/${dictionaryId}/${metaWordId}`, { method: "POST" }),
+    generateDictionaryWordWithAi: (dictionaryId: number, payload: GenerateDictionaryWordWithAiPayload) =>
+        request<GenerateDictionaryWordWithAiResponse>(`/api/dictionary-words/${dictionaryId}/words/ai-generate`, {
+            method: "POST",
+            body: payload,
+        }),
     addDictionaryWordList: (dictionaryId: number, words: MetaWordEntryPayload[]) =>
         request<WordListProcessResult>(`/api/dictionary-words/${dictionaryId}/words/list`, {
             method: "POST",
@@ -250,4 +259,6 @@ export const api = {
     deleteAiConfig: (id: number) => request<void>(`/api/ai-configs/${id}`, { method: "DELETE" }),
     chatWithAi: (payload: { configId: number; messages: { role: "system" | "user" | "assistant"; content: string }[] }) =>
         request<AiChatResponse>("/api/ai/chat", { method: "POST", body: payload }),
+    generateWordDetails: (payload: GenerateWordDetailsPayload) =>
+        request<GenerateWordDetailsResponse>("/api/ai/generate-word-details", { method: "POST", body: payload }),
 };

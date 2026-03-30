@@ -200,6 +200,48 @@ export interface AiChatResponse {
   reply: string;
 }
 
+export interface GenerateWordDetailsPayload {
+  configId?: number;
+  word: string;
+}
+
+export interface GenerateWordDetailsResponse {
+  configId: number;
+  providerName: string;
+  modelName: string;
+  word: string;
+  translation?: string | null;
+  partOfSpeech?: string | null;
+  phonetic?: string | null;
+  definition?: string | null;
+  exampleSentence?: string | null;
+}
+
+export interface GenerateDictionaryWordWithAiPayload {
+  configId?: number;
+  metaWordId?: number;
+  word: string;
+}
+
+export interface GenerateDictionaryWordWithAiResponse {
+  dictionaryId: number;
+  metaWordId: number;
+  configId: number;
+  providerName: string;
+  modelName: string;
+  word: string;
+  translation?: string | null;
+  partOfSpeech?: string | null;
+  phonetic?: string | null;
+  definition?: string | null;
+  exampleSentence?: string | null;
+  total: number;
+  existed: number;
+  created: number;
+  added: number;
+  failed: number;
+}
+
 export interface GenerateReadingPayload {
   configId?: number;
   topic: string;

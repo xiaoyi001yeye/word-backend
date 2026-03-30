@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
         listDictionaryEntriesPage: vi.fn(),
         listDictionaryMetaWordSuggestions: vi.fn(),
         addDictionaryWordList: vi.fn(),
+        generateDictionaryWordWithAi: vi.fn(),
         createDictionary: vi.fn(),
     },
 }));
@@ -58,6 +59,19 @@ describe("DictionariesPage", () => {
             empty: true,
         });
         vi.mocked(api.listDictionaryMetaWordSuggestions).mockResolvedValue([]);
+        vi.mocked(api.generateDictionaryWordWithAi).mockResolvedValue({
+            dictionaryId: 7,
+            metaWordId: 1,
+            configId: 1,
+            providerName: "OpenAI",
+            modelName: "gpt-4o-mini",
+            word: "apple",
+            total: 1,
+            existed: 1,
+            created: 0,
+            added: 0,
+            failed: 0,
+        });
         vi.mocked(api.addDictionaryWordList).mockResolvedValue({
             total: 0,
             existed: 0,
@@ -76,5 +90,37 @@ describe("DictionariesPage", () => {
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(screen.getByText("手动录入单词")).toBeInTheDocument();
+    });
+
+    it("shows word ai action for dictionary entries", async () => {
+        vi.mocked(api.listDictionaryEntriesPage).mockResolvedValue({
+            content: [
+                {
+                    entryId: 11,
+                    dictionaryId: 7,
+                    metaWordId: 21,
+                    word: "apple",
+                    translation: "苹果",
+                    phonetic: "/ˈæp.əl/",
+                    definition: "a fruit",
+                    chapterTagId: 1,
+                    chapterDisplayPath: "默认章节",
+                    entryOrder: 1,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            size: 20,
+            number: 0,
+            numberOfElements: 1,
+            first: true,
+            last: true,
+            empty: false,
+        });
+
+        render(() => <DictionariesPage />);
+
+        expect(await screen.findByText("apple")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "单词AI" })).toBeInTheDocument();
     });
 });

@@ -71,6 +71,30 @@ class AiGatewayServiceTest {
     }
 
     @Test
+    void generateTextShouldAppendChatCompletionsToBaseUrl() {
+        AiConfig config = config();
+        config.setApiUrl("https://ark.cn-beijing.volces.com/api/coding/v3");
+        when(aiConfigCryptoService.decrypt(config.getApiKeyEncrypted())).thenReturn("sk-plain");
+        when(restTemplate.exchange(
+                eq("https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                any(ParameterizedTypeReference.class)
+        )).thenReturn(ResponseEntity.ok(Map.of(
+                "choices", List.of(Map.of(
+                        "message", Map.of("content", "test-ok")
+                ))
+        )));
+
+        String result = aiGatewayService.generateText(
+                config,
+                List.of(new AiChatMessageRequest("user", "hello"))
+        );
+
+        assertEquals("test-ok", result);
+    }
+
+    @Test
     void generateTextShouldTranslateUnauthorizedProviderError() {
         AiConfig config = config();
         when(aiConfigCryptoService.decrypt(config.getApiKeyEncrypted())).thenReturn("sk-plain");
@@ -146,6 +170,32 @@ class AiGatewayServiceTest {
 
         assertInstanceOf(BadGatewayException.class, exception);
         assertEquals("AI provider is temporarily unavailable", exception.getMessage());
+    }
+
+    @Test
+    void generateTextShouldIncludeStatusForOtherClientErrors() {
+        AiConfig config = config();
+        when(aiConfigCryptoService.decrypt(config.getApiKeyEncrypted())).thenReturn("sk-plain");
+        when(restTemplate.exchange(
+                eq(config.getApiUrl()),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                any(ParameterizedTypeReference.class)
+        )).thenThrow(HttpClientErrorException.create(
+                HttpStatus.NOT_FOUND,
+                "Not Found",
+                HttpHeaders.EMPTY,
+                "missing endpoint".getBytes(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8
+        ));
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> aiGatewayService.generateText(
+                config,
+                List.of(new AiChatMessageRequest("user", "hello"))
+        ));
+
+        assertInstanceOf(BadRequestException.class, exception);
+        assertEquals("AI provider request failed with status 404: missing endpoint", exception.getMessage());
     }
 
     private AiConfig config() {

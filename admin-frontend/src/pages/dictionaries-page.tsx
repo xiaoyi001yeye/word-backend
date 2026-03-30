@@ -64,6 +64,7 @@ const compareLabels = (left: string, right: string) => {
 export function DictionariesPage() {
     const auth = useAuth();
     const [feedback, setFeedback] = createSignal("");
+    const [entryAiLoading, setEntryAiLoading] = createSignal<Record<number, boolean>>({});
     const [isCreateDialogOpen, setIsCreateDialogOpen] = createSignal(false);
     const [selectedDictionaryId, setSelectedDictionaryId] = createSignal<number | null>(null);
     const [entryKeyword, setEntryKeyword] = createSignal("");
@@ -301,6 +302,39 @@ export function DictionariesPage() {
         await refetch();
         if (selectedDictionaryId()) {
             await refetchEntries();
+        }
+    };
+
+    const handleEntryAiGenerate = async (entry: DictionaryWordEntryResponse) => {
+        if (!entry.word || !selectedDictionaryId()) {
+            setFeedback("当前词条缺少单词内容，无法使用单词AI。");
+            return;
+        }
+
+        setEntryAiLoading((previous) => ({
+            ...previous,
+            [entry.entryId]: true,
+        }));
+        setFeedback("");
+
+        try {
+            const response = await api.generateDictionaryWordWithAi(selectedDictionaryId()!, {
+                metaWordId: entry.metaWordId,
+                word: entry.word,
+            });
+            await Promise.all([refetch(), refetchEntries()]);
+            setFeedback(
+                response.added > 0
+                    ? `单词AI已生成并保存，已同步到当前词书：${response.word}`
+                    : `单词AI已更新元单词数据：${response.word}`,
+            );
+        } catch (error) {
+            setFeedback(error instanceof Error ? error.message : "单词AI处理失败");
+        } finally {
+            setEntryAiLoading((previous) => ({
+                ...previous,
+                [entry.entryId]: false,
+            }));
         }
     };
 
@@ -674,6 +708,7 @@ export function DictionariesPage() {
                                                                             <TableHeaderCell>音标</TableHeaderCell>
                                                                             <SortableEntryHeader field="chapter" label="章节" />
                                                                             <SortableEntryHeader field="entryOrder" label="顺序" />
+                                                                            <TableHeaderCell class="w-[120px]">操作</TableHeaderCell>
                                                                         </tr>
                                                                     </TableHead>
                                                                     <TableBody>
@@ -705,6 +740,18 @@ export function DictionariesPage() {
                                                                                     </TableCell>
                                                                                     <TableCell class="w-[100px] text-sm text-muted-foreground">
                                                                                         {entry.entryOrder || "-"}
+                                                                                    </TableCell>
+                                                                                    <TableCell class="w-[120px]">
+                                                                                        <Show when={canManageSelectedDictionary()}>
+                                                                                            <Button
+                                                                                                disabled={entryAiLoading()[entry.entryId] || !entry.word}
+                                                                                                size="sm"
+                                                                                                variant="outline"
+                                                                                                onClick={() => void handleEntryAiGenerate(entry)}
+                                                                                            >
+                                                                                                {entryAiLoading()[entry.entryId] ? "AI中..." : "单词AI"}
+                                                                                            </Button>
+                                                                                        </Show>
                                                                                     </TableCell>
                                                                                 </TableRow>
                                                                             )}

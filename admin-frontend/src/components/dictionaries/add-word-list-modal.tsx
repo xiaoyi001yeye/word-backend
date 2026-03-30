@@ -1,12 +1,17 @@
 import { X } from "lucide-solid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Index, onCleanup, Show } from "solid-js";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import type { Dictionary, MetaWordEntryPayload, MetaWordSuggestionResponse, WordListProcessResult } from "@/types/api";
+import type {
+    Dictionary,
+    MetaWordEntryPayload,
+    MetaWordSuggestionResponse,
+    WordListProcessResult,
+} from "@/types/api";
 
 interface AddWordListModalProps {
     isOpen: boolean;
@@ -36,7 +41,7 @@ interface ParsedEntryResult {
     lineCount: number;
 }
 
-const INITIAL_QUICK_ROW_COUNT = 5;
+const INITIAL_QUICK_ROW_COUNT = 1;
 const MAX_ENTRY_COUNT = 1000;
 const QUICK_SUGGESTION_LIMIT = 8;
 const QUICK_SUGGESTION_DEBOUNCE_MS = 180;
@@ -261,6 +266,8 @@ export function AddWordListModal(props: AddWordListModalProps) {
     const [quickRows, setQuickRows] = createSignal<QuickEntryRow[]>(createQuickRows(INITIAL_QUICK_ROW_COUNT));
     const [quickSuggestions, setQuickSuggestions] = createSignal<Record<string, MetaWordSuggestionResponse[]>>({});
     const [quickSuggestionLoading, setQuickSuggestionLoading] = createSignal<Record<string, boolean>>({});
+    const [quickAiLoading, setQuickAiLoading] = createSignal<Record<string, boolean>>({});
+    const [quickAiErrors, setQuickAiErrors] = createSignal<Record<string, string>>({});
     const [activeSuggestionRowId, setActiveSuggestionRowId] = createSignal<string | null>(null);
     const [bulkInput, setBulkInput] = createSignal("");
     const [jsonInput, setJsonInput] = createSignal("");
@@ -323,6 +330,11 @@ export function AddWordListModal(props: AddWordListModalProps) {
         setActiveSuggestionRowId((currentRowId) => (currentRowId === rowId ? null : currentRowId));
     };
 
+    const clearQuickAiState = (rowId: string) => {
+        setQuickAiLoading((previous) => removeRecordKey(previous, rowId));
+        setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
+    };
+
     const resetQuickSuggestionState = () => {
         Object.keys(quickSuggestionTimers).forEach((rowId) => clearQuickSuggestionTimer(rowId));
         Object.keys(quickSuggestionAbortControllers).forEach((rowId) => abortQuickSuggestionRequest(rowId));
@@ -332,10 +344,16 @@ export function AddWordListModal(props: AddWordListModalProps) {
         setActiveSuggestionRowId(null);
     };
 
+    const resetQuickAiState = () => {
+        setQuickAiLoading({});
+        setQuickAiErrors({});
+    };
+
     const resetAll = () => {
         setMode("quick");
         setQuickRows(createQuickRows(INITIAL_QUICK_ROW_COUNT));
         resetQuickSuggestionState();
+        resetQuickAiState();
         setBulkInput("");
         setJsonInput("");
         setLoading(false);
@@ -402,6 +420,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
         if (mode() === "quick") {
             setQuickRows(createQuickRows(INITIAL_QUICK_ROW_COUNT));
             resetQuickSuggestionState();
+            resetQuickAiState();
             return;
         }
 
@@ -419,6 +438,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
         setResult(null);
         if (nextMode !== "quick") {
             resetQuickSuggestionState();
+            resetQuickAiState();
         }
     };
 
@@ -428,6 +448,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
         );
         setResult(null);
         setError(null);
+        setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
     };
 
     const handleQuickWordChange = (rowId: string, value: string) => {
@@ -445,6 +466,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
         setResult(null);
         setError(null);
         setActiveSuggestionRowId(rowId);
+        setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
 
         clearQuickSuggestionTimer(rowId);
         abortQuickSuggestionRequest(rowId);
@@ -469,6 +491,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
 
     const handleApplySuggestion = (rowId: string, suggestion: MetaWordSuggestionResponse) => {
         clearQuickSuggestionState(rowId);
+        clearQuickAiState(rowId);
         setQuickRows((previousRows) =>
             previousRows.map((row) =>
                 row.id === rowId
@@ -498,6 +521,7 @@ export function AddWordListModal(props: AddWordListModalProps) {
 
     const handleRemoveQuickRow = (rowId: string) => {
         clearQuickSuggestionState(rowId);
+        clearQuickAiState(rowId);
         setQuickRows((previousRows) => {
             if (previousRows.length === 1) {
                 return previousRows;
@@ -508,6 +532,65 @@ export function AddWordListModal(props: AddWordListModalProps) {
 
     const handleAddQuickRow = (count = 1) => {
         setQuickRows((previousRows) => [...previousRows, ...createQuickRows(count)]);
+    };
+
+    const handleGenerateQuickRowWithAi = async (rowId: string) => {
+        const targetRow = quickRows().find((candidate) => candidate.id === rowId);
+        const word = targetRow?.word.trim() ?? "";
+
+        if (!word) {
+            setQuickAiErrors((previous) => ({
+                ...previous,
+                [rowId]: "请先输入单词，再使用 AI 补全。",
+            }));
+            return;
+        }
+
+        setQuickAiLoading((previous) => ({
+            ...previous,
+            [rowId]: true,
+        }));
+        setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
+        setError(null);
+        setResult(null);
+
+        try {
+            const details = await api.generateDictionaryWordWithAi(props.dictionary.id, { word });
+            setQuickRows((previousRows) =>
+                previousRows.map((row) =>
+                    row.id === rowId
+                        ? {
+                              ...row,
+                              word: details.word?.trim() || row.word,
+                              translation: details.translation?.trim() || row.translation,
+                              partOfSpeech: details.partOfSpeech?.trim() || row.partOfSpeech,
+                              phonetic: details.phonetic?.trim() || row.phonetic,
+                              definition: details.definition?.trim() || row.definition,
+                              exampleSentence: details.exampleSentence?.trim() || row.exampleSentence,
+                              matchedMetaWordId: details.metaWordId,
+                          }
+                        : row,
+                ),
+            );
+            setResult({
+                total: details.total,
+                existed: details.existed,
+                created: details.created,
+                added: details.added,
+                failed: details.failed,
+            });
+            await props.onSuccess?.();
+        } catch (aiError) {
+            setQuickAiErrors((previous) => ({
+                ...previous,
+                [rowId]: aiError instanceof Error ? aiError.message : "AI 补全失败，请稍后重试。",
+            }));
+        } finally {
+            setQuickAiLoading((previous) => ({
+                ...previous,
+                [rowId]: false,
+            }));
+        }
     };
 
     const handleFormatJson = () => {
@@ -698,56 +781,56 @@ export function AddWordListModal(props: AddWordListModalProps) {
                                 </div>
 
                                 <div class="space-y-3">
-                                    <For each={quickRows()}>
+                                    <Index each={quickRows()}>
                                         {(row, index) => (
                                             <div class="grid gap-3 rounded-[24px] border border-border/70 bg-background/70 p-4 xl:grid-cols-[auto_minmax(0,1fr)_auto]">
                                                 <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                                    {index() + 1}
+                                                    {index + 1}
                                                 </div>
                                                 <div class="space-y-3">
                                                     <div class="relative">
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行单词`}
+                                                            aria-label={`第 ${index + 1} 行单词`}
                                                             autocomplete="off"
                                                             disabled={loading()}
                                                             placeholder="单词 *（输入时自动联想词元表）"
-                                                            value={row.word}
-                                                            onBlur={() => handleQuickWordBlur(row.id)}
-                                                            onFocus={() => setActiveSuggestionRowId(row.id)}
-                                                            onInput={(event) => handleQuickWordChange(row.id, event.currentTarget.value)}
+                                                            value={row().word}
+                                                            onBlur={() => handleQuickWordBlur(row().id)}
+                                                            onFocus={() => setActiveSuggestionRowId(row().id)}
+                                                            onInput={(event) => handleQuickWordChange(row().id, event.currentTarget.value)}
                                                         />
-                                                        <Show when={row.matchedMetaWordId}>
+                                                        <Show when={row().matchedMetaWordId}>
                                                             <p class="mt-2 text-xs leading-5 text-muted-foreground">
                                                                 已从词元表匹配到该单词，释义信息已自动回填。
                                                             </p>
                                                         </Show>
                                                         <Show
                                                             when={
-                                                                activeSuggestionRowId() === row.id
-                                                                && row.word.trim().length > 0
-                                                                && (quickSuggestionLoading()[row.id] || quickSuggestions()[row.id] !== undefined)
+                                                                activeSuggestionRowId() === row().id
+                                                                && row().word.trim().length > 0
+                                                                && (quickSuggestionLoading()[row().id] || quickSuggestions()[row().id] !== undefined)
                                                             }
                                                         >
                                                             <div class="absolute inset-x-0 top-[calc(100%+0.5rem)] z-10 flex max-h-72 flex-col gap-2 overflow-y-auto rounded-2xl border border-border/70 bg-background p-2 shadow-xl">
                                                                 <Show
-                                                                    when={!quickSuggestionLoading()[row.id]}
+                                                                    when={!quickSuggestionLoading()[row().id]}
                                                                     fallback={<div class="px-3 py-2 text-sm text-muted-foreground">正在匹配词元表...</div>}
                                                                 >
                                                                     <Show
-                                                                        when={(quickSuggestions()[row.id]?.length ?? 0) > 0}
+                                                                        when={(quickSuggestions()[row().id]?.length ?? 0) > 0}
                                                                         fallback={
                                                                             <div class="px-3 py-2 text-sm text-muted-foreground">
                                                                                 词元表里暂时没有这个前缀的候选词，你也可以继续手动录入。
                                                                             </div>
                                                                         }
                                                                     >
-                                                                        <For each={quickSuggestions()[row.id] ?? []}>
+                                                                        <For each={quickSuggestions()[row().id] ?? []}>
                                                                             {(suggestion) => (
                                                                                 <button
                                                                                     class="rounded-2xl bg-muted/40 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:bg-muted/70"
                                                                                     onMouseDown={(event) => {
                                                                                         event.preventDefault();
-                                                                                        handleApplySuggestion(row.id, suggestion);
+                                                                                        handleApplySuggestion(row().id, suggestion);
                                                                                     }}
                                                                                     type="button"
                                                                                 >
@@ -766,74 +849,89 @@ export function AddWordListModal(props: AddWordListModalProps) {
 
                                                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行中文释义`}
+                                                            aria-label={`第 ${index + 1} 行中文释义`}
                                                             disabled={loading()}
                                                             placeholder="中文释义"
-                                                            value={row.translation}
+                                                            value={row().translation}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "translation", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "translation", event.currentTarget.value)
                                                             }
                                                         />
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行词性`}
+                                                            aria-label={`第 ${index + 1} 行词性`}
                                                             disabled={loading()}
                                                             placeholder="词性"
-                                                            value={row.partOfSpeech}
+                                                            value={row().partOfSpeech}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "partOfSpeech", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "partOfSpeech", event.currentTarget.value)
                                                             }
                                                         />
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行音标`}
+                                                            aria-label={`第 ${index + 1} 行音标`}
                                                             disabled={loading()}
                                                             placeholder="音标"
-                                                            value={row.phonetic}
+                                                            value={row().phonetic}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "phonetic", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "phonetic", event.currentTarget.value)
                                                             }
                                                         />
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行难度`}
+                                                            aria-label={`第 ${index + 1} 行难度`}
                                                             disabled={loading()}
                                                             placeholder="难度 1-5"
-                                                            value={row.difficulty}
+                                                            value={row().difficulty}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "difficulty", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "difficulty", event.currentTarget.value)
                                                             }
                                                         />
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行英文释义`}
+                                                            aria-label={`第 ${index + 1} 行英文释义`}
                                                             class="md:col-span-2"
                                                             disabled={loading()}
                                                             placeholder="英文释义"
-                                                            value={row.definition}
+                                                            value={row().definition}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "definition", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "definition", event.currentTarget.value)
                                                             }
                                                         />
                                                         <Input
-                                                            aria-label={`第 ${index() + 1} 行例句`}
+                                                            aria-label={`第 ${index + 1} 行例句`}
                                                             class="md:col-span-2"
                                                             disabled={loading()}
                                                             placeholder="例句"
-                                                            value={row.exampleSentence}
+                                                            value={row().exampleSentence}
                                                             onInput={(event) =>
-                                                                handleQuickRowChange(row.id, "exampleSentence", event.currentTarget.value)
+                                                                handleQuickRowChange(row().id, "exampleSentence", event.currentTarget.value)
                                                             }
                                                         />
                                                     </div>
                                                 </div>
-                                                <Button
-                                                    disabled={loading() || quickRows().length === 1}
-                                                    variant="outline"
-                                                    onClick={() => handleRemoveQuickRow(row.id)}
-                                                    type="button"
-                                                >
-                                                    移除
-                                                </Button>
+                                                <div class="flex min-w-[5.5rem] flex-col gap-3">
+                                                    <Button
+                                                        disabled={loading() || quickRows().length === 1}
+                                                        variant="outline"
+                                                        onClick={() => handleRemoveQuickRow(row().id)}
+                                                        type="button"
+                                                    >
+                                                        移除
+                                                    </Button>
+                                                    <Button
+                                                        disabled={loading() || quickAiLoading()[row().id] || row().word.trim().length === 0}
+                                                        variant="secondary"
+                                                        onClick={() => void handleGenerateQuickRowWithAi(row().id)}
+                                                        type="button"
+                                                    >
+                                                        {quickAiLoading()[row().id] ? "AI中..." : "AI"}
+                                                    </Button>
+                                                    <Show when={quickAiErrors()[row().id]}>
+                                                        <p class="text-center text-xs leading-5 text-destructive">
+                                                            {quickAiErrors()[row().id]}
+                                                        </p>
+                                                    </Show>
+                                                </div>
                                             </div>
                                         )}
-                                    </For>
+                                    </Index>
                                 </div>
                             </>
                         </Show>

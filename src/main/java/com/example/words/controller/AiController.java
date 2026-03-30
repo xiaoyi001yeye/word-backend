@@ -4,6 +4,8 @@ import com.example.words.dto.AiChatRequest;
 import com.example.words.dto.AiChatResponse;
 import com.example.words.dto.GenerateReadingRequest;
 import com.example.words.dto.GenerateReadingResponse;
+import com.example.words.dto.GenerateWordDetailsRequest;
+import com.example.words.dto.GenerateWordDetailsResponse;
 import com.example.words.service.AiConversationService;
 import com.example.words.service.AiGenerationService;
 import jakarta.validation.Valid;
@@ -37,5 +39,11 @@ public class AiController {
     @PostMapping("/generate-reading")
     public ResponseEntity<GenerateReadingResponse> generateReading(@Valid @RequestBody GenerateReadingRequest request) {
         return ResponseEntity.ok(aiGenerationService.generateReading(request));
+    }
+
+    @PostMapping("/generate-word-details")
+    public ResponseEntity<GenerateWordDetailsResponse> generateWordDetails(
+            @Valid @RequestBody GenerateWordDetailsRequest request) {
+        return ResponseEntity.ok(aiGenerationService.generateWordDetails(request));
     }
 }

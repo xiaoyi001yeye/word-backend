@@ -8,7 +8,7 @@ COPY src ./src
 
 RUN mvn -q -s settings.xml -Dmaven.repo.local=/workspace/maven-repo -DskipTests package
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
