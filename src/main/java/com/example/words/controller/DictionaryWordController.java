@@ -3,6 +3,8 @@ package com.example.words.controller;
 import com.example.words.dto.AddWordsToDictionaryRequest;
 import com.example.words.dto.AddWordListRequest;
 import com.example.words.dto.DictionaryWordEntryResponse;
+import com.example.words.dto.GenerateDictionaryWordWithAiRequest;
+import com.example.words.dto.GenerateDictionaryWordWithAiResponse;
 import com.example.words.dto.MetaWordSuggestionDto;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.exception.ResourceNotFoundException;
@@ -15,6 +17,7 @@ import com.example.words.service.AccessControlService;
 import com.example.words.service.CurrentUserService;
 import com.example.words.service.DictionaryService;
 import com.example.words.service.DictionaryWordService;
+import com.example.words.service.AiGenerationService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -43,17 +46,20 @@ public class DictionaryWordController {
     private final DictionaryService dictionaryService;
     private final CurrentUserService currentUserService;
     private final AccessControlService accessControlService;
+    private final AiGenerationService aiGenerationService;
 
     public DictionaryWordController(DictionaryWordService dictionaryWordService,
                                   CsvImportService csvImportService,
                                   DictionaryService dictionaryService,
                                   CurrentUserService currentUserService,
-                                  AccessControlService accessControlService) {
+                                  AccessControlService accessControlService,
+                                  AiGenerationService aiGenerationService) {
         this.dictionaryWordService = dictionaryWordService;
         this.csvImportService = csvImportService;
         this.dictionaryService = dictionaryService;
         this.currentUserService = currentUserService;
         this.accessControlService = accessControlService;
+        this.aiGenerationService = aiGenerationService;
     }
 
     @GetMapping("/dictionary/{dictionaryId}/words")
@@ -159,6 +165,26 @@ public class DictionaryWordController {
                 "added", result.getAdded(),
                 "failed", result.getFailed()
         ));
+    }
+
+    @PostMapping("/{dictionaryId}/words/ai-generate")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<GenerateDictionaryWordWithAiResponse> generateWordWithAi(
+            @PathVariable Long dictionaryId,
+            @Valid @RequestBody GenerateDictionaryWordWithAiRequest request) {
+        ensureCanManageDictionary(dictionaryId);
+        AiGenerationService.GeneratedWordEntryV2 generated = aiGenerationService.generateWordEntryV2(
+                new com.example.words.dto.GenerateWordDetailsRequest(request.getConfigId(), request.getWord())
+        );
+        GenerateDictionaryWordWithAiResponse response = dictionaryWordService.saveGeneratedWordV2(
+                dictionaryId,
+                request.getMetaWordId(),
+                generated.configId(),
+                generated.providerName(),
+                generated.modelName(),
+                generated.entry()
+        );
+        return ResponseEntity.ok(response);
     }
     
     /**

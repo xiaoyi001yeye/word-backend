@@ -89,6 +89,44 @@ class DictionaryWordServiceTest {
     }
 
     @Test
+    void processWordListShouldUpdateExistingMetaWordFields() {
+        MetaWord existingMetaWord = new MetaWord();
+        existingMetaWord.setId(101L);
+        existingMetaWord.setWord("apple");
+        existingMetaWord.setDifficulty(1);
+
+        when(metaWordRepository.findByNormalizedWord("apple")).thenReturn(Optional.of(existingMetaWord));
+        when(tagService.getOrCreateDefaultChapterTagId(10L)).thenReturn(99L);
+        when(dictionaryWordRepository.findMaxEntryOrderByDictionaryIdAndChapterTagId(10L, 99L)).thenReturn(0);
+        when(metaWordRepository.save(any(MetaWord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dictionaryWordRepository.countDistinctMetaWordIdByDictionaryId(10L)).thenReturn(1L);
+        when(dictionaryWordRepository.countByDictionaryId(10L)).thenReturn(1L);
+
+        DictionaryWordService.WordListProcessResult result = dictionaryWordService.processWordList(
+                10L,
+                List.of(new MetaWordEntryDto(
+                        "apple",
+                        "/ˈæp.əl/",
+                        "a round fruit",
+                        "noun",
+                        "She picked an apple.",
+                        "苹果",
+                        3
+                ))
+        );
+
+        assertEquals(1, result.getExisted());
+        assertEquals(0, result.getCreated());
+        assertEquals("/ˈæp.əl/", existingMetaWord.getPhonetic());
+        assertEquals("a round fruit", existingMetaWord.getDefinition());
+        assertEquals("noun", existingMetaWord.getPartOfSpeech());
+        assertEquals("She picked an apple.", existingMetaWord.getExampleSentence());
+        assertEquals("苹果", existingMetaWord.getTranslation());
+        assertEquals(3, existingMetaWord.getDifficulty());
+        verify(metaWordRepository).save(existingMetaWord);
+    }
+
+    @Test
     void deleteByDictionaryIdShouldResetWordCount() {
         dictionaryWordService.deleteByDictionaryId(12L);
 

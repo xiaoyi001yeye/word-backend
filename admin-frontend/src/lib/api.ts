@@ -1,12 +1,21 @@
 import { clearStoredToken, getStoredToken } from "@/lib/session";
 import type {
+    AiChatResponse,
+    AiConfigResponse,
+    AiConfigStatus,
+    AiConfigTestResponse,
     ApiErrorPayload,
     BooksImportBatchFileResponse,
     BooksImportConflictResponse,
     BooksImportJobResponse,
     ClassroomResponse,
+    CreateAiConfigPayload,
     Dictionary,
     DictionaryWordEntryResponse,
+    GenerateDictionaryWordWithAiPayload,
+    GenerateDictionaryWordWithAiResponse,
+    GenerateWordDetailsPayload,
+    GenerateWordDetailsResponse,
     LoginResponse,
     MetaWordEntryPayload,
     MetaWordSuggestionResponse,
@@ -15,6 +24,7 @@ import type {
     StudyPlanOverviewResponse,
     StudyPlanResponse,
     StudyPlanStudentSummaryResponse,
+    UpdateAiConfigPayload,
     UserResponse,
     WordListProcessResult,
 } from "@/types/api";
@@ -176,6 +186,11 @@ export const api = {
         ),
     addDictionaryWord: (dictionaryId: number, metaWordId: number) =>
         request<void>(`/api/dictionary-words/${dictionaryId}/${metaWordId}`, { method: "POST" }),
+    generateDictionaryWordWithAi: (dictionaryId: number, payload: GenerateDictionaryWordWithAiPayload) =>
+        request<GenerateDictionaryWordWithAiResponse>(`/api/dictionary-words/${dictionaryId}/words/ai-generate`, {
+            method: "POST",
+            body: payload,
+        }),
     addDictionaryWordList: (dictionaryId: number, words: MetaWordEntryPayload[]) =>
         request<WordListProcessResult>(`/api/dictionary-words/${dictionaryId}/words/list`, {
             method: "POST",
@@ -219,4 +234,31 @@ export const api = {
     discardImportBatch: (batchId: string) =>
         request<BooksImportJobResponse>(`/api/books-import/batches/${batchId}/discard`, { method: "POST" }),
     deleteImportBatch: (batchId: string) => request<void>(`/api/books-import/batches/${batchId}`, { method: "DELETE" }),
+
+    listAiConfigs: (params?: { status?: AiConfigStatus; providerName?: string }) =>
+        request<AiConfigResponse[]>(
+            `/api/ai-configs${buildQueryString({
+                status: params?.status,
+                providerName: params?.providerName,
+            })}`,
+        ),
+    getAiConfig: (id: number) => request<AiConfigResponse>(`/api/ai-configs/${id}`),
+    createAiConfig: (payload: CreateAiConfigPayload) =>
+        request<AiConfigResponse>("/api/ai-configs", { method: "POST", body: payload }),
+    updateAiConfig: (id: number, payload: UpdateAiConfigPayload) =>
+        request<AiConfigResponse>(`/api/ai-configs/${id}`, { method: "PUT", body: payload }),
+    updateAiConfigStatus: (id: number, status: AiConfigStatus) =>
+        request<AiConfigResponse>(`/api/ai-configs/${id}/status`, {
+            method: "PATCH",
+            body: { status },
+        }),
+    setDefaultAiConfig: (id: number) =>
+        request<AiConfigResponse>(`/api/ai-configs/${id}/default`, { method: "PATCH" }),
+    testAiConfig: (id: number) =>
+        request<AiConfigTestResponse>(`/api/ai-configs/${id}/test`, { method: "POST" }),
+    deleteAiConfig: (id: number) => request<void>(`/api/ai-configs/${id}`, { method: "DELETE" }),
+    chatWithAi: (payload: { configId: number; messages: { role: "system" | "user" | "assistant"; content: string }[] }) =>
+        request<AiChatResponse>("/api/ai/chat", { method: "POST", body: payload }),
+    generateWordDetails: (payload: GenerateWordDetailsPayload) =>
+        request<GenerateWordDetailsResponse>("/api/ai/generate-word-details", { method: "POST", body: payload }),
 };

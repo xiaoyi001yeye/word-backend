@@ -32,7 +32,7 @@ interface ParsedEntryResult {
   lineCount: number;
 }
 
-const INITIAL_QUICK_ROW_COUNT = 5;
+const INITIAL_QUICK_ROW_COUNT = 1;
 const MAX_ENTRY_COUNT = 1000;
 const QUICK_SUGGESTION_LIMIT = 8;
 const QUICK_SUGGESTION_DEBOUNCE_MS = 180;
@@ -248,6 +248,8 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
   const [quickRows, setQuickRows] = useState<QuickEntryRow[]>(() => createQuickRows(INITIAL_QUICK_ROW_COUNT));
   const [quickSuggestions, setQuickSuggestions] = useState<Record<string, MetaWord[]>>({});
   const [quickSuggestionLoading, setQuickSuggestionLoading] = useState<Record<string, boolean>>({});
+  const [quickAiLoading, setQuickAiLoading] = useState<Record<string, boolean>>({});
+  const [quickAiErrors, setQuickAiErrors] = useState<Record<string, string>>({});
   const [activeSuggestionRowId, setActiveSuggestionRowId] = useState<string | null>(null);
   const [bulkInput, setBulkInput] = useState('');
   const [jsonInput, setJsonInput] = useState('');
@@ -291,6 +293,11 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     setActiveSuggestionRowId((currentRowId) => (currentRowId === rowId ? null : currentRowId));
   };
 
+  const clearQuickAiState = (rowId: string) => {
+    setQuickAiLoading((previous) => removeRecordKey(previous, rowId));
+    setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
+  };
+
   const resetQuickSuggestionState = () => {
     Object.keys(quickSuggestionTimersRef.current).forEach((rowId) => clearQuickSuggestionTimer(rowId));
     Object.keys(quickSuggestionAbortControllersRef.current).forEach((rowId) => abortQuickSuggestionRequest(rowId));
@@ -298,6 +305,11 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     setQuickSuggestions({});
     setQuickSuggestionLoading({});
     setActiveSuggestionRowId(null);
+  };
+
+  const resetQuickAiState = () => {
+    setQuickAiLoading({});
+    setQuickAiErrors({});
   };
 
   const loadQuickSuggestions = async (rowId: string, keyword: string) => {
@@ -360,6 +372,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     if (mode === 'quick') {
       setQuickRows(createQuickRows(INITIAL_QUICK_ROW_COUNT));
       resetQuickSuggestionState();
+      resetQuickAiState();
       return;
     }
 
@@ -377,6 +390,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     setResult(null);
     if (nextMode !== 'quick') {
       resetQuickSuggestionState();
+      resetQuickAiState();
     }
   };
 
@@ -386,6 +400,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     )));
     setResult(null);
     setError(null);
+    setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
   };
 
   const handleQuickWordChange = (rowId: string, value: string) => {
@@ -401,6 +416,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     setResult(null);
     setError(null);
     setActiveSuggestionRowId(rowId);
+    setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
 
     clearQuickSuggestionTimer(rowId);
     abortQuickSuggestionRequest(rowId);
@@ -425,6 +441,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
 
   const handleApplySuggestion = (rowId: string, suggestion: MetaWord) => {
     clearQuickSuggestionState(rowId);
+    clearQuickAiState(rowId);
     setQuickRows((previousRows) => previousRows.map((row) => (
       row.id === rowId
         ? {
@@ -452,6 +469,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
 
   const handleRemoveQuickRow = (rowId: string) => {
     clearQuickSuggestionState(rowId);
+    clearQuickAiState(rowId);
     setQuickRows((previousRows) => {
       if (previousRows.length === 1) {
         return previousRows;
@@ -462,6 +480,65 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
 
   const handleAddQuickRow = () => {
     setQuickRows((previousRows) => [...previousRows, createQuickEntryRow()]);
+  };
+
+  const handleGenerateQuickRowWithAi = async (rowId: string) => {
+    const targetRow = quickRows.find((row) => row.id === rowId);
+    const word = targetRow?.word.trim() ?? '';
+
+    if (!word) {
+      setQuickAiErrors((previous) => ({
+        ...previous,
+        [rowId]: '请先输入单词，再使用 AI 补全。',
+      }));
+      return;
+    }
+
+    setQuickAiLoading((previous) => ({
+      ...previous,
+      [rowId]: true,
+    }));
+    setQuickAiErrors((previous) => removeRecordKey(previous, rowId));
+    setError(null);
+    setResult(null);
+
+    try {
+      const details = await dictionaryWordApi.generateWithAi(dictionary.id, { word });
+      setQuickRows((previousRows) => previousRows.map((row) => (
+        row.id === rowId
+          ? {
+            ...row,
+            word: details.word?.trim() || row.word,
+            translation: details.translation?.trim() || row.translation,
+            partOfSpeech: details.partOfSpeech?.trim() || row.partOfSpeech,
+            phonetic: details.phonetic?.trim() || row.phonetic,
+            definition: details.definition?.trim() || row.definition,
+            exampleSentence: details.exampleSentence?.trim() || row.exampleSentence,
+            matchedMetaWordId: details.metaWordId,
+          }
+          : row
+      )));
+      setResult({
+        message: 'AI generated and saved successfully',
+        dictionaryId: details.dictionaryId,
+        total: details.total,
+        existed: details.existed,
+        created: details.created,
+        added: details.added,
+        failed: details.failed,
+      });
+      onSuccess?.();
+    } catch (aiError) {
+      setQuickAiErrors((previous) => ({
+        ...previous,
+        [rowId]: aiError instanceof Error ? aiError.message : 'AI 补全失败，请稍后重试。',
+      }));
+    } finally {
+      setQuickAiLoading((previous) => ({
+        ...previous,
+        [rowId]: false,
+      }));
+    }
   };
 
   const handleFillBulkExample = () => {
@@ -557,6 +634,7 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
     setMode('quick');
     setQuickRows(createQuickRows(INITIAL_QUICK_ROW_COUNT));
     resetQuickSuggestionState();
+    resetQuickAiState();
     setBulkInput('');
     setJsonInput('');
     setError(null);
@@ -771,14 +849,29 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
                         />
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="manual-entry-row__remove"
-                      onClick={() => handleRemoveQuickRow(row.id)}
-                      disabled={loading || quickRows.length === 1}
-                    >
-                      移除
-                    </button>
+                    <div className="manual-entry-row__actions">
+                      <button
+                        type="button"
+                        className="manual-entry-row__remove"
+                        onClick={() => handleRemoveQuickRow(row.id)}
+                        disabled={loading || quickRows.length === 1}
+                      >
+                        移除
+                      </button>
+                      <button
+                        type="button"
+                        className="manual-entry-row__ai"
+                        onClick={() => void handleGenerateQuickRowWithAi(row.id)}
+                        disabled={loading || quickAiLoading[row.id] || row.word.trim().length === 0}
+                      >
+                        {quickAiLoading[row.id] ? 'AI中...' : 'AI'}
+                      </button>
+                      {quickAiErrors[row.id] && (
+                        <div className="manual-entry-row__ai-error">
+                          {quickAiErrors[row.id]}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

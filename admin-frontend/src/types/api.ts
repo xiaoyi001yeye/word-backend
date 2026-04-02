@@ -248,3 +248,100 @@ export interface ApiErrorPayload {
     message?: string;
     details?: string[];
 }
+
+export type AiConfigStatus = "ENABLED" | "DISABLED";
+
+export interface AiConfigResponse {
+    id: number;
+    providerName: string;
+    apiUrl: string;
+    apiKeyMasked: string;
+    modelName: string;
+    status: AiConfigStatus;
+    isDefault: boolean;
+    remark?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+}
+
+export interface CreateAiConfigPayload {
+    providerName: string;
+    apiUrl: string;
+    apiKey: string;
+    modelName: string;
+    status: AiConfigStatus;
+    isDefault: boolean;
+    remark?: string;
+}
+
+export interface UpdateAiConfigPayload {
+    providerName: string;
+    apiUrl: string;
+    apiKey?: string;
+    modelName: string;
+    status: AiConfigStatus;
+    isDefault: boolean;
+    remark?: string;
+}
+
+export interface AiConfigTestResponse {
+    configId: number;
+    providerName: string;
+    modelName: string;
+    success: boolean;
+    reply: string;
+}
+
+export interface AiChatMessagePayload {
+    role: "system" | "user" | "assistant";
+    content: string;
+}
+
+export interface AiChatResponse {
+    configId: number;
+    providerName: string;
+    modelName: string;
+    reply: string;
+}
+
+export interface GenerateWordDetailsPayload {
+    configId?: number;
+    word: string;
+}
+
+export interface GenerateWordDetailsResponse {
+    configId: number;
+    providerName: string;
+    modelName: string;
+    word: string;
+    translation?: string | null;
+    partOfSpeech?: string | null;
+    phonetic?: string | null;
+    definition?: string | null;
+    exampleSentence?: string | null;
+}
+
+export interface GenerateDictionaryWordWithAiPayload {
+    configId?: number;
+    metaWordId?: number;
+    word: string;
+}
+
+export interface GenerateDictionaryWordWithAiResponse {
+    dictionaryId: number;
+    metaWordId: number;
+    configId: number;
+    providerName: string;
+    modelName: string;
+    word: string;
+    translation?: string | null;
+    partOfSpeech?: string | null;
+    phonetic?: string | null;
+    definition?: string | null;
+    exampleSentence?: string | null;
+    total: number;
+    existed: number;
+    created: number;
+    added: number;
+    failed: number;
+}

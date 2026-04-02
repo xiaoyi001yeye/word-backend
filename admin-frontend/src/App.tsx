@@ -1,6 +1,7 @@
 import { Route, Router } from "@solidjs/router";
 import { ProtectedLayout } from "@/components/layout/protected-layout";
 import { AuthProvider } from "@/features/auth/auth-context";
+import { AiConfigsPage } from "@/pages/ai-configs-page";
 import { ClassroomsPage } from "@/pages/classrooms-page";
 import { DictionariesPage } from "@/pages/dictionaries-page";
 import { ImportCenterPage } from "@/pages/import-center-page";
@@ -18,6 +19,7 @@ function App() {
                 <Route path="/" component={ProtectedLayout}>
                     <Route path="/" component={OverviewPage} />
                     <Route path="/users" component={UsersPage} />
+                    <Route path="/ai-configs" component={AiConfigsPage} />
                     <Route path="/classrooms" component={ClassroomsPage} />
                     <Route path="/dictionaries" component={DictionariesPage} />
                     <Route path="/study-plans" component={StudyPlansPage} />

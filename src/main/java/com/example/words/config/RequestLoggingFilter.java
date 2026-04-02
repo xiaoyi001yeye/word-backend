@@ -17,6 +17,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
+    private static final String HEALTH_CHECK_PATH = "/api/auth/quote";
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -37,6 +39,12 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
                     extractClientIp(request)
             );
         }
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "HEAD".equalsIgnoreCase(request.getMethod())
+                && HEALTH_CHECK_PATH.equals(request.getRequestURI());
     }
 
     private String buildRequestPath(HttpServletRequest request) {

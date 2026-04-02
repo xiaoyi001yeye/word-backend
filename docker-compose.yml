@@ -26,6 +26,7 @@ services:
       SPRING_JACKSON_TIME_ZONE: Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      AI_CONFIG_ENCRYPTION_KEY: ${AI_CONFIG_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
     depends_on:
       db:
         condition: service_healthy

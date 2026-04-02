@@ -26,3 +26,10 @@ logging:
   level:
     com.example.words: DEBUG
     org.hibernate.SQL: DEBUG
+
+ai:
+  config:
+    encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  http:
+    connect-timeout-ms: 1000
+    read-timeout-ms: 1000
