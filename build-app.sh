@@ -1,1 +1,1 @@
-mvn clean package -DskipTests -Dmaven.repo.local=$(pwd)/maven-repo   -s settings.xml -Paliyun
+mvn clean package -DskipTests -Dmaven.repo.local=D:\code\word-backend\maven-repo   -s settings.xml -Paliyun
