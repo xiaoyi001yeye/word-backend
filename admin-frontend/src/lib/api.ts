@@ -10,6 +10,7 @@ import type {
     BooksImportJobResponse,
     ClassroomResponse,
     CreateAiConfigPayload,
+    CreateVideoStorageConfigPayload,
     Dictionary,
     DictionaryWordEntryResponse,
     GenerateDictionaryWordWithAiPayload,
@@ -25,7 +26,14 @@ import type {
     StudyPlanResponse,
     StudyPlanStudentSummaryResponse,
     UpdateAiConfigPayload,
+    UpdateVideoStorageConfigPayload,
     UserResponse,
+    VideoAccessResponse,
+    VideoResponse,
+    VideoStatus,
+    VideoStorageConfigResponse,
+    VideoStorageConfigStatus,
+    VideoStorageConfigTestResponse,
     WordListProcessResult,
 } from "@/types/api";
 
@@ -261,4 +269,36 @@ export const api = {
         request<AiChatResponse>("/api/ai/chat", { method: "POST", body: payload }),
     generateWordDetails: (payload: GenerateWordDetailsPayload) =>
         request<GenerateWordDetailsResponse>("/api/ai/generate-word-details", { method: "POST", body: payload }),
+
+    listVideosPage: (params: { page?: number; size?: number; keyword?: string; status?: VideoStatus; scopeType?: string }) =>
+        request<PaginatedResponse<VideoResponse>>(`/api/videos/page${buildQueryString(params)}`),
+    getVideo: (id: number) => request<VideoResponse>(`/api/videos/${id}`),
+    uploadVideo: (formData: FormData) =>
+        request<VideoResponse>("/api/videos/upload", { method: "POST", body: formData }),
+    getVideoAccess: (id: number) => request<VideoAccessResponse>(`/api/videos/${id}/access`),
+    syncVideo: (id: number) => request<VideoResponse>(`/api/videos/${id}/sync`, { method: "POST" }),
+    deleteVideo: (id: number) => request<void>(`/api/videos/${id}`, { method: "DELETE" }),
+
+    listVideoStorageConfigs: (params?: { status?: VideoStorageConfigStatus }) =>
+        request<VideoStorageConfigResponse[]>(
+            `/api/video-storage-configs${buildQueryString({
+                status: params?.status,
+            })}`,
+        ),
+    getVideoStorageConfig: (id: number) => request<VideoStorageConfigResponse>(`/api/video-storage-configs/${id}`),
+    createVideoStorageConfig: (payload: CreateVideoStorageConfigPayload) =>
+        request<VideoStorageConfigResponse>("/api/video-storage-configs", { method: "POST", body: payload }),
+    updateVideoStorageConfig: (id: number, payload: UpdateVideoStorageConfigPayload) =>
+        request<VideoStorageConfigResponse>(`/api/video-storage-configs/${id}`, { method: "PUT", body: payload }),
+    updateVideoStorageConfigStatus: (id: number, status: VideoStorageConfigStatus) =>
+        request<VideoStorageConfigResponse>(`/api/video-storage-configs/${id}/status`, {
+            method: "PATCH",
+            body: { status },
+        }),
+    setDefaultVideoStorageConfig: (id: number) =>
+        request<VideoStorageConfigResponse>(`/api/video-storage-configs/${id}/default`, { method: "PATCH" }),
+    testVideoStorageConfig: (id: number) =>
+        request<VideoStorageConfigTestResponse>(`/api/video-storage-configs/${id}/test`, { method: "POST" }),
+    deleteVideoStorageConfig: (id: number) =>
+        request<void>(`/api/video-storage-configs/${id}`, { method: "DELETE" }),
 };

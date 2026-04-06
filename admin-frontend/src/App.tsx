@@ -10,6 +10,8 @@ import { NotFoundPage } from "@/pages/not-found-page";
 import { OverviewPage } from "@/pages/overview-page";
 import { StudyPlansPage } from "@/pages/study-plans-page";
 import { UsersPage } from "@/pages/users-page";
+import { VideoStoragePage } from "@/pages/video-storage-page";
+import { VideosPage } from "@/pages/videos-page";
 
 function App() {
     return (
@@ -22,6 +24,8 @@ function App() {
                     <Route path="/ai-configs" component={AiConfigsPage} />
                     <Route path="/classrooms" component={ClassroomsPage} />
                     <Route path="/dictionaries" component={DictionariesPage} />
+                    <Route path="/videos" component={VideosPage} />
+                    <Route path="/video-storage" component={VideoStoragePage} />
                     <Route path="/study-plans" component={StudyPlansPage} />
                     <Route path="/imports" component={ImportCenterPage} />
                     <Route path="*404" component={NotFoundPage} />

@@ -304,6 +304,88 @@ export interface AiChatResponse {
     reply: string;
 }
 
+export type VideoStorageConfigStatus = "ENABLED" | "DISABLED";
+export type VideoStatus = "PROCESSING" | "READY" | "FAILED";
+export type VideoAccessMode = "PREVIEW";
+
+export interface VideoResponse {
+    id: number;
+    title: string;
+    description?: string | null;
+    originalFileName: string;
+    contentType?: string | null;
+    fileSize: number;
+    tencentFileId: string;
+    mediaUrl?: string | null;
+    coverUrl?: string | null;
+    durationSeconds?: number | null;
+    status: VideoStatus;
+    errorMessage?: string | null;
+    createdBy: number;
+    createdByDisplayName: string;
+    ownerUserId: number;
+    scopeType: string;
+    storageConfigId: number;
+    storageConfigName?: string | null;
+    canManage: boolean;
+    canPreview: boolean;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+}
+
+export interface VideoAccessResponse {
+    videoId: number;
+    mode: VideoAccessMode;
+    url: string;
+    coverUrl?: string | null;
+}
+
+export interface VideoStorageConfigResponse {
+    id: number;
+    configName: string;
+    secretIdMasked: string;
+    secretKeyMasked: string;
+    region: string;
+    subAppId?: number | null;
+    procedureName?: string | null;
+    status: VideoStorageConfigStatus;
+    isDefault: boolean;
+    remark?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+}
+
+export interface CreateVideoStorageConfigPayload {
+    configName: string;
+    secretId: string;
+    secretKey: string;
+    region: string;
+    subAppId?: number;
+    procedureName?: string;
+    status: VideoStorageConfigStatus;
+    isDefault: boolean;
+    remark?: string;
+}
+
+export interface UpdateVideoStorageConfigPayload {
+    configName: string;
+    secretId?: string;
+    secretKey?: string;
+    region: string;
+    subAppId?: number;
+    procedureName?: string;
+    status: VideoStorageConfigStatus;
+    isDefault: boolean;
+    remark?: string;
+}
+
+export interface VideoStorageConfigTestResponse {
+    configId: number;
+    configName: string;
+    success: boolean;
+    message: string;
+}
+
 export interface GenerateWordDetailsPayload {
     configId?: number;
     word: string;
