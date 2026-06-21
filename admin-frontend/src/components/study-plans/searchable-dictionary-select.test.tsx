@@ -42,7 +42,7 @@ describe("SearchableDictionarySelect", () => {
 
         fireEvent.click(screen.getByRole("option", { name: "CET-4 核心词汇 1200 词" }));
 
-        expect(screen.getByRole("button", { name: "CET-4 核心词汇，1200 词" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "词书：CET-4 核心词汇，1200 词" })).toBeInTheDocument();
         expect(screen.queryByPlaceholderText("搜索词书名称")).not.toBeInTheDocument();
     });
 
@@ -68,6 +68,69 @@ describe("SearchableDictionarySelect", () => {
         expect(trigger).toHaveFocus();
     });
 
+    it("closes on Escape from non-input popup controls and returns focus to the trigger", () => {
+        render(() => <SelectorHarness />);
+        const trigger = screen.getByRole("button", { name: "选择词书" });
+
+        fireEvent.click(trigger);
+        fireEvent.input(screen.getByPlaceholderText("搜索词书名称"), { target: { value: "CET" } });
+        const clearButton = screen.getByRole("button", { name: "清空词书搜索" });
+        clearButton.focus();
+        fireEvent.keyDown(clearButton, { key: "Escape" });
+
+        expect(screen.queryByPlaceholderText("搜索词书名称")).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+
+        fireEvent.click(trigger);
+        const option = screen.getByRole("option", { name: "CET-4 核心词汇 1200 词" });
+        option.focus();
+        fireEvent.keyDown(option, { key: "Escape" });
+
+        expect(screen.queryByPlaceholderText("搜索词书名称")).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+    });
+
+    it("navigates options from the search input and selects the active option with Enter", () => {
+        render(() => <SelectorHarness />);
+
+        fireEvent.click(screen.getByRole("button", { name: "选择词书" }));
+        const searchInput = screen.getByPlaceholderText("搜索词书名称");
+        const activeOption = () => document.getElementById(searchInput.getAttribute("aria-activedescendant") || "");
+
+        expect(activeOption()).toHaveAccessibleName("CET-4 核心词汇 1200 词");
+        fireEvent.keyDown(searchInput, { key: "End" });
+        expect(activeOption()).toHaveAccessibleName("考研英语高频词 860 词");
+        fireEvent.keyDown(searchInput, { key: "Home" });
+        expect(activeOption()).toHaveAccessibleName("CET-4 核心词汇 1200 词");
+        fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+        expect(activeOption()).toHaveAccessibleName("考研英语高频词 860 词");
+        fireEvent.keyDown(searchInput, { key: "ArrowUp" });
+        expect(activeOption()).toHaveAccessibleName("CET-4 核心词汇 1200 词");
+        fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+        fireEvent.keyDown(searchInput, { key: "Enter" });
+
+        expect(screen.getByRole("button", { name: "词书：考研英语高频词，860 词" })).toBeInTheDocument();
+        expect(screen.queryByPlaceholderText("搜索词书名称")).not.toBeInTheDocument();
+    });
+
+    it("keeps listbox options out of the tab order", () => {
+        render(() => <SelectorHarness />);
+
+        fireEvent.click(screen.getByRole("button", { name: "选择词书" }));
+
+        for (const option of screen.getAllByRole("option")) {
+            expect(option).toHaveAttribute("tabindex", "-1");
+        }
+    });
+
+    it("explicitly labels the search combobox", () => {
+        render(() => <SelectorHarness />);
+
+        fireEvent.click(screen.getByRole("button", { name: "选择词书" }));
+
+        expect(screen.getByRole("combobox", { name: "搜索词书" })).toBeInTheDocument();
+    });
+
     it("disables selection when no dictionaries are available", () => {
         const onChange = vi.fn();
         render(() => <SearchableDictionarySelect dictionaries={[]} value="" onChange={onChange} />);
@@ -83,6 +146,6 @@ describe("SearchableDictionarySelect", () => {
         expect(option).toBeInTheDocument();
 
         fireEvent.click(option);
-        expect(screen.getByRole("button", { name: "未统计词书，0 词" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "词书：未统计词书，0 词" })).toBeInTheDocument();
     });
 });

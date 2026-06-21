@@ -97,4 +97,18 @@ describe("StudyPlansPage", () => {
             );
         });
     });
+
+    it("keeps the visible wordbook field purpose associated with the selected trigger", async () => {
+        render(() => <StudyPlansPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "选择词书" }));
+        fireEvent.click(screen.getByRole("option", { name: "CET-4 核心词汇 1200 词" }));
+
+        const trigger = screen.getByRole("button", { name: "词书：CET-4 核心词汇，1200 词" });
+        expect(trigger).toHaveAttribute("id", "study-plan-dictionary");
+        expect(screen.getByText("词书", { selector: "label" })).toHaveAttribute(
+            "for",
+            "study-plan-dictionary",
+        );
+    });
 });

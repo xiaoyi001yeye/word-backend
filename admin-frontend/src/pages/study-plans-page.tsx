@@ -181,8 +181,9 @@ export function StudyPlansPage() {
                                             />
                                         </div>
                                         <div class="space-y-2">
-                                            <Label>词书</Label>
+                                            <Label for="study-plan-dictionary">词书</Label>
                                             <SearchableDictionarySelect
+                                                id="study-plan-dictionary"
                                                 dictionaries={data().dictionaries}
                                                 value={form.dictionaryId}
                                                 onChange={(value) => setForm("dictionaryId", value)}
