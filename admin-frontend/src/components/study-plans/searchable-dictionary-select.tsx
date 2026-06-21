@@ -67,7 +67,10 @@ export function SearchableDictionarySelect(props: SearchableDictionarySelectProp
             <button
                 ref={triggerRef}
                 type="button"
-                class="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background/70 px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                class={
+                    "flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background/70 " +
+                    "px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                }
                 aria-expanded={open()}
                 aria-haspopup="listbox"
                 aria-label={
@@ -118,7 +121,10 @@ export function SearchableDictionarySelect(props: SearchableDictionarySelectProp
                         <Show when={keyword()}>
                             <button
                                 type="button"
-                                class="rounded-lg border border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                                class={
+                                    "rounded-lg border border-border px-3 text-xs text-muted-foreground " +
+                                    "hover:text-foreground"
+                                }
                                 aria-label="清空词书搜索"
                                 onClick={() => {
                                     setKeyword("");
@@ -148,8 +154,10 @@ export function SearchableDictionarySelect(props: SearchableDictionarySelectProp
                                         aria-label={`${dictionary.name} ${dictionary.wordCount || 0} 词`}
                                         class={
                                             String(dictionary.id) === props.value
-                                                ? "flex w-full items-center justify-between rounded-lg bg-primary/10 px-3 py-2.5 text-left text-sm text-primary"
-                                                : "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted/60"
+                                                ? "flex w-full items-center justify-between rounded-lg " +
+                                                  "bg-primary/10 px-3 py-2.5 text-left text-sm text-primary"
+                                                : "flex w-full items-center justify-between rounded-lg px-3 py-2.5 " +
+                                                  "text-left text-sm hover:bg-muted/60"
                                         }
                                         onClick={() => selectDictionary(dictionary)}
                                     >

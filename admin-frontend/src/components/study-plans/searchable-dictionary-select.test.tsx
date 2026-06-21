@@ -19,6 +19,17 @@ function SelectorHarness() {
     );
 }
 
+function MissingCountSelectorHarness() {
+    const [value, setValue] = createSignal("");
+    return (
+        <SearchableDictionarySelect
+            dictionaries={[{ id: 9, name: "未统计词书", wordCount: null }]}
+            value={value()}
+            onChange={setValue}
+        />
+    );
+}
+
 describe("SearchableDictionarySelect", () => {
     it("filters dictionary names case-insensitively and selects a result", async () => {
         render(() => <SelectorHarness />);
@@ -62,5 +73,16 @@ describe("SearchableDictionarySelect", () => {
         render(() => <SearchableDictionarySelect dictionaries={[]} value="" onChange={onChange} />);
 
         expect(screen.getByRole("button", { name: "暂无可选词书" })).toBeDisabled();
+    });
+
+    it("uses zero as the fallback for a missing word count", () => {
+        render(() => <MissingCountSelectorHarness />);
+
+        fireEvent.click(screen.getByRole("button", { name: "选择词书" }));
+        const option = screen.getByRole("option", { name: "未统计词书 0 词" });
+        expect(option).toBeInTheDocument();
+
+        fireEvent.click(option);
+        expect(screen.getByRole("button", { name: "未统计词书，0 词" })).toBeInTheDocument();
     });
 });
