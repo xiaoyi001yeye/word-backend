@@ -1,5 +1,6 @@
 import { createEffect, createResource, createSignal, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { Eye, EyeOff } from "lucide-solid";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ export function LoginPage() {
     const navigate = useNavigate();
     const [username, setUsername] = createSignal("");
     const [password, setPassword] = createSignal("");
+    const [passwordVisible, setPasswordVisible] = createSignal(false);
     const [submitting, setSubmitting] = createSignal(false);
     const [error, setError] = createSignal("");
     const [quote] = createResource(() => true, () => api.authQuote());
@@ -108,14 +110,28 @@ export function LoginPage() {
                                 </div>
                                 <div class="space-y-2">
                                     <Label for="password">密码</Label>
-                                    <Input
-                                        id="password"
-                                        type="password"
-                                        autocomplete="current-password"
-                                        placeholder="请输入密码"
-                                        value={password()}
-                                        onInput={(event) => setPassword(event.currentTarget.value)}
-                                    />
+                                    <div class="relative">
+                                        <Input
+                                            id="password"
+                                            type={passwordVisible() ? "text" : "password"}
+                                            autocomplete="current-password"
+                                            placeholder="请输入密码"
+                                            value={password()}
+                                            class="pr-12"
+                                            onInput={(event) => setPassword(event.currentTarget.value)}
+                                        />
+                                        <button
+                                            type="button"
+                                            class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            aria-label={passwordVisible() ? "隐藏密码" : "显示密码"}
+                                            aria-pressed={passwordVisible()}
+                                            onClick={() => setPasswordVisible((visible) => !visible)}
+                                        >
+                                            <Show when={passwordVisible()} fallback={<Eye class="h-4 w-4" aria-hidden="true" />}>
+                                                <EyeOff class="h-4 w-4" aria-hidden="true" />
+                                            </Show>
+                                        </button>
+                                    </div>
                                 </div>
                                 <Show when={error()}>
                                     <Alert class="border-destructive/30 bg-destructive/10 text-destructive">{error()}</Alert>
