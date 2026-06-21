@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { SearchableDictionarySelect } from "@/components/study-plans/searchable-dictionary-select";
 import { useAuth } from "@/features/auth/auth-context";
 import { api } from "@/lib/api";
 import { formatDate, formatPercent } from "@/lib/format";
@@ -172,21 +173,20 @@ export function StudyPlansPage() {
                                 <form class="grid gap-5" onSubmit={handleCreate}>
                                     <div class="grid gap-4 md:grid-cols-2">
                                         <div class="space-y-2">
-                                            <Label>计划名称</Label>
-                                            <Input value={form.name} onInput={(event) => setForm("name", event.currentTarget.value)} />
+                                            <Label for="study-plan-name">计划名称</Label>
+                                            <Input
+                                                id="study-plan-name"
+                                                value={form.name}
+                                                onInput={(event) => setForm("name", event.currentTarget.value)}
+                                            />
                                         </div>
                                         <div class="space-y-2">
                                             <Label>词书</Label>
-                                            <select
-                                                class="h-11 rounded-lg border border-input bg-background/70 px-3 text-sm"
+                                            <SearchableDictionarySelect
+                                                dictionaries={data().dictionaries}
                                                 value={form.dictionaryId}
-                                                onChange={(event) => setForm("dictionaryId", event.currentTarget.value)}
-                                            >
-                                                <option value="">选择词书</option>
-                                                <For each={data().dictionaries}>
-                                                    {(dictionary) => <option value={dictionary.id}>{dictionary.name}</option>}
-                                                </For>
-                                            </select>
+                                                onChange={(value) => setForm("dictionaryId", value)}
+                                            />
                                         </div>
                                     </div>
 
