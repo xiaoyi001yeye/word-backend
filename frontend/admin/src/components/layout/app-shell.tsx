@@ -4,6 +4,8 @@ import {
     Bot,
     BookCopy,
     CalendarRange,
+    Clapperboard,
+    Cloud,
     DatabaseZap,
     LayoutDashboard,
     LogOut,
@@ -39,6 +41,8 @@ export function AppShell(props: AppShellProps) {
             { href: "/ai-configs", label: "AI 配置", icon: Bot, roles: ["ADMIN"] },
             { href: "/classrooms", label: "班级管理", icon: School, roles: ["ADMIN", "TEACHER"] },
             { href: "/dictionaries", label: "词书资源", icon: BookCopy, roles: ["ADMIN", "TEACHER"] },
+            { href: "/videos", label: "视频资源", icon: Clapperboard, roles: ["ADMIN", "TEACHER"] },
+            { href: "/video-storage", label: "视频存储", icon: Cloud, roles: ["ADMIN"] },
             { href: "/study-plans", label: "学习计划", icon: CalendarRange, roles: ["ADMIN", "TEACHER"] },
             { href: "/imports", label: "辞书导入", icon: DatabaseZap, roles: ["ADMIN"] },
         ];

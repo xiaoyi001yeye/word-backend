@@ -6,6 +6,7 @@ import com.example.words.model.Dictionary;
 import com.example.words.model.Exam;
 import com.example.words.model.ResourceScopeType;
 import com.example.words.model.UserRole;
+import com.example.words.model.VideoAsset;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
@@ -143,5 +144,35 @@ public class AccessControlService {
         }
 
         throw new AccessDeniedException("Only the assigned student can submit this exam");
+    }
+
+    public void ensureCanViewVideo(AppUser actor, VideoAsset videoAsset) {
+        if (actor.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (actor.getRole() == UserRole.TEACHER) {
+            if (videoAsset.getScopeType() == ResourceScopeType.SYSTEM
+                    || actor.getId().equals(videoAsset.getOwnerUserId())
+                    || actor.getId().equals(videoAsset.getCreatedBy())) {
+                return;
+            }
+        }
+
+        throw new AccessDeniedException("You do not have access to this video");
+    }
+
+    public void ensureCanManageVideo(AppUser actor, VideoAsset videoAsset) {
+        if (actor.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (actor.getRole() == UserRole.TEACHER
+                && videoAsset.getScopeType() != ResourceScopeType.SYSTEM
+                && actor.getId().equals(videoAsset.getOwnerUserId())) {
+            return;
+        }
+
+        throw new AccessDeniedException("You do not have permission to manage this video");
     }
 }
