@@ -32,6 +32,7 @@ import type {
   StudentDashboard,
   StudentDashboardRecordPayload,
   StudentStudyPlanSummary,
+  StudentWordMemory,
   StudyPlan,
   StudyPlanOverview,
   StudyPlanStudentAttention,
@@ -452,6 +453,19 @@ export const studentDashboardApi = {
     {
       method: 'POST',
       body: JSON.stringify(payload),
+    },
+  ),
+};
+
+export const studentWordMemoryApi = {
+  list: () => fetchJson<StudentWordMemory[]>(`${API_BASE}/students/me/word-memory`),
+  listWrongWords: () => fetchJson<StudentWordMemory[]>(`${API_BASE}/students/me/wrong-words`),
+  listFavoriteWords: () => fetchJson<StudentWordMemory[]>(`${API_BASE}/students/me/favorite-words`),
+  updateFavorite: (metaWordId: number, favorite: boolean) => fetchJson<StudentWordMemory>(
+    `${API_BASE}/students/me/word-memory/${metaWordId}/favorite`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ favorite }),
     },
   ),
 };

@@ -1,0 +1,133 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-AI-0001
+  version: "1.0.0"
+  title: 用户级 AI 配置与内容生成
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: AI
+    domain_path: ai
+    frozen_slug: ai-config-generation
+    canonical_path: aifr/requirements/items/ai/REQ-AI-0001--ai-config-generation/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [LEX]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, security]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 AI 配置、网关和生成服务代码反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 用户配置自己的 AI Provider 后，可进行对话、阅读生成和单词详情生成。
+    business_value: 用可替换模型提升内容生产效率，并把密钥隔离到用户级配置。
+  scope:
+    in: [AI 配置增删改查, 启停状态, 默认配置, 配置测试, Chat Completions 调用, 阅读生成, 词条详情生成]
+    out: [多供应商适配差异, 用量计费, 流式输出, 团队共享配置]
+  actors:
+    primary: [admin, teacher, student]
+    secondary: [external_ai_provider]
+  domain_terms:
+    ai_config: 用户私有的 Provider、URL、模型、密钥、状态和默认标记配置。
+    enabled_config: status 为 ENABLED 的可调用配置。
+    default_config: 用户未显式传 configId 时使用的配置。
+  preconditions:
+    - 调用者已认证且角色为 ADMIN、TEACHER 或 STUDENT。
+    - 内容生成需要显式可用 configId 或用户默认 ENABLED 配置。
+  rules:
+    - id: RULE-001
+      description: 用户只能查看和管理自己的 AI 配置。
+      invariant: ai_config.user_id = actor.id
+    - id: RULE-002
+      description: 创建配置时同一用户的 providerName、apiUrl、modelName 组合必须唯一。
+      invariant: unique(user_id, provider_name, api_url, model_name)
+    - id: RULE-003
+      description: API Key 必须加密存储并只返回脱敏值。
+      invariant: api_key_encrypted_present and api_key_masked_present and raw_key_not_returned
+    - id: RULE-004
+      description: 默认配置必须为 ENABLED；禁用配置时必须取消默认。
+      invariant: is_default implies status = ENABLED
+    - id: RULE-005
+      description: AI 网关应调用兼容 /chat/completions 的接口，并从 choices[0].message.content 提取非空回复。
+      invariant: provider_response_valid implies content_not_blank
+  scenarios:
+    - id: SCN-001
+      name: 首个启用配置自动成为默认
+      given: [用户没有任何 AI 配置]
+      when: [创建 ENABLED 配置且 isDefault 未显式为 false]
+      then: [保存为默认配置]
+    - id: SCN-002
+      name: 调用词条详情生成
+      given: [用户有 ENABLED 配置]
+      when: [调用 POST /api/ai/generate-word-details]
+      then: [返回 GenerateWordDetailsResponse 或 Provider 错误被转换为 BadGateway]
+  acceptance_criteria:
+    - id: AC-001
+      text: AI 配置 CRUD 必须限制在当前用户范围内。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 配置保存不得泄露明文 API Key。
+      verifies: [RULE-003]
+    - id: AC-003
+      text: 默认配置和禁用状态必须保持一致。
+      verifies: [RULE-004]
+    - id: AC-004
+      text: Provider 空响应、无 choices 或无 content 必须转换为网关错误。
+      verifies: [RULE-005]
+  interfaces:
+    apis:
+      - method: GET
+        path: "/api/ai-configs"
+        request_schema: status,providerName
+        response_schema: List<AiConfigResponse>
+      - method: POST
+        path: "/api/ai-configs"
+        request_schema: CreateAiConfigRequest
+        response_schema: AiConfigResponse
+      - method: PATCH
+        path: "/api/ai-configs/{id}/default"
+        request_schema: none
+        response_schema: AiConfigResponse
+      - method: POST
+        path: "/api/ai/chat"
+        request_schema: AiChatRequest
+        response_schema: AiChatResponse
+      - method: POST
+        path: "/api/ai/generate-word-details"
+        request_schema: GenerateWordDetailsRequest
+        response_schema: GenerateWordDetailsResponse
+  trace:
+    expected_code:
+      - controller: AiConfigController
+      - controller: AiController
+      - service: AiConfigService
+      - service: AiGatewayService
+      - service: AiGenerationService
+      - service: AiConversationService
+      - service: AiConfigCryptoService
+    expected_tests:
+      - AiConfigServiceTest
+      - AiGatewayServiceTest
+      - AiGenerationServiceTest
+      - AiConversationServiceTest
+      - AiConfigCryptoServiceTest
+  risk:
+    level: high
+    reasons: [涉及用户密钥、外部网络调用和生成内容质量]
+  non_functional:
+    security: [API Key 加密存储、脱敏展示、不得记录明文]
+    reliability: [Provider 超时、4xx/5xx 和响应结构异常必须转为明确错误]
+  open_questions:
+    - 支持哪些 Provider 的 URL 格式和模型能力尚未形成产品约束。
+    - AI 生成内容是否需要审核或缓存未在代码中体现。

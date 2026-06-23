@@ -4,7 +4,7 @@ import type { PronunciationAccent } from './student-workspace-state';
 export interface PlaybackDependencies {
   cancel: () => void;
   playAudio: (url: string) => Promise<void>;
-  speak: (text: string, accent: PronunciationAccent, rate: number) => Promise<void>;
+  playPronunciation: (text: string, accent: PronunciationAccent) => Promise<void>;
 }
 
 export type PlaybackStateListener = (activeText: string | null) => void;
@@ -29,7 +29,7 @@ export class SyllablePlaybackController {
   ) {
     const generation = this.begin();
     onState(segment.text);
-    await this.playUnit(segment, accent, 0.75);
+    await this.playUnit(segment, accent);
     if (generation === this.generation) {
       onState(null);
     }
@@ -42,7 +42,7 @@ export class SyllablePlaybackController {
   ) {
     const generation = this.begin();
     onState(word);
-    await this.dependencies.speak(word, accent, 0.9);
+    await this.dependencies.playPronunciation(word, accent);
     if (generation === this.generation) {
       onState(null);
     }
@@ -60,13 +60,13 @@ export class SyllablePlaybackController {
         return;
       }
       onState(segment.text);
-      await this.playUnit(segment, accent, 0.65);
+      await this.playUnit(segment, accent);
     }
     if (generation !== this.generation) {
       return;
     }
     onState(word);
-    await this.dependencies.speak(word, accent, 0.55);
+    await this.dependencies.playPronunciation(word, accent);
     if (generation === this.generation) {
       onState(null);
     }
@@ -80,7 +80,6 @@ export class SyllablePlaybackController {
   private async playUnit(
     segment: SyllableSegment,
     accent: PronunciationAccent,
-    speechRate: number,
   ) {
     const audioUrl = accent === 'US' ? segment.usAudioUrl : segment.ukAudioUrl;
     if (audioUrl) {
@@ -88,9 +87,9 @@ export class SyllablePlaybackController {
         await this.dependencies.playAudio(audioUrl);
         return;
       } catch {
-        // A broken remote clip should not block the browser voice fallback.
+        // A broken segment clip should not block the dictionary word audio fallback.
       }
     }
-    await this.dependencies.speak(segment.text, accent, speechRate);
+    await this.dependencies.playPronunciation(segment.text, accent);
   }
 }

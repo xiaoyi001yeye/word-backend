@@ -1,0 +1,126 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-IMP-0001
+  version: "1.0.0"
+  title: books 目录批量导入流水
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: IMP
+    domain_path: imp
+    frozen_slug: books-import-pipeline
+    canonical_path: aifr/requirements/items/imp/REQ-IMP-0001--books-import-pipeline/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [DICT, LEX]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, content]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 BooksImportController 和 BooksImportJobService 反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 管理员可以从 books 目录批量导入 CSV 词书，查看进度、处理冲突并发布到正式词库。
+    business_value: 降低大规模词库初始化和更新成本，并保留导入批次可观测性。
+  scope:
+    in: [创建批次, 扫描暂存, 自动合并, 冲突查询和解决, 发布, 废弃, 删除批次, 文件分页, SSE 进度]
+    out: [前端冲突编辑器细节, 外部文件上传, 导入回滚策略]
+  actors:
+    primary: [admin]
+    secondary: [books_import_job_service, books_import_progress_emitter, postgres]
+  domain_terms:
+    import_batch: 一次 books 目录导入任务，id 为 UUID 字符串。
+    staging: 将文件内容解析到候选和冲突表但尚未发布的阶段。
+    conflict: 字段冲突或多来源冲突，需要自动或人工决议。
+    publish: 将已决议候选写入正式 dictionaries、meta_words 和 dictionary_words。
+  preconditions:
+    - 调用者为 ADMIN。
+    - books 目录存在可读取的 CSV 文件。
+  rules:
+    - id: RULE-001
+      description: 只有管理员可创建、查看、推进或删除导入批次。
+      invariant: books_import_api requires role = ADMIN
+    - id: RULE-002
+      description: 批次必须记录状态、文件数、行数、成功失败数、候选数、冲突数和错误信息。
+      invariant: import_job_progress_fields_updated_during_pipeline
+    - id: RULE-003
+      description: 自动合并只能从可合并暂存状态推进，存在未解决冲突时不得直接发布。
+      invariant: publish_allowed implies unresolved_conflict_count = 0
+    - id: RULE-004
+      description: 冲突解决必须记录 resolution、source 和 resolvedBy。
+      invariant: resolved_conflict has resolution and resolved_by
+    - id: RULE-005
+      description: SSE 订阅应向客户端推送批次进度事件。
+      invariant: subscribe(batch_id) returns text_event_stream
+  scenarios:
+    - id: SCN-001
+      name: 创建导入批次
+      given: [管理员已登录, books 目录包含 CSV]
+      when: [调用 POST /api/books-import/batches]
+      then: [返回 202 和 BooksImportJobResponse, 后台开始导入]
+    - id: SCN-002
+      name: 人工解决冲突后发布
+      given: [批次存在 PENDING_REVIEW 冲突]
+      when: [管理员调用 resolve conflict 后调用 publish]
+      then: [批次进入发布流程并最终记录发布结果]
+  acceptance_criteria:
+    - id: AC-001
+      text: 批次列表、详情、文件、冲突和事件接口必须全部限制为 ADMIN。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 任何批次状态变化都必须反映在 BooksImportJobResponse 中。
+      verifies: [RULE-002]
+    - id: AC-003
+      text: 未解决冲突不得被静默发布。
+      verifies: [RULE-003]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/books-import/batches"
+        request_schema: none
+        response_schema: BooksImportJobResponse
+      - method: GET
+        path: "/api/books-import/batches/{batchId}/conflicts"
+        request_schema: conflictType,resolved
+        response_schema: List<BooksImportConflictResponse>
+      - method: POST
+        path: "/api/books-import/batches/{batchId}/conflicts/{conflictId}/resolve"
+        request_schema: ResolveBooksImportConflictRequest
+        response_schema: BooksImportConflictResponse
+      - method: POST
+        path: "/api/books-import/batches/{batchId}/publish"
+        request_schema: none
+        response_schema: BooksImportJobResponse
+      - method: GET
+        path: "/api/books-import/batches/{batchId}/events"
+        request_schema: none
+        response_schema: text/event-stream
+  trace:
+    expected_code:
+      - controller: BooksImportController
+      - controller: DictionaryController#importDictionaries
+      - controller: MetaWordController#importFromBooks
+      - service: BooksImportJobService
+      - service: BooksImportProgressEmitterService
+      - model: BooksImportJob
+    expected_tests:
+      - BooksImportJobServiceTest
+  risk:
+    level: high
+    reasons: [批量写入词库，错误发布会污染正式数据]
+  non_functional:
+    reliability: [长任务必须可查询进度，失败批次应记录 errorMessage]
+    auditability: [冲突决议和发布结果应能回溯到批次和操作者]
+  open_questions:
+    - 导入任务并发策略、锁粒度和重复启动用户体验需要产品确认。
+    - 发布失败后的部分写入回滚或补偿策略未形成显式需求。

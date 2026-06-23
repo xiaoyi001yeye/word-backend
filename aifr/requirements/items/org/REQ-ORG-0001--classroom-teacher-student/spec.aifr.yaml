@@ -1,0 +1,119 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-ORG-0001
+  version: "1.0.0"
+  title: 班级与师生关系管理
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: ORG
+    domain_path: org
+    frozen_slug: classroom-teacher-student
+    canonical_path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [AUTH, DICT, STUDY]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 Classroom 和 TeacherStudent 代码反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 管理员和教师可以维护班级、学生成员、师生关系和班级辞书。
+    business_value: 建立教学组织结构，让辞书分配和学习计划能按班级落地。
+  scope:
+    in: [班级列表和分页, 创建更新删除班级, 班级学生维护, 师生关系维护, 班级辞书维护]
+    out: [班级归档, 多教师共管班级, 学生自助加入班级]
+  actors:
+    primary: [admin, teacher]
+    secondary: [student]
+  domain_terms:
+    classroom: 由 teacherId 拥有的教学班级。
+    classroom_member: 学生加入班级的关系。
+    teacher_student_relation: 管理员显式维护的教师负责学生关系。
+  preconditions:
+    - 用户已认证。
+    - 教师只能操作自己可见或自己管理的班级。
+  rules:
+    - id: RULE-001
+      description: 管理员可查看和管理全部班级；教师只可查看和管理自己 teacherId 下的班级。
+      invariant: teacher_classroom_access iff classroom.teacher_id = actor.id
+    - id: RULE-002
+      description: 管理员可维护任意教师的学生关系；教师只能查询自己的学生。
+      invariant: teacher_student_assignment_mutation requires ADMIN
+    - id: RULE-003
+      description: 教师给学生分配辞书或创建学习计划时，学生必须属于教师负责范围。
+      invariant: assign_to_student_by_teacher requires teacher_responsible_for_student
+    - id: RULE-004
+      description: 班级辞书分配必须检查调用者对班级和辞书的管理权限。
+      invariant: classroom_dictionary_assignment requires can_manage_classroom and can_assign_dictionary
+  scenarios:
+    - id: SCN-001
+      name: 教师查看自己的班级分页
+      given: [teacherId=7 拥有两个班级]
+      when: [调用 GET /api/classrooms/page]
+      then: [仅返回 teacherId=7 可见班级]
+    - id: SCN-002
+      name: 管理员建立师生关系
+      given: [存在 teacherId=7 和 studentId=20]
+      when:
+        - "调用 POST /api/teachers/{teacherId}/students/{studentId}"
+      then: [创建关系，返回 204]
+  acceptance_criteria:
+    - id: AC-001
+      text: 班级查询和写入接口必须按管理员或教师所有权过滤。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 师生关系写入接口必须限制为 ADMIN。
+      verifies: [RULE-002]
+    - id: AC-003
+      text: 基于班级的辞书和学习计划操作必须复用负责学生校验。
+      verifies: [RULE-003, RULE-004]
+  interfaces:
+    apis:
+      - method: GET
+        path: "/api/classrooms/page"
+        request_schema: page,size,keyword,sortBy,sortDir
+        response_schema: Page<ClassroomResponse>
+      - method: POST
+        path: "/api/classrooms"
+        request_schema: CreateClassroomRequest
+        response_schema: ClassroomResponse
+      - method: POST
+        path: "/api/classrooms/{id}/students/{studentId}"
+        request_schema: none
+        response_schema: none
+      - method: POST
+        path: "/api/classrooms/{id}/dictionaries"
+        request_schema: AssignDictionariesRequest
+        response_schema: assignedCount
+      - method: GET
+        path: "/api/teachers/me/students/page"
+        request_schema: page,size,name
+        response_schema: Page<UserResponse>
+  trace:
+    expected_code:
+      - controller: ClassroomController
+      - controller: TeacherController
+      - service: ClassroomService
+      - service: TeacherStudentService
+      - service: AccessControlService
+    expected_tests: []
+  risk:
+    level: high
+    reasons: [组织边界是辞书分配和学习计划权限的基础]
+  non_functional:
+    security: [教师不得枚举或操作非自己负责学生和非自己班级]
+  open_questions:
+    - 班级删除是否应级联删除成员、辞书分配和学习计划关联，目前需从数据库约束确认。

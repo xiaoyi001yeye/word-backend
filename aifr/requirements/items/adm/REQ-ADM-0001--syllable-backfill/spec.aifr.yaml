@@ -1,0 +1,89 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-ADM-0001
+  version: "1.0.0"
+  title: 管理员音节数据补全
+  type: functional
+  status: draft
+  priority: medium
+  identity:
+    primary_domain: ADM
+    domain_path: adm
+    frozen_slug: syllable-backfill
+    canonical_path: aifr/requirements/items/adm/REQ-ADM-0001--syllable-backfill/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [LEX, STUDY]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 SyllableBackfillController 和服务测试反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 管理员可以为已发布学习计划涉及的单词补全音节详情。
+    business_value: 提升学生学习时的发音拆分展示完整度。
+  scope:
+    in: [管理员触发补全, limit 参数, 返回成功失败统计]
+    out: [定时任务, 全量后台队列, 人工编辑音节]
+  actors:
+    primary: [admin]
+    secondary: [syllable_backfill_service, meta_word_repository]
+  domain_terms:
+    syllable_detail: 存储在 meta_words.syllable_detail JSONB 中的音节拆分数据。
+    published_plan_words: 已发布学习计划关联辞书中的单词集合。
+  preconditions:
+    - 调用者为 ADMIN。
+    - 存在已发布学习计划和缺少 syllableDetail 的元单词。
+  rules:
+    - id: RULE-001
+      description: 音节补全接口仅管理员可调用。
+      invariant: syllable_backfill requires role = ADMIN
+    - id: RULE-002
+      description: limit 默认 200，服务应规范化 requestedLimit 后限制处理数量。
+      invariant: processed_count <= normalized_limit
+    - id: RULE-003
+      description: 补全范围应限定在已发布学习计划涉及的单词。
+      invariant: candidate_words subset_of published_plan_dictionary_words
+  scenarios:
+    - id: SCN-001
+      name: 管理员触发默认数量补全
+      given: [管理员已登录]
+      when: [调用 POST /api/admin/syllables/backfill]
+      then: [服务最多处理默认 limit=200 的候选词并返回 SyllableBackfillResponse]
+  acceptance_criteria:
+    - id: AC-001
+      text: 非管理员不得调用音节补全。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 响应必须包含补全数量和失败信息，便于后台判断执行结果。
+      verifies: [RULE-002]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/admin/syllables/backfill"
+        request_schema: limit
+        response_schema: SyllableBackfillResponse
+  trace:
+    expected_code:
+      - controller: SyllableBackfillController
+      - service: SyllableBackfillService
+      - dto: SyllableBackfillResponse
+    expected_tests:
+      - SyllableBackfillServiceTest
+  risk:
+    level: medium
+    reasons: [批量更新内容字段，错误补全会影响展示但不改变学习进度]
+  non_functional:
+    reliability: [单个词补全失败应记录失败项并继续处理其他词]
+  open_questions:
+    - 音节拆分算法来源和质量验收标准需要产品或内容团队确认。

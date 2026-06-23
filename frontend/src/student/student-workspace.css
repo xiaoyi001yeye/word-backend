@@ -100,7 +100,7 @@
 .status-pill--green { border-color: rgba(57, 118, 90, 0.28); color: var(--green); background: rgba(57, 118, 90, 0.09); }
 .status-pill--blue { border-color: rgba(36, 71, 96, 0.28); color: var(--blue); background: rgba(36, 71, 96, 0.08); }
 
-.mission, .grouped-list, .study-card, .dictionary-card, .profile-panel, .library-empty, .study-complete {
+.mission, .grouped-list, .study-card, .dictionary-card, .memory-list, .profile-panel, .library-empty, .study-complete {
   border: 1px solid var(--paper-line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
@@ -268,9 +268,17 @@
 .word-chip-list { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; }
 .word-chip-list button { min-height: 36px; padding: 0 11px; border: 1px solid var(--paper-line); border-radius: 999px; color: var(--muted); background: #fff; cursor: pointer; }
 .word-chip-list button.is-active { border-color: var(--blue); color: #fff; background: var(--blue); }
+.memory-list { margin-top: 22px; padding: 18px; }
+.memory-chip-list { margin-top: 16px; }
 .library-word-detail { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--paper-line); }
-.library-word-detail h3 { font-size: 38px; text-align: center; overflow-wrap: anywhere; }
+.library-word-detail__heading { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.library-word-detail h3 { min-width: 0; font-size: 38px; text-align: center; overflow-wrap: anywhere; }
 .library-word-detail > p:not(.phonetic) { font-size: 17px; line-height: 1.6; }
+.favorite-toggle { display: inline-flex; width: 42px; height: 42px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid rgba(170, 81, 45, 0.2); border-radius: 8px; color: var(--brown); background: rgba(255, 255, 255, 0.82); cursor: pointer; }
+.favorite-toggle.is-active { color: #fff; background: var(--brown-deep); }
+.favorite-toggle:disabled { cursor: not-allowed; opacity: 0.6; }
+.memory-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.memory-stats span { min-height: 34px; padding: 8px 6px; border: 1px solid rgba(37, 95, 122, 0.14); border-radius: 8px; color: var(--blue); background: rgba(37, 95, 122, 0.06); font-size: 13px; font-weight: 700; text-align: center; }
 .library-empty, .study-complete { margin-top: 22px; padding: 34px 20px; text-align: center; }
 .library-empty svg { color: var(--blue); }
 .library-empty h2, .study-complete h1 { margin-top: 12px; font-size: 28px; }

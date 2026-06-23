@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PlayCircle, SpeakerHigh } from '@phosphor-icons/react';
 import type { SyllableDetail } from '../types';
 import { SyllablePlaybackController } from './syllable-playback';
 import type { PronunciationAccent } from './student-workspace-state';
+import { WordPronunciationAudioService } from './word-pronunciation';
 
 interface SyllableReaderProps {
   word: string;
@@ -21,41 +22,47 @@ export function SyllableReader({ word, detail, onInteraction }: SyllableReaderPr
   const [playing, setPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const controller = useMemo(() => new SyllablePlaybackController({
-    cancel: () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      window.speechSynthesis?.cancel();
-      setPlaying(null);
-    },
-    playAudio: (url) => new Promise<void>((resolve, reject) => {
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
-        audioRef.current = null;
-        resolve();
-      };
-      audio.onerror = () => {
-        audioRef.current = null;
-        reject(new Error('Audio playback failed'));
-      };
-      void audio.play().catch(reject);
-    }),
-    speak: (text, selectedAccent, rate) => new Promise<void>((resolve, reject) => {
-      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
-        reject(new Error('Speech synthesis is unavailable'));
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = selectedAccent === 'UK' ? 'en-GB' : 'en-US';
-      utterance.rate = rate;
-      utterance.onend = () => resolve();
-      utterance.onerror = () => reject(new Error('Speech synthesis failed'));
-      window.speechSynthesis.speak(utterance);
-    }),
+  const playAudio = useCallback((url: string) => new Promise<void>((resolve, reject) => {
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => {
+      audioRef.current = null;
+      resolve();
+    };
+    audio.onerror = () => {
+      audioRef.current = null;
+      reject(new Error('Audio playback failed'));
+    };
+    void audio.play().catch((error: unknown) => {
+      audioRef.current = null;
+      reject(error);
+    });
   }), []);
+
+  const controller = useMemo(() => {
+    const pronunciationService = new WordPronunciationAudioService({
+      fetchJson: async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Pronunciation lookup failed');
+        }
+        return response.json() as Promise<unknown>;
+      },
+      playAudio,
+    });
+
+    return new SyllablePlaybackController({
+      cancel: () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        setPlaying(null);
+      },
+      playAudio,
+      playPronunciation: (text, selectedAccent) => pronunciationService.playWord(text, selectedAccent),
+    });
+  }, [playAudio]);
 
   useEffect(() => () => controller.cancel(), [controller]);
 

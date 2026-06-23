@@ -1,0 +1,56 @@
+domains:
+  - code: AUTH
+    path: auth
+    name: Authentication And User Access
+    description: 登录、登出、当前用户、用户管理、角色与对象级访问控制
+    id_number_width: 4
+  - code: DICT
+    path: dict
+    name: Dictionary
+    description: 辞书创建、可见性、分配、删除和词数统计
+    id_number_width: 4
+  - code: LEX
+    path: lex
+    name: Lexical Data
+    description: 元单词、辞书词条、词条导入、AI 生成词条和音节字段
+    id_number_width: 4
+  - code: TAG
+    path: tag
+    name: Tagging
+    description: 辞书章节标签树和词条章节归类
+    id_number_width: 4
+  - code: IMP
+    path: imp
+    name: Books Import
+    description: books 目录批量导入、暂存、冲突解决、发布和 SSE 进度
+    id_number_width: 4
+  - code: ORG
+    path: org
+    name: Classroom Organization
+    description: 班级、师生关系、班级成员和班级辞书分配
+    id_number_width: 4
+  - code: STUDY
+    path: study
+    name: Study Plan
+    description: 学习计划、每日任务、学习记录、进度、专注度统计
+    id_number_width: 4
+  - code: EXAM
+    path: exam
+    name: Exam
+    description: 基于辞书的四选一测试、提交、评分和历史
+    id_number_width: 4
+  - code: MEM
+    path: mem
+    name: Student Word Memory
+    description: 学生单词记忆盒、错词、收藏、复习日期和记忆事件
+    id_number_width: 4
+  - code: AI
+    path: ai
+    name: AI Assistance
+    description: 用户级 AI 配置、模型调用、对话、阅读和词条生成
+    id_number_width: 4
+  - code: ADM
+    path: adm
+    name: Admin Maintenance
+    description: 后台维护任务和数据补全工具
+    id_number_width: 4

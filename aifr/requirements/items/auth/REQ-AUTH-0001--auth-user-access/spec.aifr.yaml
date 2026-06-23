@@ -1,0 +1,127 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-AUTH-0001
+  version: "1.0.0"
+  title: 认证、用户管理与访问控制
+  type: functional
+  status: draft
+  priority: critical
+  identity:
+    primary_domain: AUTH
+    domain_path: auth
+    frozen_slug: auth-user-access
+    canonical_path: aifr/requirements/items/auth/REQ-AUTH-0001--auth-user-access/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, security]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从当前认证、用户和访问控制代码反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 用户登录后按角色访问自己的学习、教学或管理功能。
+    business_value: 保护学习数据、教学资源和后台管理入口，保证多角色协作边界清晰。
+  scope:
+    in: [登录登出, 当前用户资料, 名言获取, 管理员用户管理, 角色状态维护, 对象级访问控制]
+    out: [自助注册, 密码重置, 第三方 OAuth, 多租户组织边界]
+  actors:
+    primary: [admin, teacher, student]
+    secondary: [spring_security, jwt_service, auth_cookie_service, famous_quote_service]
+  domain_terms:
+    admin: 拥有全局管理权限的用户角色。
+    teacher: 可管理自己学生、班级、非系统辞书和学习计划的用户角色。
+    student: 只能访问被分配内容和自己的学习记录的用户角色。
+    auth_cookie: 登录成功后由后端设置的认证 Cookie。
+  preconditions:
+    - 用户数据已存在于 users 表，且密码哈希可由认证管理器校验。
+    - 安全过滤器能从 JWT 或认证 Cookie 建立当前用户上下文。
+  rules:
+    - id: RULE-001
+      description: 登录成功必须返回 JWT、用户信息和随机名言，并刷新用户 lastLoginAt。
+      invariant: login_success implies token_present and user_present and last_login_at_updated
+    - id: RULE-002
+      description: 登出必须清除认证 Cookie 并返回 204。
+      invariant: logout_response_status = 204 and set_cookie_clears_auth
+    - id: RULE-003
+      description: 管理员可创建、分页查询、按角色查询、修改角色和修改状态；非管理员不得执行这些管理动作。
+      invariant: user_management_write requires role = ADMIN
+    - id: RULE-004
+      description: 普通用户只能查看自己的用户资料，管理员可查看任意用户资料。
+      invariant: get_user_allowed iff actor_role = ADMIN or actor_id = target_user_id
+    - id: RULE-005
+      description: 新建用户时 username 必须 trim 后小写化且唯一，密码必须加密存储。
+      invariant: created_user.username = lower(trim(input.username)) and password_hash != raw_password
+  scenarios:
+    - id: SCN-001
+      name: 用户登录成功
+      given: [存在 ACTIVE 用户, 输入用户名密码正确]
+      when: [客户端调用 POST /api/auth/login]
+      then: [返回 LoginResponse, 设置认证 Cookie, 用户 lastLoginAt 被更新]
+    - id: SCN-002
+      name: 学生读取他人资料被拒绝
+      given: [当前用户角色为 STUDENT, targetUserId 不是当前用户 id]
+      when:
+        - "客户端调用 GET /api/users/{id}"
+      then: [访问控制拒绝请求]
+  acceptance_criteria:
+    - id: AC-001
+      text: 登录接口成功时必须同时提供 token、用户对象和 quote。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 管理员用户管理接口必须受 ADMIN 角色限制。
+      verifies: [RULE-003]
+    - id: AC-003
+      text: 用户资料读取必须满足管理员或本人条件。
+      verifies: [RULE-004]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/auth/login"
+        request_schema: LoginRequest
+        response_schema: LoginResponse
+      - method: POST
+        path: "/api/auth/logout"
+        request_schema: none
+        response_schema: none
+      - method: GET
+        path: "/api/auth/me"
+        request_schema: none
+        response_schema: UserResponse
+      - method: GET
+        path: "/api/users/page"
+        request_schema: page,size,role,name
+        response_schema: Page<UserResponse>
+      - method: PATCH
+        path: "/api/users/{id}/role"
+        request_schema: UpdateUserRoleRequest
+        response_schema: UserResponse
+  trace:
+    expected_code:
+      - controller: AuthController
+      - controller: UserController
+      - service: AuthService
+      - service: UserService
+      - service: AccessControlService
+      - security: JwtAuthenticationFilter
+    expected_tests:
+      - AuthServiceTest
+  risk:
+    level: critical
+    reasons: [涉及身份认证、角色授权和用户数据隔离]
+  non_functional:
+    security: [不得记录明文密码或 token, 密码必须哈希存储, 对象级访问控制必须在服务入口前执行]
+    auditability: [登录时间应保留为 lastLoginAt]
+    reliability: [无效用户和越权请求必须返回一致的错误语义]
+  open_questions:
+    - 是否需要账号状态 DISABLED 在认证阶段禁止登录的明确产品验收？
+    - Cookie 的 SameSite、Domain、过期时间和刷新策略是否需要单独成文？

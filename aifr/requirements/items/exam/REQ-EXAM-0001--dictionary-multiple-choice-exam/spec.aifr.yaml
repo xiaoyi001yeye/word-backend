@@ -1,0 +1,125 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-EXAM-0001
+  version: "1.0.0"
+  title: 辞书四选一测试
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: EXAM
+    domain_path: exam
+    frozen_slug: dictionary-multiple-choice-exam
+    canonical_path: aifr/requirements/items/exam/REQ-EXAM-0001--dictionary-multiple-choice-exam/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [DICT, AUTH]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, product]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 ExamController、ExamService 和测试反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 教师给学生创建基于辞书的选择题测试，学生提交后查看成绩和答案。
+    business_value: 提供阶段性检测，帮助教师和学生评估词汇掌握情况。
+  scope:
+    in: [创建考试, 四选项生成, 答案提交, 分数计算, 结果查看, 历史查询, 考试访问控制]
+    out: [限时考试, 主观题, 重考策略, 错题自动入库策略]
+  actors:
+    primary: [teacher, student]
+    secondary: [admin]
+  domain_terms:
+    exam: 指向一个辞书和目标学生的测试。
+    exam_question: 一个单词题，包含 A/B/C/D 四个释义选项和正确选项。
+    distractor: 从全局元单词可用释义中选取的干扰项。
+  preconditions:
+    - 创建考试者为 ADMIN 或 TEACHER。
+    - 目标辞书存在且对创建者可见。
+    - 目标学生存在且教师对该学生负责。
+  rules:
+    - id: RULE-001
+      description: 创建考试时只能从目标辞书中有可用释义或翻译的元单词抽题。
+      invariant: selected_questions subset_of dictionary_words_with_usable_meaning
+    - id: RULE-002
+      description: 每道题必须有四个互不重复的选项，正确选项来自该单词释义。
+      invariant: option_count = 4 and unique_option_texts and correct_option_in_options
+    - id: RULE-003
+      description: 当辞书可抽题数量不足或全局可用释义不足四个时，创建考试必须失败。
+      invariant: create_exam_allowed implies eligible_words >= question_count and unique_meanings >= 4
+    - id: RULE-004
+      description: 提交答案时 questionId 必须属于该考试，selectedOption 必须为 A/B/C/D，且不得重复答同一题。
+      invariant: submit_answers_validated_against_exam_questions
+    - id: RULE-005
+      description: 成绩按 correctCount / totalQuestions * 100 四舍五入计算，提交后状态变为 SUBMITTED。
+      formula: score = round(correct_count * 100 / total_questions)
+  scenarios:
+    - id: SCN-001
+      name: 创建两题四选一考试
+      given: [辞书有 3 个可用单词, 全局有至少 4 个唯一释义]
+      when: [调用 POST /api/exams questionCount=2]
+      then: [生成 2 道题，每题 4 个唯一选项]
+    - id: SCN-002
+      name: 提交考试计算 50 分
+      given: [考试有 2 题, 用户答对 1 题]
+      when:
+        - "调用 POST /api/exams/{examId}/submit"
+      then: [answeredCount=2, correctCount=1, score=50, status=SUBMITTED]
+  acceptance_criteria:
+    - id: AC-001
+      text: 创建考试必须满足题目数量和四选项生成约束。
+      verifies: [RULE-001, RULE-002, RULE-003]
+    - id: AC-002
+      text: 提交接口必须拒绝重复 questionId、非法选项和非本考试题目。
+      verifies: [RULE-004]
+    - id: AC-003
+      text: 分数、正确数、答题数和提交时间必须持久化。
+      verifies: [RULE-005]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/exams"
+        request_schema: CreateExamRequest
+        response_schema: ExamResponse
+      - method: GET
+        path: "/api/exams/{examId}"
+        request_schema: none
+        response_schema: ExamResponse
+      - method: POST
+        path: "/api/exams/{examId}/submit"
+        request_schema: SubmitExamRequest
+        response_schema: SubmitExamResponse
+      - method: GET
+        path: "/api/exams/{examId}/result"
+        request_schema: none
+        response_schema: SubmitExamResponse
+      - method: GET
+        path: "/api/exams/history"
+        request_schema: dictionaryId?
+        response_schema: List<ExamHistoryItemDto>
+  trace:
+    expected_code:
+      - controller: ExamController
+      - service: ExamService
+      - service: AccessControlService
+      - model: Exam
+      - model: ExamQuestion
+    expected_tests:
+      - ExamServiceTest
+  risk:
+    level: high
+    reasons: [考试结果影响学习评估，权限和评分必须准确]
+  non_functional:
+    security: [学生只能提交分配给自己的考试，教师只能查看自己创建或负责学生的考试]
+    reliability: [已提交考试不得重复提交]
+  open_questions:
+    - 考试是否应把错误结果同步到 StudentWordMemory，目前实现未显式连接。

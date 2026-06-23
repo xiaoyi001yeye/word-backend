@@ -388,6 +388,31 @@ export type StudyRecordResult = 'CORRECT' | 'INCORRECT' | 'SKIPPED';
 
 export type AttentionState = 'FOCUSED' | 'MIXED' | 'IDLE';
 
+export type StudentWordMemorySourceType = 'PLAN_STUDY' | 'SELF_STUDY' | 'FORMAL_EXAM' | 'SELF_PRACTICE';
+
+export interface StudentWordMemory {
+  metaWordId: number;
+  word: string;
+  phonetic?: string | null;
+  phoneticDetail?: PhoneticDetail | null;
+  syllableDetail?: SyllableDetail | null;
+  definition?: string | null;
+  translation?: string | null;
+  partOfSpeech?: string | null;
+  exampleSentence?: string | null;
+  boxLevel: number;
+  masteryLevel: number;
+  nextReviewDate?: string | null;
+  correctTimes: number;
+  wrongTimes: number;
+  correctStreak: number;
+  lastResult?: StudyRecordResult | null;
+  lastSource?: StudentWordMemorySourceType | null;
+  autoWrong: boolean;
+  favorite: boolean;
+  lastStudiedAt?: string | null;
+}
+
 export interface CreateStudyPlanPayload {
   name: string;
   description?: string;

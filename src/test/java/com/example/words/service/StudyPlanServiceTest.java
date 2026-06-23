@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
@@ -116,6 +117,9 @@ class StudyPlanServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private StudentWordMemoryService studentWordMemoryService;
+
     private StudyPlanService studyPlanService;
 
     @BeforeEach
@@ -137,6 +141,7 @@ class StudyPlanServiceTest {
                 metaWordRepository,
                 accessControlService,
                 userService,
+                studentWordMemoryService,
                 new ObjectMapper()
         );
     }
@@ -456,6 +461,14 @@ class StudyPlanServiceTest {
         assertNotNull(savedDailyStatRef.get());
         assertEquals(22, savedDailyStatRef.get().getTotalFocusSeconds());
         verify(studyRecordRepository).save(any(StudyRecord.class));
+        verify(studentWordMemoryService).recordPlanStudy(
+                eq(20L),
+                eq(3L),
+                eq(null),
+                eq(10L),
+                eq(StudyRecordResult.CORRECT),
+                any(LocalDateTime.class)
+        );
         verify(studentAttentionDailyStatRepository).save(any(StudentAttentionDailyStat.class));
     }
 

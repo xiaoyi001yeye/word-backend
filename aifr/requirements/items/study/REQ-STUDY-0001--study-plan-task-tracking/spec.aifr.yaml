@@ -1,0 +1,142 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-STUDY-0001
+  version: "1.0.0"
+  title: 学习计划、每日任务与专注度统计
+  type: functional
+  status: draft
+  priority: critical
+  identity:
+    primary_domain: STUDY
+    domain_path: study
+    frozen_slug: study-plan-task-tracking
+    canonical_path: aifr/requirements/items/study/REQ-STUDY-0001--study-plan-task-tracking/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [DICT, ORG, MEM]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, product]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 StudyPlanService、学生学习接口和测试反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 教师为班级发布学习计划，学生每天获得新学和复习任务并记录学习结果。
+    business_value: 支撑按遗忘曲线或固定间隔的持续背词，并提供学习进度和专注度监控。
+  scope:
+    in: [创建草稿计划, 发布计划, 学生计划列表, 今日任务生成, 学习记录, 完成率, 连续学习, 专注度统计, 教师概览]
+    out: [计划编辑, 暂停恢复接口, 补课规则, 前端计时采集策略]
+  actors:
+    primary: [teacher, student]
+    secondary: [admin, dictionary_service, student_word_memory_service]
+  domain_terms:
+    study_plan: 教师配置的学习计划，包含辞书、班级、日期、复习模式和每日数量。
+    student_study_plan: 学生加入某学习计划后的个人进度。
+    study_day_task: 某学生某日期的任务汇总。
+    study_day_task_item: 某日任务中的具体单词。
+    study_word_progress: 学生在计划内对某单词的学习阶段和掌握度。
+    attention_score: 根据专注时长、长停留和空闲中断计算出的注意力指标。
+  preconditions:
+    - 教师或管理员可查看目标辞书，并可管理所选班级。
+    - 学习计划发布前已选择班级和辞书。
+    - 学生日任务只在计划已发布且当前日期处于计划有效期时生成。
+  rules:
+    - id: RULE-001
+      description: 创建计划时，目标辞书必须对所选班级均可用。
+      invariant: create_plan_allowed implies dictionary_visible_for_all_selected_classrooms
+    - id: RULE-002
+      description: 新计划初始状态为 DRAFT；发布时将辞书分配给班级学生并创建 StudentStudyPlan。
+      invariant: publish_plan creates_student_plans_and_assigns_dictionary
+    - id: RULE-003
+      description: 今日任务应包含逾期复习、今日复习和每日新词，数量受 dailyNewCount 与 dailyReviewLimit 限制。
+      invariant: today_task_items = overdue_reviews + today_reviews + new_words_with_limits
+    - id: RULE-004
+      description: 学生只能记录今日任务内且属于计划辞书的单词。
+      invariant: record_study_allowed iff word_in_today_task and word_in_plan_dictionary
+    - id: RULE-005
+      description: CORRECT 或 SKIPPED 等满足 StudyTaskCompletionPolicy 的结果才计入任务完成。
+      invariant: completed_count increments only when completes_task(result)
+    - id: RULE-006
+      description: 每次学习记录必须更新词进度、日任务状态、个人指标、日专注统计，并同步学生单词记忆。
+      invariant: record_study updates_progress_task_metrics_attention_and_memory
+  scenarios:
+    - id: SCN-001
+      name: 创建计划拒绝不属于班级交集的辞书
+      given:
+        - "教师选择 classroomIds=[100,101]"
+        - dictionaryId=10 不对所有班级可见
+      when:
+        - "调用 POST /api/study-plans"
+      then:
+        - 返回业务错误 dictionaryId is not associated with all selected classrooms
+    - id: SCN-002
+      name: 学生记录今日任务单词
+      given: [学生拥有已发布计划, 今日任务包含 metaWordId=11]
+      when:
+        - "调用 POST /api/students/me/study-plans/{id}/records 且 result=CORRECT"
+      then: [保存 StudyRecord, 更新进度和完成数, 写入 StudentWordMemoryEvent]
+  acceptance_criteria:
+    - id: AC-001
+      text: 创建计划必须保存 reviewIntervals、完成阈值、截止时间和专注度配置。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 发布计划必须为班级学生创建个人计划并分配辞书。
+      verifies: [RULE-002]
+    - id: AC-003
+      text: 非今日任务或非计划辞书单词不得记录学习。
+      verifies: [RULE-004]
+    - id: AC-004
+      text: 学习记录后概览、学生摘要和专注统计必须可反映最新状态。
+      verifies: [RULE-006]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/study-plans"
+        request_schema: CreateStudyPlanRequest
+        response_schema: StudyPlanResponse
+      - method: POST
+        path: "/api/study-plans/{id}/publish"
+        request_schema: none
+        response_schema: StudyPlanResponse
+      - method: GET
+        path: "/api/students/me/study-plans/{id}/today"
+        request_schema: none
+        response_schema: StudyTaskResponse
+      - method: POST
+        path: "/api/students/me/study-plans/{id}/records"
+        request_schema: RecordStudyRequest
+        response_schema: StudyTaskResponse
+      - method: GET
+        path: "/api/study-plans/{id}/overview"
+        request_schema: none
+        response_schema: StudyPlanOverviewResponse
+  trace:
+    expected_code:
+      - controller: StudyPlanController
+      - controller: StudentStudyPlanController
+      - controller: StudentDashboardController
+      - service: StudyPlanService
+      - service: StudentDashboardService
+      - service: StudyTaskCompletionPolicy
+    expected_tests:
+      - StudyPlanServiceTest
+      - StudentDashboardServiceTest
+      - StudyTaskCompletionPolicyTest
+  risk:
+    level: critical
+    reasons: [核心学习流程，状态和统计跨多张表联动]
+  non_functional:
+    reliability: [学习记录写入、进度更新和记忆同步应在事务内保持一致]
+    performance: [今日任务生成应避免对大型辞书进行无界扫描]
+  open_questions:
+    - 每种 StudyRecordResult 是否都应计入完成，需以 StudyTaskCompletionPolicy 为准但产品文案未明确。
+    - 专注度公式和阈值的产品解释需要补充。

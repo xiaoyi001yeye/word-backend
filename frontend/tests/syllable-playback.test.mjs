@@ -16,7 +16,7 @@ test('prefers the selected accent audio URL', async () => {
   const controller = new SyllablePlaybackController({
     cancel: () => calls.push('cancel'),
     playAudio: async (url) => calls.push(`audio:${url}`),
-    speak: async (text) => calls.push(`speech:${text}`),
+    playPronunciation: async (text, accent) => calls.push(`pronunciation:${text}:${accent}`),
   });
 
   await controller.playSegment(segment, 'US', () => undefined);
@@ -24,7 +24,7 @@ test('prefers the selected accent audio URL', async () => {
   assert.deepEqual(calls, ['cancel', 'audio:https://audio.test/re-us.mp3']);
 });
 
-test('falls back to speech when audio playback fails', async () => {
+test('falls back to dictionary pronunciation when segment audio playback fails', async () => {
   const calls = [];
   const controller = new SyllablePlaybackController({
     cancel: () => calls.push('cancel'),
@@ -32,12 +32,12 @@ test('falls back to speech when audio playback fails', async () => {
       calls.push('audio');
       throw new Error('unavailable');
     },
-    speak: async (text, accent, rate) => calls.push(`speech:${text}:${accent}:${rate}`),
+    playPronunciation: async (text, accent) => calls.push(`pronunciation:${text}:${accent}`),
   });
 
   await controller.playSegment(segment, 'UK', () => undefined);
 
-  assert.deepEqual(calls, ['cancel', 'audio', 'speech:re:UK:0.75']);
+  assert.deepEqual(calls, ['cancel', 'audio', 'pronunciation:re:UK']);
 });
 
 test('slow spelling reads each syllable before the whole word', async () => {
@@ -45,7 +45,7 @@ test('slow spelling reads each syllable before the whole word', async () => {
   const controller = new SyllablePlaybackController({
     cancel: () => calls.push('cancel'),
     playAudio: async () => undefined,
-    speak: async (text, accent, rate) => calls.push(`${text}:${accent}:${rate}`),
+    playPronunciation: async (text, accent) => calls.push(`${text}:${accent}`),
   });
 
   await controller.playSequence(
@@ -57,9 +57,22 @@ test('slow spelling reads each syllable before the whole word', async () => {
 
   assert.deepEqual(calls, [
     'cancel',
-    're:US:0.65',
-    'mem:US:0.65',
-    'ber:US:0.65',
-    'remember:US:0.55',
+    're:US',
+    'mem:US',
+    'ber:US',
+    'remember:US',
   ]);
+});
+
+test('whole word reading uses pronunciation audio instead of speech synthesis', async () => {
+  const calls = [];
+  const controller = new SyllablePlaybackController({
+    cancel: () => calls.push('cancel'),
+    playAudio: async () => calls.push('audio'),
+    playPronunciation: async (text, accent) => calls.push(`pronunciation:${text}:${accent}`),
+  });
+
+  await controller.playWord('remember', 'US', () => undefined);
+
+  assert.deepEqual(calls, ['cancel', 'pronunciation:remember:US']);
 });

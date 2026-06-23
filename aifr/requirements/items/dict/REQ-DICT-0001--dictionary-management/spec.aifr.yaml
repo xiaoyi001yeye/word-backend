@@ -1,0 +1,129 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-DICT-0001
+  version: "1.0.0"
+  title: 辞书管理、可见性与分配
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: DICT
+    domain_path: dict
+    frozen_slug: dictionary-management
+    canonical_path: aifr/requirements/items/dict/REQ-DICT-0001--dictionary-management/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [AUTH, ORG, LEX]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从辞书控制器、服务和访问控制代码反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 教师和学生只能看到自己可用的辞书，教师可创建和分配教学辞书。
+    business_value: 将系统词库、教师自建词库和学生学习范围隔离，支撑班级教学。
+  scope:
+    in: [辞书列表, 分类查询, 创建辞书, 删除辞书, 学生分配, 班级分配, 词数和条目数维护]
+    out: [辞书版本化, 审核发布流, 文件上传型辞书创建]
+  actors:
+    primary: [admin, teacher, student]
+    secondary: [dictionary_assignment_service, classroom_dictionary_assignment_service]
+  domain_terms:
+    system_dictionary: scopeType 为 SYSTEM 的全局可见辞书。
+    teacher_dictionary: scopeType 为 TEACHER 且 ownerUserId 为教师的辞书。
+    dictionary_assignment: 将辞书直接分配给学生的关系。
+    classroom_dictionary_assignment: 将辞书分配给班级的关系。
+  preconditions:
+    - 用户已认证并具备对应角色。
+    - 参与分配的辞书和学生或班级已存在。
+  rules:
+    - id: RULE-001
+      description: 管理员可查看全部辞书；教师可查看系统辞书、自己拥有或创建的辞书、分配到其班级的辞书。
+      invariant: teacher_visible iff system_or_owned_or_created_or_assigned_to_teacher_classroom
+    - id: RULE-002
+      description: 学生可查看系统辞书、直接分配给自己的辞书、或分配到自己班级的辞书。
+      invariant: student_visible iff system_or_direct_assignment_or_classroom_assignment
+    - id: RULE-003
+      description: 只有管理员和教师可创建辞书；教师创建的辞书归属该教师且不得是系统辞书。
+      invariant: create_dictionary requires actor_role in [ADMIN, TEACHER]
+    - id: RULE-004
+      description: 教师只能管理非系统且 ownerUserId 为自己的辞书；管理员可管理全部辞书。
+      invariant: manage_dictionary_allowed iff admin or teacher_owns_non_system_dictionary
+    - id: RULE-005
+      description: 词条变更后必须刷新辞书 wordCount 和 entryCount。
+      invariant: dictionary_counts = counts_from_dictionary_words
+  scenarios:
+    - id: SCN-001
+      name: 学生查看已分配辞书
+      given: [学生已被直接分配 dictionaryId=10]
+      when: [调用 GET /api/students/me/dictionaries]
+      then: [响应包含 dictionaryId=10]
+    - id: SCN-002
+      name: 教师给负责学生分配辞书
+      given: [教师负责 studentId=20, 辞书为系统辞书或教师自有辞书]
+      when:
+        - "调用 POST /api/dictionaries/{id}/assign/students"
+      then: [创建分配关系并返回 assignedCount]
+  acceptance_criteria:
+    - id: AC-001
+      text: 辞书列表和详情必须按当前用户可见性过滤。
+      verifies: [RULE-001, RULE-002]
+    - id: AC-002
+      text: 辞书管理动作必须执行角色和所有权检查。
+      verifies: [RULE-003, RULE-004]
+    - id: AC-003
+      text: 添加或删除词条后辞书统计值必须与关系表一致。
+      verifies: [RULE-005]
+  interfaces:
+    apis:
+      - method: GET
+        path: "/api/dictionaries"
+        request_schema: classroomIds?
+        response_schema: List<Dictionary>
+      - method: POST
+        path: "/api/dictionaries"
+        request_schema: Dictionary
+        response_schema: Dictionary
+      - method: POST
+        path: "/api/dictionaries/{id}/assign/students"
+        request_schema: AssignStudentsRequest
+        response_schema: assignedCount
+      - method: POST
+        path: "/api/dictionaries/{id}/assign/classrooms"
+        request_schema: AssignClassroomsRequest
+        response_schema: assignedCount
+      - method: DELETE
+        path: "/api/dictionaries/{id}"
+        request_schema: none
+        response_schema: message,id
+  trace:
+    expected_code:
+      - controller: DictionaryController
+      - controller: StudentController
+      - service: DictionaryService
+      - service: DictionaryAssignmentService
+      - service: ClassroomDictionaryAssignmentService
+      - service: AccessControlService
+    expected_tests:
+      - DictionaryServiceTest
+      - DictionaryWordServiceTest
+      - DictionaryWordRepositoryIntegrationTest
+  risk:
+    level: high
+    reasons: [辞书可见性直接影响学生可学习内容和教师数据边界]
+  non_functional:
+    security: [所有详情、词条、标签接口必须复用辞书可见性检查]
+    reliability: [批量分配应忽略重复或保持幂等，不应造成重复有效关系]
+  open_questions:
+    - 系统辞书是否允许教师删除或覆盖，目前代码仅管理员可删除全部或用户创建辞书。
+    - 字典分类 category 的业务枚举和展示排序规则尚未在代码中固定。

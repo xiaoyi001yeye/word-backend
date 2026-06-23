@@ -1,0 +1,116 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-TAG-0001
+  version: "1.0.0"
+  title: 辞书章节标签树
+  type: functional
+  status: draft
+  priority: medium
+  identity:
+    primary_domain: TAG
+    domain_path: tag
+    frozen_slug: dictionary-chapter-tags
+    canonical_path: aifr/requirements/items/tag/REQ-TAG-0001--dictionary-chapter-tags/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [DICT, LEX]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 TagController 和 TagService 反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 教师可按章节层级组织辞书词条，学生和教师可查看章节树。
+    business_value: 支持教材章节、单元或自定义目录结构，便于词条浏览和任务编排。
+  scope:
+    in: [章节树查询, 创建章节, 更新章节父子关系和排序, 删除未引用章节, 默认章节自动创建]
+    out: [多标签关系 UI, 标签批量移动, 跨辞书复制章节树]
+  actors:
+    primary: [admin, teacher]
+    secondary: [student, dictionary_word_service]
+  domain_terms:
+    chapter_tag: type 为 CHAPTER 的辞书内树节点。
+    path_name: 章节从根到当前节点的展示路径。
+    path_key: 章节从根到当前节点的稳定路径键。
+    sort_key: 用于按层级和 sortOrder 排序的键。
+  preconditions:
+    - 目标辞书存在且调用者可查看或管理。
+  rules:
+    - id: RULE-001
+      description: 查询章节树必须按辞书可见性校验后返回层级结构。
+      invariant: get_tag_tree requires can_view_dictionary
+    - id: RULE-002
+      description: 创建、更新、删除章节必须要求调用者可管理目标辞书。
+      invariant: mutate_tag requires can_manage_dictionary
+    - id: RULE-003
+      description: 章节不得把自身或自身后代设为父节点。
+      invariant: parent_id != tag_id and parent_not_descendant_of_tag
+    - id: RULE-004
+      description: 有子节点或已被辞书词条引用的章节不得删除。
+      invariant: delete_allowed iff child_count = 0 and referenced_entry_count = 0
+  scenarios:
+    - id: SCN-001
+      name: 创建根章节
+      given: [教师可管理 dictionaryId=10, 请求 name=Unit 1]
+      when:
+        - "调用 POST /api/dictionaries/{dictionaryId}/tags"
+      then: [创建 CHAPTER 节点, level=1, 刷新 pathName/pathKey/sortKey]
+    - id: SCN-002
+      name: 删除被引用章节被拒绝
+      given: [tagId=5 已被 dictionary_words.chapter_tag_id 引用]
+      when:
+        - "调用 DELETE /api/tags/{tagId}"
+      then: [返回业务错误]
+  acceptance_criteria:
+    - id: AC-001
+      text: 章节树响应必须保持父子结构。
+      verifies: [RULE-001]
+    - id: AC-002
+      text: 更新章节父节点时必须防止循环。
+      verifies: [RULE-003]
+    - id: AC-003
+      text: 删除章节必须校验子节点和词条引用。
+      verifies: [RULE-004]
+  interfaces:
+    apis:
+      - method: GET
+        path: "/api/dictionaries/{dictionaryId}/tags/tree"
+        request_schema: type
+        response_schema: List<TagTreeNodeResponse>
+      - method: POST
+        path: "/api/dictionaries/{dictionaryId}/tags"
+        request_schema: CreateTagRequest
+        response_schema: Tag
+      - method: PATCH
+        path: "/api/tags/{tagId}"
+        request_schema: UpdateTagRequest
+        response_schema: Tag
+      - method: DELETE
+        path: "/api/tags/{tagId}"
+        request_schema: none
+        response_schema: none
+  trace:
+    expected_code:
+      - controller: TagController
+      - service: TagService
+      - model: Tag
+      - repository: TagRepository
+    expected_tests:
+      - DictionaryWordServiceTest
+  risk:
+    level: medium
+    reasons: [树结构循环或错误删除会影响词条组织]
+  non_functional:
+    reliability: [路径字段和后代路径必须在移动章节后同步刷新]
+  open_questions:
+    - TagType 除 CHAPTER 外的业务用途尚未在接口中体现。

@@ -1,0 +1,151 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-MEM-0001
+  version: "1.1.0"
+  title: 学生单词记忆、错词与收藏
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: MEM
+    domain_path: mem
+    frozen_slug: student-word-memory
+    canonical_path: aifr/requirements/items/mem/REQ-MEM-0001--student-word-memory/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [STUDY, DICT]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-23"
+    owner: backend
+    reviewers: [backend, qa, product]
+  versioning:
+    change_type: minor
+    previous_version: "1.0.0"
+    supersedes:
+      - REQ-MEM-0001@1.0.0
+    superseded_by: null
+    breaking_change: false
+    change_summary: 补充班级分配辞书可收藏、跳过入错词和取消收藏不影响错词状态的验收规则
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+    - version: "1.1.0"
+      change_type: minor
+      summary: 明确学生可收藏直接分配或班级分配词书中的单词，并补充记忆盒验收覆盖
+  intent:
+    user_goal: 学生可以看到自己的记忆记录、错词和收藏词，并通过学习结果自动更新复习节奏。
+    business_value: 沉淀个人化词汇掌握数据，支持复习计划和错词跟踪。
+  scope:
+    in: [学习结果入记忆盒, 错词标记, 错词清除, 收藏切换, 记忆列表, 错词列表, 收藏列表, 记忆事件记录]
+    out: [自定义复习间隔, 手动修改盒等级, 考试错题入库]
+  actors:
+    primary: [student]
+    secondary: [study_plan_service]
+  domain_terms:
+    box_level: 记忆盒等级，范围按 REVIEW_INTERVALS 索引限制。
+    auto_wrong: 因学习答错自动进入错词本的标记。
+    favorite: 学生手动收藏标记。
+    mastery_level: correctTimes / (correctTimes + wrongTimes) 百分比。
+  preconditions:
+    - 记忆列表接口调用者必须是 STUDENT。
+    - 收藏目标词必须存在且位于学生直接分配或班级分配的辞书中。
+  rules:
+    - id: RULE-001
+      description: 计划学习答对时 boxLevel 至多加 1，答错或跳过时 boxLevel 至少减到 0，并标记 autoWrong。
+      invariant: correct increments_box; incorrect_or_skipped decrements_box_and_sets_auto_wrong
+    - id: RULE-002
+      description: nextReviewDate 按固定间隔 [0,1,2,4,7,15,30] 天由 boxLevel 计算。
+      formula: next_review_date = occurred_date + REVIEW_INTERVALS[box_level]
+    - id: RULE-003
+      description: 当 boxLevel >= 5 且连续答对次数 >= 3 时，自动错词标记清除。
+      invariant: box_level >= 5 and correct_streak >= 3 implies auto_wrong = false
+    - id: RULE-004
+      description: 每次计划学习记忆更新必须写入 StudentWordMemoryEvent，保留前后 boxLevel、来源记录和辞书。
+      invariant: record_plan_study creates_memory_event
+    - id: RULE-005
+      description: 学生只能收藏直接分配或班级分配辞书中的单词。
+      invariant: update_favorite_allowed iff word_in_direct_or_classroom_assigned_dictionary
+    - id: RULE-006
+      description: 取消收藏只能改变 favorite，不得清除 autoWrong 或重置记忆盒状态。
+      invariant: update_favorite_false preserves_auto_wrong_and_memory_state
+  scenarios:
+    - id: SCN-001
+      name: 答错自动加入错词
+      given: [学生首次学习 metaWordId=11]
+      when: [计划学习结果为 INCORRECT]
+      then: [boxLevel=0, wrongTimes=1, autoWrong=true, nextReviewDate=当天]
+    - id: SCN-002
+      name: 高盒等级连续答对清除错词
+      given: [boxLevel=5, correctStreak=2, autoWrong=true]
+      when: [计划学习结果为 CORRECT]
+      then: [boxLevel=6, correctStreak=3, autoWrong=false, nextReviewDate=30 天后]
+    - id: SCN-003
+      name: 跳过自动加入错词
+      given: [学生首次学习 metaWordId=11]
+      when: [计划学习结果为 SKIPPED]
+      then: [boxLevel=0, wrongTimes=1, autoWrong=true, nextReviewDate=当天]
+    - id: SCN-004
+      name: 收藏班级分配词书中的单词
+      given: [学生属于 classroomId=3, classroomId=3 被分配 dictionaryId=44, dictionaryId=44 包含 metaWordId=11]
+      when:
+        - "调用 PATCH /api/students/me/word-memory/{metaWordId}/favorite 且 favorite=true"
+      then: [创建或更新该学生的 StudentWordMemory, favorite=true]
+    - id: SCN-005
+      name: 取消收藏不移出自动错词
+      given: [metaWordId=11 的记忆记录 autoWrong=true, favorite=true]
+      when:
+        - "调用 PATCH /api/students/me/word-memory/{metaWordId}/favorite 且 favorite=false"
+      then: [favorite=false, autoWrong=true]
+  acceptance_criteria:
+    - id: AC-001
+      text: 学习结果必须正确更新正确次数、错误次数、连续正确次数、盒等级和复习日期。
+      verifies: [RULE-001, RULE-002]
+    - id: AC-002
+      text: 自动错词清除条件必须符合盒等级和连续答对次数。
+      verifies: [RULE-003]
+    - id: AC-003
+      text: 收藏接口必须拒绝既不在直接分配词书、也不在班级分配词书中的词。
+      verifies: [RULE-005]
+    - id: AC-004
+      text: 跳过学习必须按错词处理并进入错词本。
+      verifies: [RULE-001]
+    - id: AC-005
+      text: 取消收藏不得改变自动错词状态。
+      verifies: [RULE-006]
+  interfaces:
+    apis:
+      - method: GET
+        path: "/api/students/me/word-memory"
+        request_schema: none
+        response_schema: List<StudentWordMemoryResponse>
+      - method: GET
+        path: "/api/students/me/wrong-words"
+        request_schema: none
+        response_schema: List<StudentWordMemoryResponse>
+      - method: GET
+        path: "/api/students/me/favorite-words"
+        request_schema: none
+        response_schema: List<StudentWordMemoryResponse>
+      - method: PATCH
+        path: "/api/students/me/word-memory/{metaWordId}/favorite"
+        request_schema: UpdateFavoriteRequest
+        response_schema: StudentWordMemoryResponse
+  trace:
+    expected_code:
+      - controller: StudentWordMemoryController
+      - service: StudentWordMemoryService
+      - model: StudentWordMemory
+      - model: StudentWordMemoryEvent
+      - repository: ClassroomMemberRepository
+      - repository: ClassroomDictionaryAssignmentRepository
+    expected_tests:
+      - StudentWordMemoryServiceTest
+  risk:
+    level: high
+    reasons: [个人化复习状态会长期影响学习体验]
+  non_functional:
+    reliability: [记忆更新和事件写入应在同一事务内完成]
+    security: [学生不得收藏或查看其他学生的记忆, 收藏权限必须同时识别直接分配和班级分配词书]
+  open_questions:
+    - SELF_STUDY 和 FORMAL_EXAM 来源枚举已有但当前行为未完整实现。

@@ -1,0 +1,45 @@
+requirements:
+  - id: REQ-AUTH-0001
+    title: 认证、用户管理与访问控制
+    version: "1.0.0"
+    path: aifr/requirements/items/auth/REQ-AUTH-0001--auth-user-access/spec.aifr.yaml
+  - id: REQ-DICT-0001
+    title: 辞书管理、可见性与分配
+    version: "1.0.0"
+    path: aifr/requirements/items/dict/REQ-DICT-0001--dictionary-management/spec.aifr.yaml
+  - id: REQ-LEX-0001
+    title: 元单词与辞书词条维护
+    version: "1.0.0"
+    path: aifr/requirements/items/lex/REQ-LEX-0001--lexical-entry-management/spec.aifr.yaml
+  - id: REQ-TAG-0001
+    title: 辞书章节标签树
+    version: "1.0.0"
+    path: aifr/requirements/items/tag/REQ-TAG-0001--dictionary-chapter-tags/spec.aifr.yaml
+  - id: REQ-IMP-0001
+    title: books 目录批量导入流水
+    version: "1.0.0"
+    path: aifr/requirements/items/imp/REQ-IMP-0001--books-import-pipeline/spec.aifr.yaml
+  - id: REQ-ORG-0001
+    title: 班级与师生关系管理
+    version: "1.0.0"
+    path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
+  - id: REQ-STUDY-0001
+    title: 学习计划、每日任务与专注度统计
+    version: "1.0.0"
+    path: aifr/requirements/items/study/REQ-STUDY-0001--study-plan-task-tracking/spec.aifr.yaml
+  - id: REQ-EXAM-0001
+    title: 辞书四选一测试
+    version: "1.0.0"
+    path: aifr/requirements/items/exam/REQ-EXAM-0001--dictionary-multiple-choice-exam/spec.aifr.yaml
+  - id: REQ-MEM-0001
+    title: 学生单词记忆、错词与收藏
+    version: "1.1.0"
+    path: aifr/requirements/items/mem/REQ-MEM-0001--student-word-memory/spec.aifr.yaml
+  - id: REQ-AI-0001
+    title: 用户级 AI 配置与内容生成
+    version: "1.0.0"
+    path: aifr/requirements/items/ai/REQ-AI-0001--ai-config-generation/spec.aifr.yaml
+  - id: REQ-ADM-0001
+    title: 管理员音节数据补全
+    version: "1.0.0"
+    path: aifr/requirements/items/adm/REQ-ADM-0001--syllable-backfill/spec.aifr.yaml

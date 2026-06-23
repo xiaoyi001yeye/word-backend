@@ -1,0 +1,13 @@
+aifr_repository:
+  naming_standard_version: "1.0.0"
+  schema_version: "1.0.0"
+  canonical_requirement_glob: "aifr/requirements/items/*/*/spec.aifr.yaml"
+  baseline_glob: "aifr/baselines/**/*.aifr-baseline.yaml"
+  requirement_id_format: "REQ-<DOMAIN>-<NUMBER4>"
+  canonical_requirement_path_format: "aifr/requirements/items/<domain-path>/<requirement-id>--<frozen-slug>/spec.aifr.yaml"
+  default_current_file: "spec.aifr.yaml"
+  version_snapshot_dir: "versions"
+  source_baseline:
+    id: BL-WORD-2026-06-22-CODE
+    created_at: "2026-06-22"
+    source: "Current Java Spring Boot backend code under src/main/java/com/example/words"

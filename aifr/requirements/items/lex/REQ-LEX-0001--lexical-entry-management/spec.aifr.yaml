@@ -1,0 +1,128 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-LEX-0001
+  version: "1.0.0"
+  title: 元单词与辞书词条维护
+  type: functional
+  status: draft
+  priority: high
+  identity:
+    primary_domain: LEX
+    domain_path: lex
+    frozen_slug: lexical-entry-management
+    canonical_path: aifr/requirements/items/lex/REQ-LEX-0001--lexical-entry-management/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains: [DICT, TAG, AI]
+  lifecycle:
+    created_at: "2026-06-22"
+    updated_at: "2026-06-22"
+    owner: backend
+    reviewers: [backend, qa, content]
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 MetaWord 和 DictionaryWord 代码反推的初始需求
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线
+  intent:
+    user_goal: 管理员和教师可以维护标准单词数据，并把单词加入具体辞书形成有序词条。
+    business_value: 复用统一元单词资料，同时支持不同辞书、章节和导入来源组织学习内容。
+  scope:
+    in: [元单词查询, 元单词创建, V1/V2 词条导入, CSV/JSON 导入, AI 生成词条保存, 辞书词条分页排序搜索]
+    out: [人工审核工作台, 词条版本历史, 发音音频文件管理]
+  actors:
+    primary: [admin, teacher]
+    secondary: [student, ai_generation_service, csv_import_service, tag_service]
+  domain_terms:
+    meta_word: 全局复用的单词资料，包含释义、词性、音标、例句、翻译、难度和结构化 JSON 字段。
+    dictionary_word: 辞书和元单词的关联，带章节标签和 entryOrder。
+    normalized_word: 由 WordNormalizationUtils 生成的查重键。
+    default_chapter: 未指定章节时自动创建或使用的 "默认章节"。
+  preconditions:
+    - 管理接口调用者具备 ADMIN 或 TEACHER 角色，并可管理目标辞书。
+    - 元单词创建接口仅 ADMIN 可用。
+  rules:
+    - id: RULE-001
+      description: 元单词查重应优先使用 normalizedWord，兼容原始 word 查询。
+      invariant: same_normalized_word implies same_meta_word_candidate
+    - id: RULE-002
+      description: 词表导入遇到已有元单词时应更新可用字段，遇到新词时创建元单词。
+      invariant: import_word_existing updates_fields; import_word_new creates_meta_word
+    - id: RULE-003
+      description: 新增辞书词条必须分配章节标签；未指定时使用默认章节，并递增章节内 entryOrder。
+      invariant: dictionary_word.chapter_tag_id is not null and entry_order increases_in_chapter
+    - id: RULE-004
+      description: 词条建议接口必须 trim keyword，空 keyword 返回空列表，limit 最大按实现限制为 20。
+      invariant: blank_keyword implies empty_suggestions
+    - id: RULE-005
+      description: 导入或保存 AI 生成词条后必须刷新目标辞书 wordCount 和 entryCount。
+      invariant: after_entry_mutation dictionary_counts_refreshed
+  scenarios:
+    - id: SCN-001
+      name: 导入已有单词并更新字段
+      given: [元单词 apple 已存在, 输入包含新的音标、释义、例句、翻译和难度]
+      when:
+        - "调用 POST /api/dictionary-words/{dictionaryId}/words/list"
+      then: [更新已有元单词字段, 返回 existed=1 created=0]
+    - id: SCN-002
+      name: V2 词条保存音节结构
+      given: [输入 resilient 带 syllableDetail.segments]
+      when:
+        - "调用 POST /api/dictionary-words/{dictionaryId}/words/list/v2"
+      then: [元单词保存 syllableDetail JSON]
+  acceptance_criteria:
+    - id: AC-001
+      text: 批量导入必须返回 total、existed、created、added、failed 统计。
+      verifies: [RULE-002]
+    - id: AC-002
+      text: 每个新增辞书词条必须有章节标签和稳定 entryOrder。
+      verifies: [RULE-003]
+    - id: AC-003
+      text: 词条保存后辞书统计必须刷新。
+      verifies: [RULE-005]
+  interfaces:
+    apis:
+      - method: POST
+        path: "/api/meta-words/search"
+        request_schema: MetaWordSearchRequest
+        response_schema: Page<MetaWord>
+      - method: POST
+        path: "/api/dictionary-words/{dictionaryId}/words/list"
+        request_schema: AddWordListRequest
+        response_schema: WordListProcessResult
+      - method: POST
+        path: "/api/dictionary-words/{dictionaryId}/words/list/v2"
+        request_schema: List<MetaWordEntryDtoV2>
+        response_schema: WordListProcessResult
+      - method: POST
+        path: "/api/dictionary-words/{dictionaryId}/words/import-csv"
+        request_schema: MultipartFile,hasHeader
+        response_schema: import summary
+      - method: POST
+        path: "/api/dictionary-words/{dictionaryId}/words/ai-generate"
+        request_schema: GenerateDictionaryWordWithAiRequest
+        response_schema: GenerateDictionaryWordWithAiResponse
+  trace:
+    expected_code:
+      - controller: MetaWordController
+      - controller: DictionaryWordController
+      - service: MetaWordService
+      - service: DictionaryWordService
+      - service: CsvImportService
+      - util: WordNormalizationUtils
+    expected_tests:
+      - DictionaryWordServiceTest
+  risk:
+    level: high
+    reasons: [词条查重、覆盖和统计影响内容质量与学习任务生成]
+  non_functional:
+    performance: [分页接口必须限制页大小并避免一次性返回大型辞书全部详情]
+    reliability: [单条词导入失败应计入 failed 并继续处理其他词]
+  open_questions:
+    - V2 DTO 中词性、变形、释义层级的完整映射规则尚未完全体现在 createV2 控制器中。
+    - 词条重复加入同一辞书时是否应强制唯一，目前部分批量路径可能依赖数据库约束或后续统计纠偏。

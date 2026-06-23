@@ -90,6 +90,7 @@ public class StudyPlanService {
     private final MetaWordRepository metaWordRepository;
     private final AccessControlService accessControlService;
     private final UserService userService;
+    private final StudentWordMemoryService studentWordMemoryService;
     private final ObjectMapper objectMapper;
 
     public StudyPlanService(
@@ -109,6 +110,7 @@ public class StudyPlanService {
             MetaWordRepository metaWordRepository,
             AccessControlService accessControlService,
             UserService userService,
+            StudentWordMemoryService studentWordMemoryService,
             ObjectMapper objectMapper) {
         this.studyPlanRepository = studyPlanRepository;
         this.studyPlanClassroomRepository = studyPlanClassroomRepository;
@@ -126,6 +128,7 @@ public class StudyPlanService {
         this.metaWordRepository = metaWordRepository;
         this.accessControlService = accessControlService;
         this.userService = userService;
+        this.studentWordMemoryService = studentWordMemoryService;
         this.objectMapper = objectMapper;
     }
 
@@ -393,7 +396,17 @@ public class StudyPlanService {
         studyRecord.setAttentionState(request.getAttentionState());
         studyRecord.setStageBefore(stageBefore);
         studyRecord.setStageAfter(savedProgress.getPhase());
-        studyRecordRepository.save(studyRecord);
+        StudyRecord savedStudyRecord = studyRecordRepository.save(studyRecord);
+        if (studentWordMemoryService != null) {
+            studentWordMemoryService.recordPlanStudy(
+                    studentStudyPlan.getStudentId(),
+                    request.getMetaWordId(),
+                    savedStudyRecord.getId(),
+                    studyPlan.getDictionaryId(),
+                    request.getResult(),
+                    now
+            );
+        }
 
         if (firstRecordToday) {
             updateStreak(studentStudyPlan, taskDate, now);

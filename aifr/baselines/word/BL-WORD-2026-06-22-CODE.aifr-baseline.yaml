@@ -1,0 +1,39 @@
+baseline:
+  id: BL-WORD-2026-06-22-CODE
+  product_version: "current-code-snapshot"
+  status: draft
+  created_at: "2026-06-22"
+  requirements:
+    - id: REQ-AUTH-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/auth/REQ-AUTH-0001--auth-user-access/spec.aifr.yaml
+    - id: REQ-DICT-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/dict/REQ-DICT-0001--dictionary-management/spec.aifr.yaml
+    - id: REQ-LEX-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/lex/REQ-LEX-0001--lexical-entry-management/spec.aifr.yaml
+    - id: REQ-TAG-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/tag/REQ-TAG-0001--dictionary-chapter-tags/spec.aifr.yaml
+    - id: REQ-IMP-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/imp/REQ-IMP-0001--books-import-pipeline/spec.aifr.yaml
+    - id: REQ-ORG-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
+    - id: REQ-STUDY-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/study/REQ-STUDY-0001--study-plan-task-tracking/spec.aifr.yaml
+    - id: REQ-EXAM-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/exam/REQ-EXAM-0001--dictionary-multiple-choice-exam/spec.aifr.yaml
+    - id: REQ-MEM-0001
+      version: "1.1.0"
+      path: aifr/requirements/items/mem/REQ-MEM-0001--student-word-memory/spec.aifr.yaml
+    - id: REQ-AI-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/ai/REQ-AI-0001--ai-config-generation/spec.aifr.yaml
+    - id: REQ-ADM-0001
+      version: "1.0.0"
+      path: aifr/requirements/items/adm/REQ-ADM-0001--syllable-backfill/spec.aifr.yaml
