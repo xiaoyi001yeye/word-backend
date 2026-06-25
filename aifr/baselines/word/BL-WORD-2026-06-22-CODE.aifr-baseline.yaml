@@ -20,11 +20,20 @@ baseline:
       version: "1.0.0"
       path: aifr/requirements/items/imp/REQ-IMP-0001--books-import-pipeline/spec.aifr.yaml
     - id: REQ-ORG-0001
-      version: "1.0.0"
+      version: "1.1.0"
       path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
+    - id: REQ-ORG-0002
+      version: "1.0.0"
+      path: aifr/requirements/items/org/REQ-ORG-0002--teacher-student-responsibility/spec.aifr.yaml
+    - id: REQ-ORG-0003
+      version: "1.0.0"
+      path: aifr/requirements/items/org/REQ-ORG-0003--classroom-dictionary-assignment/spec.aifr.yaml
     - id: REQ-STUDY-0001
       version: "1.0.0"
       path: aifr/requirements/items/study/REQ-STUDY-0001--study-plan-task-tracking/spec.aifr.yaml
+    - id: REQ-STUDY-0002
+      version: "1.0.0"
+      path: aifr/requirements/items/study/REQ-STUDY-0002--classroom-study-plan-scope/spec.aifr.yaml
     - id: REQ-EXAM-0001
       version: "1.0.0"
       path: aifr/requirements/items/exam/REQ-EXAM-0001--dictionary-multiple-choice-exam/spec.aifr.yaml

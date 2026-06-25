@@ -1,119 +1,288 @@
 aifr_spec:
   schema_version: "1.0.0"
   id: REQ-ORG-0001
-  version: "1.0.0"
-  title: 班级与师生关系管理
+  version: "1.1.0"
+  title: 班级基础管理与成员维护
   type: functional
   status: draft
   priority: high
+
   identity:
     primary_domain: ORG
     domain_path: org
     frozen_slug: classroom-teacher-student
     canonical_path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
     naming_standard_version: "1.0.0"
-    related_domains: [AUTH, DICT, STUDY]
+    related_domains:
+      - AUTH
+      - DICT
+      - STUDY
+
   lifecycle:
     created_at: "2026-06-22"
-    updated_at: "2026-06-22"
+    updated_at: "2026-06-24"
     owner: backend
-    reviewers: [backend, qa]
+    reviewers:
+      - backend
+      - qa
+
   versioning:
-    change_type: initial
-    previous_version: null
-    supersedes: []
+    change_type: minor
+    previous_version: "1.0.0"
+    supersedes:
+      - REQ-ORG-0001@1.0.0
     superseded_by: null
     breaking_change: false
-    change_summary: 从 Classroom 和 TeacherStudent 代码反推的初始需求
+    change_summary: 拆分班级基础管理、成员维护、师生责任和班级辞书分配边界。
+
   revision_history:
     - version: "1.0.0"
       change_type: initial
-      summary: 初始代码基线
+      summary: 初始代码基线，覆盖班级、师生关系和班级辞书的合并需求。
+    - version: "1.1.0"
+      change_type: minor
+      summary: 聚焦班级 CRUD 与成员维护，并将师生责任、班级辞书、学习计划范围拆为关联需求。
+
   intent:
-    user_goal: 管理员和教师可以维护班级、学生成员、师生关系和班级辞书。
-    business_value: 建立教学组织结构，让辞书分配和学习计划能按班级落地。
+    user_goal: 管理员和教师可以创建、查看、更新、删除班级，并维护班级中的学生成员。
+    business_value: 为班级辞书分配、教师学生范围、学习计划发布和学生学习权限提供稳定的教学组织边界。
+
   scope:
-    in: [班级列表和分页, 创建更新删除班级, 班级学生维护, 师生关系维护, 班级辞书维护]
-    out: [班级归档, 多教师共管班级, 学生自助加入班级]
+    in:
+      - 班级列表查询
+      - 班级分页查询
+      - 班级创建
+      - 班级更新
+      - 班级删除
+      - 班级学生列表
+      - 添加班级学生
+      - 移除班级学生
+      - 班级响应中的教师名称和学生数量
+    out:
+      - 学生自助加入班级
+      - 多教师共同管理同一个班级
+      - 班级归档或恢复
+      - 班级成员历史审计
+      - 前端班级页面交互细节
+
   actors:
-    primary: [admin, teacher]
-    secondary: [student]
+    primary:
+      - admin
+      - teacher
+    secondary:
+      - student
+      - user_service
+      - classroom_repository
+      - classroom_member_repository
+
   domain_terms:
-    classroom: 由 teacherId 拥有的教学班级。
-    classroom_member: 学生加入班级的关系。
-    teacher_student_relation: 管理员显式维护的教师负责学生关系。
+    classroom: 由一个 teacherId 负责的教学班级，包含名称、说明、创建时间和更新时间。
+    classroom_owner: 班级 teacherId 指向的教师用户。
+    classroom_member: 学生加入班级后形成的班级成员关系。
+    actor: 当前已认证并调用班级接口的用户。
+    student_count: 按 classroomId 统计的班级成员数量。
+
   preconditions:
-    - 用户已认证。
-    - 教师只能操作自己可见或自己管理的班级。
+    - 调用者已认证。
+    - 调用班级接口的角色必须是 ADMIN 或 TEACHER。
+    - 创建或转移班级时，目标 teacherId 必须指向 TEACHER 角色用户。
+    - 添加班级成员时，目标 studentId 必须指向 STUDENT 角色用户。
+
   rules:
     - id: RULE-001
-      description: 管理员可查看和管理全部班级；教师只可查看和管理自己 teacherId 下的班级。
-      invariant: teacher_classroom_access iff classroom.teacher_id = actor.id
+      description: 管理员可查看和管理全部班级，教师只能查看和管理 teacherId 等于自己的班级。
+      invariant: classroom_manage_allowed iff actor.role = ADMIN or (actor.role = TEACHER and classroom.teacher_id = actor.id)
+
     - id: RULE-002
-      description: 管理员可维护任意教师的学生关系；教师只能查询自己的学生。
-      invariant: teacher_student_assignment_mutation requires ADMIN
+      description: 管理员创建班级时必须显式提供 teacherId；教师创建班级时 teacherId 固定为当前教师。
+      invariant: created_classroom.teacher_id = request.teacherId when actor.role = ADMIN else actor.id
+
     - id: RULE-003
-      description: 教师给学生分配辞书或创建学习计划时，学生必须属于教师负责范围。
-      invariant: assign_to_student_by_teacher requires teacher_responsible_for_student
+      description: 只有管理员可以在更新班级时变更 teacherId，教师不得将班级转移给其他教师。
+      invariant: teacher_reassignment_allowed iff actor.role = ADMIN
+
     - id: RULE-004
-      description: 班级辞书分配必须检查调用者对班级和辞书的管理权限。
-      invariant: classroom_dictionary_assignment requires can_manage_classroom and can_assign_dictionary
+      description: 班级名称必须非空并在保存前去除首尾空白，空白说明应保存为 null。
+      invariant: classroom.name = trim(request.name) and blank(description) becomes null
+
+    - id: RULE-005
+      description: 添加班级学生是幂等操作，同一 classroomId 和 studentId 只能存在一条成员关系。
+      invariant: unique(classroom_member.classroom_id, classroom_member.student_id)
+
+    - id: RULE-006
+      description: 删除班级时，数据库应级联删除班级成员、班级辞书分配和学习计划班级关联。
+      invariant: delete classroom cascades classroom_members and dependent classroom relations
+
+    - id: RULE-007
+      description: 班级分页查询 page 从 1 开始，size 限制在 1 到 100，排序字段只允许 name、createdAt、updatedAt。
+      invariant: normalized_page >= 0 and 1 <= normalized_size <= 100 and sort_by in [name, createdAt, updatedAt]
+
   scenarios:
     - id: SCN-001
-      name: 教师查看自己的班级分页
-      given: [teacherId=7 拥有两个班级]
-      when: [调用 GET /api/classrooms/page]
-      then: [仅返回 teacherId=7 可见班级]
-    - id: SCN-002
-      name: 管理员建立师生关系
-      given: [存在 teacherId=7 和 studentId=20]
+      name: 教师创建自己的班级
+      given:
+        - actor.role = TEACHER
+        - actor.id = 7
+        - request.name = " 一班 "
+        - request.teacherId = 99
       when:
-        - "调用 POST /api/teachers/{teacherId}/students/{studentId}"
-      then: [创建关系，返回 204]
+        - 调用 POST /api/classrooms
+      then:
+        - 创建的 classroom.teacherId = 7
+        - 创建的 classroom.name = "一班"
+
+    - id: SCN-002
+      name: 管理员创建指定教师班级
+      given:
+        - actor.role = ADMIN
+        - request.teacherId = 7 且该用户角色为 TEACHER
+      when:
+        - 调用 POST /api/classrooms
+      then:
+        - 返回 ClassroomResponse
+        - response.teacherId = 7
+        - response.studentCount = 0
+
+    - id: SCN-003
+      name: 教师不能管理他人班级
+      given:
+        - actor.role = TEACHER
+        - actor.id = 7
+        - classroom.id = 100
+        - classroom.teacherId = 8
+      when:
+        - 调用 PUT /api/classrooms/100
+      then:
+        - 拒绝访问
+        - 班级数据不被修改
+
+    - id: SCN-004
+      name: 添加学生到班级
+      given:
+        - actor 可管理 classroomId = 100
+        - studentId = 20 的用户角色为 STUDENT
+        - 班级成员关系尚不存在
+      when:
+        - 调用 POST /api/classrooms/100/students/20
+      then:
+        - 创建 ClassroomMember
+        - 返回 204
+
+    - id: SCN-005
+      name: 重复添加学生保持幂等
+      given:
+        - actor 可管理 classroomId = 100
+        - classroom_members 已存在 classroomId = 100 且 studentId = 20
+      when:
+        - 调用 POST /api/classrooms/100/students/20
+      then:
+        - 不创建重复成员关系
+        - 返回 204
+
   acceptance_criteria:
     - id: AC-001
-      text: 班级查询和写入接口必须按管理员或教师所有权过滤。
-      verifies: [RULE-001]
+      text: 班级列表、分页、详情相关成员查询必须按管理员全量和教师本人班级过滤。
+      verifies:
+        - RULE-001
+
     - id: AC-002
-      text: 师生关系写入接口必须限制为 ADMIN。
-      verifies: [RULE-002]
+      text: 创建班级必须按角色解析 teacherId，并拒绝非教师用户作为班级负责人。
+      verifies:
+        - RULE-002
+
     - id: AC-003
-      text: 基于班级的辞书和学习计划操作必须复用负责学生校验。
-      verifies: [RULE-003, RULE-004]
+      text: 更新班级必须阻止教师把班级转移给其他教师。
+      verifies:
+        - RULE-003
+
+    - id: AC-004
+      text: 班级名称、说明和分页参数必须按服务层规则归一化。
+      verifies:
+        - RULE-004
+        - RULE-007
+
+    - id: AC-005
+      text: 添加同一学生到同一班级多次不得产生重复成员记录。
+      verifies:
+        - RULE-005
+
+    - id: AC-006
+      text: 删除班级后，依赖 classroomId 的成员和分配关系不得残留为孤儿记录。
+      verifies:
+        - RULE-006
+
   interfaces:
     apis:
       - method: GET
-        path: "/api/classrooms/page"
+        path: /api/classrooms
+        request_schema: none
+        response_schema: List<ClassroomResponse>
+      - method: GET
+        path: /api/classrooms/page
         request_schema: page,size,keyword,sortBy,sortDir
         response_schema: Page<ClassroomResponse>
       - method: POST
-        path: "/api/classrooms"
+        path: /api/classrooms
         request_schema: CreateClassroomRequest
         response_schema: ClassroomResponse
+      - method: PUT
+        path: /api/classrooms/{id}
+        request_schema: UpdateClassroomRequest
+        response_schema: ClassroomResponse
+      - method: DELETE
+        path: /api/classrooms/{id}
+        request_schema: none
+        response_schema: message,id
+      - method: GET
+        path: /api/classrooms/{id}/students
+        request_schema: none
+        response_schema: List<UserResponse>
       - method: POST
-        path: "/api/classrooms/{id}/students/{studentId}"
+        path: /api/classrooms/{id}/students/{studentId}
         request_schema: none
         response_schema: none
-      - method: POST
-        path: "/api/classrooms/{id}/dictionaries"
-        request_schema: AssignDictionariesRequest
-        response_schema: assignedCount
-      - method: GET
-        path: "/api/teachers/me/students/page"
-        request_schema: page,size,name
-        response_schema: Page<UserResponse>
+      - method: DELETE
+        path: /api/classrooms/{id}/students/{studentId}
+        request_schema: none
+        response_schema: none
+    persistence:
+      - table: classrooms
+        constraints: teacher_id references users(id) on delete cascade
+      - table: classroom_members
+        constraints: unique(classroom_id, student_id), classroom_id references classrooms(id) on delete cascade, student_id references users(id) on delete cascade
+
   trace:
     expected_code:
       - controller: ClassroomController
-      - controller: TeacherController
       - service: ClassroomService
-      - service: TeacherStudentService
-      - service: AccessControlService
-    expected_tests: []
+      - repository: ClassroomRepository
+      - repository: ClassroomMemberRepository
+      - dto: CreateClassroomRequest
+      - dto: UpdateClassroomRequest
+      - dto: ClassroomResponse
+      - migration: V10__add_classroom_support.sql
+    expected_tests:
+      - ClassroomServiceTest
+      - ClassroomsPageTest
+      - StudyPlanServiceTest
+      - SparkJunior1600SeedServiceTest
+
   risk:
     level: high
-    reasons: [组织边界是辞书分配和学习计划权限的基础]
+    reasons:
+      - 班级所有权是教师可见范围、学生范围、辞书分配和学习计划权限的基础。
+      - 删除班级会通过外键级联影响多张业务表。
+
   non_functional:
-    security: [教师不得枚举或操作非自己负责学生和非自己班级]
+    security:
+      - 教师不得枚举、修改或删除非自己负责的班级。
+      - 学生不得调用班级管理接口。
+    reliability:
+      - 班级成员写入必须在事务中完成。
+      - 重复添加成员不得破坏唯一约束。
+    performance:
+      - 分页查询必须限制最大 page size 为 100。
+
   open_questions:
-    - 班级删除是否应级联删除成员、辞书分配和学习计划关联，目前需从数据库约束确认。
+    - 删除班级是否需要产品层二次确认或软删除，目前代码为物理删除并依赖外键级联。
+    - 班级名称是否需要同一教师下唯一，目前代码和数据库未强制唯一。

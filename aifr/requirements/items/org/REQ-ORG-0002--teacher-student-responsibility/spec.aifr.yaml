@@ -1,0 +1,258 @@
+aifr_spec:
+  schema_version: "1.0.0"
+  id: REQ-ORG-0002
+  version: "1.0.0"
+  title: 师生责任范围聚合
+  type: functional
+  status: draft
+  priority: high
+
+  identity:
+    primary_domain: ORG
+    domain_path: org
+    frozen_slug: teacher-student-responsibility
+    canonical_path: aifr/requirements/items/org/REQ-ORG-0002--teacher-student-responsibility/spec.aifr.yaml
+    naming_standard_version: "1.0.0"
+    related_domains:
+      - AUTH
+      - DICT
+      - EXAM
+      - STUDY
+
+  lifecycle:
+    created_at: "2026-06-24"
+    updated_at: "2026-06-24"
+    owner: backend
+    reviewers:
+      - backend
+      - qa
+
+  versioning:
+    change_type: initial
+    previous_version: null
+    supersedes: []
+    superseded_by: null
+    breaking_change: false
+    change_summary: 从 TeacherStudentService、TeacherController 和 AccessControlService 反推的初始需求。
+
+  revision_history:
+    - version: "1.0.0"
+      change_type: initial
+      summary: 初始代码基线。
+
+  intent:
+    user_goal: 管理员可以维护教师与学生的直接负责关系，教师可以查看自己负责的学生。
+    business_value: 为辞书分配、考试创建、学习计划发布和教师看板提供统一的学生责任范围。
+
+  scope:
+    in:
+      - 管理员建立教师学生关系
+      - 管理员移除教师学生关系
+      - 教师查看自己负责的学生
+      - 管理员查看指定教师负责的学生
+      - 直接师生关系与班级成员关系聚合
+      - 按学生反查负责教师集合
+    out:
+      - 学生主动申请绑定教师
+      - 教师自行创建直接师生关系
+      - 关系审批流
+      - 责任范围历史审计
+
+  actors:
+    primary:
+      - admin
+      - teacher
+    secondary:
+      - student
+      - access_control_service
+      - classroom_repository
+      - classroom_member_repository
+
+  domain_terms:
+    teacher_student_relation: 管理员维护的教师与学生直接负责关系。
+    classroom_responsibility: 教师拥有班级且学生是该班级成员时形成的负责关系。
+    responsible_student: 由直接师生关系或班级成员关系推导出的教师负责学生。
+    responsible_teacher: 由直接师生关系或学生所在班级推导出的负责教师。
+    display_name_filter: 教师学生分页查询中用于匹配 displayName 的名称关键字。
+
+  preconditions:
+    - 调用者已认证。
+    - 写入师生关系的调用者必须是 ADMIN。
+    - 直接关系中的 teacherId 必须指向 TEACHER 用户。
+    - 直接关系中的 studentId 必须指向 STUDENT 用户。
+
+  rules:
+    - id: RULE-001
+      description: 只有管理员可以建立或移除直接师生关系。
+      invariant: teacher_student_relation_mutation_allowed iff actor.role = ADMIN
+
+    - id: RULE-002
+      description: 建立直接师生关系前必须校验 teacherId 和 studentId 的用户角色。
+      invariant: create_relation_allowed iff teacher.role = TEACHER and student.role = STUDENT
+
+    - id: RULE-003
+      description: 建立直接师生关系是幂等操作，同一 teacherId 和 studentId 已存在时不重复创建。
+      invariant: unique_effect(teacher_id, student_id)
+
+    - id: RULE-004
+      description: 教师负责学生集合等于直接师生关系学生与该教师名下班级成员学生的并集。
+      formula: responsible_students = direct_relation_students union classroom_member_students_for_teacher_classrooms
+
+    - id: RULE-005
+      description: 学生负责教师集合等于直接师生关系教师与学生所在班级 owner 教师的并集。
+      formula: responsible_teachers = direct_relation_teachers union classroom_owner_teachers_for_student_classrooms
+
+    - id: RULE-006
+      description: 教师学生分页查询 page 从 1 开始，size 限制在 1 到 100，并按 id 倒序返回。
+      invariant: normalized_page >= 0 and 1 <= normalized_size <= 100 and sort = id desc
+
+    - id: RULE-007
+      description: 教师学生分页的 name 参数只匹配 displayName，空白 name 不参与过滤。
+      invariant: name_filter_applies iff trim(name) is not blank
+
+  scenarios:
+    - id: SCN-001
+      name: 管理员建立直接师生关系
+      given:
+        - actor.role = ADMIN
+        - teacherId = 7 的用户角色为 TEACHER
+        - studentId = 20 的用户角色为 STUDENT
+        - 直接师生关系尚不存在
+      when:
+        - 调用 POST /api/teachers/7/students/20
+      then:
+        - 保存 TeacherStudentRelation
+        - 返回 204
+
+    - id: SCN-002
+      name: 重复建立直接师生关系保持幂等
+      given:
+        - actor.role = ADMIN
+        - 已存在 teacherId = 7 且 studentId = 20 的关系
+      when:
+        - 调用 POST /api/teachers/7/students/20
+      then:
+        - 不创建重复记录
+        - 返回 204
+
+    - id: SCN-003
+      name: 教师查看聚合后的负责学生
+      given:
+        - teacherId = 7 直接负责 studentId = 20
+        - teacherId = 7 拥有 classroomId = 100
+        - classroomId = 100 包含 studentId = 21
+      when:
+        - 调用 GET /api/teachers/me/students
+      then:
+        - 返回 studentId = 20 和 studentId = 21
+
+    - id: SCN-004
+      name: 教师责任范围用于授权
+      given:
+        - teacherId = 7 负责 studentId = 20
+        - dictionaryId = 10 可由 teacherId = 7 分配
+      when:
+        - 教师尝试给 studentId = 20 分配辞书或创建考试
+      then:
+        - AccessControlService 判定目标学生在教师负责范围内
+
+  acceptance_criteria:
+    - id: AC-001
+      text: 直接师生关系写入接口必须仅允许 ADMIN 调用。
+      verifies:
+        - RULE-001
+
+    - id: AC-002
+      text: 建立直接关系时，非教师用户或非学生用户必须被拒绝。
+      verifies:
+        - RULE-002
+
+    - id: AC-003
+      text: 重复建立同一 teacherId/studentId 直接关系不得产生重复记录。
+      verifies:
+        - RULE-003
+
+    - id: AC-004
+      text: 教师负责学生查询必须合并直接关系和班级成员关系。
+      verifies:
+        - RULE-004
+
+    - id: AC-005
+      text: 学生负责教师查询必须合并直接关系和所在班级 owner 教师。
+      verifies:
+        - RULE-005
+
+    - id: AC-006
+      text: 分页查询必须规范化 page、size，并支持 displayName 模糊过滤。
+      verifies:
+        - RULE-006
+        - RULE-007
+
+  interfaces:
+    apis:
+      - method: POST
+        path: /api/teachers/{teacherId}/students/{studentId}
+        request_schema: none
+        response_schema: none
+      - method: DELETE
+        path: /api/teachers/{teacherId}/students/{studentId}
+        request_schema: none
+        response_schema: none
+      - method: GET
+        path: /api/teachers/me/students
+        request_schema: none
+        response_schema: List<UserResponse>
+      - method: GET
+        path: /api/teachers/me/students/page
+        request_schema: page,size,name
+        response_schema: Page<UserResponse>
+      - method: GET
+        path: /api/teachers/{teacherId}/students
+        request_schema: none
+        response_schema: List<UserResponse>
+      - method: GET
+        path: /api/teachers/{teacherId}/students/page
+        request_schema: page,size,name
+        response_schema: Page<UserResponse>
+    persistence:
+      - table: teacher_student_relations
+        constraints: teacher_id references users(id) on delete cascade, student_id references users(id) on delete cascade
+      - table: classrooms
+        usage: 按 teacher_id 推导教师拥有的班级
+      - table: classroom_members
+        usage: 按 classroom_id 和 student_id 推导责任范围
+
+  trace:
+    expected_code:
+      - controller: TeacherController
+      - service: TeacherStudentService
+      - service: AccessControlService
+      - repository: TeacherStudentRelationRepository
+      - repository: ClassroomRepository
+      - repository: ClassroomMemberRepository
+      - migration: V9__add_user_role_support.sql
+      - migration: V10__add_classroom_support.sql
+    expected_tests:
+      - TeacherStudentServiceTest
+      - AccessControlServiceTest
+      - StudyPlanServiceTest
+      - VideoAssetServiceTest
+
+  risk:
+    level: high
+    reasons:
+      - 教师责任范围被多个授权点复用，错误聚合会导致越权或无法分配学习资源。
+      - 直接关系和班级关系是并集，去重不当会影响分页和统计。
+
+  non_functional:
+    security:
+      - 教师不得通过教师接口查询其他教师的学生列表。
+      - 管理员写入前必须校验目标用户角色。
+    reliability:
+      - 责任范围判断必须稳定复用同一聚合规则。
+    performance:
+      - 分页查询必须限制最大 page size 为 100。
+
+  open_questions:
+    - teacher_student_relations 表当前代码基线中是否有数据库唯一约束需要确认；服务层已做幂等检查。
+    - 删除直接师生关系是否应影响已有学习计划或考试权限，目前代码仅删除关系本身。

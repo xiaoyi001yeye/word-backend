@@ -20,13 +20,25 @@ requirements:
     version: "1.0.0"
     path: aifr/requirements/items/imp/REQ-IMP-0001--books-import-pipeline/spec.aifr.yaml
   - id: REQ-ORG-0001
-    title: 班级与师生关系管理
-    version: "1.0.0"
+    title: 班级基础管理与成员维护
+    version: "1.1.0"
     path: aifr/requirements/items/org/REQ-ORG-0001--classroom-teacher-student/spec.aifr.yaml
+  - id: REQ-ORG-0002
+    title: 师生责任范围聚合
+    version: "1.0.0"
+    path: aifr/requirements/items/org/REQ-ORG-0002--teacher-student-responsibility/spec.aifr.yaml
+  - id: REQ-ORG-0003
+    title: 班级辞书分配与可见性
+    version: "1.0.0"
+    path: aifr/requirements/items/org/REQ-ORG-0003--classroom-dictionary-assignment/spec.aifr.yaml
   - id: REQ-STUDY-0001
     title: 学习计划、每日任务与专注度统计
     version: "1.0.0"
     path: aifr/requirements/items/study/REQ-STUDY-0001--study-plan-task-tracking/spec.aifr.yaml
+  - id: REQ-STUDY-0002
+    title: 班级范围学习计划约束
+    version: "1.0.0"
+    path: aifr/requirements/items/study/REQ-STUDY-0002--classroom-study-plan-scope/spec.aifr.yaml
   - id: REQ-EXAM-0001
     title: 辞书四选一测试
     version: "1.0.0"
