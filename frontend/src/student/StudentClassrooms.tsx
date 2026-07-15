@@ -54,6 +54,7 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
   const [videoAccess, setVideoAccess] = useState<VideoAccessResponse | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoLandscape, setIsVideoLandscape] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -144,6 +145,7 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
     setPlayingMessage(message);
     setVideoAccess(null);
     setVideoError(null);
+    setIsVideoLandscape(false);
     setVideoLoading(true);
     try {
       setVideoAccess(await studentVideoApi.playFromClassroomFeed(selectedClassroomId, message.resourceId));
@@ -158,6 +160,7 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
     setPlayingMessage(null);
     setVideoAccess(null);
     setVideoError(null);
+    setIsVideoLandscape(false);
   };
 
   return (
@@ -254,7 +257,7 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
 
       {playingMessage && (
         <div className="student-player" role="dialog" aria-modal="true" aria-label={playingMessage.resourceTitle || '学习视频'}>
-          <section className="student-player__panel">
+          <section className={`student-player__panel ${isVideoLandscape ? 'student-player__panel--landscape' : ''}`}>
             <div className="student-player__media">
               {videoLoading ? (
                 <div className="student-player__loading"><SpinnerGap size={34} />正在获取播放地址</div>
@@ -263,6 +266,14 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
               ) : (
                 <div className="student-player__loading"><VideoCamera size={34} />{videoError || '无法播放这个视频'}</div>
               )}
+              <button
+                type="button"
+                className="student-player__orientation"
+                onClick={() => setIsVideoLandscape((current) => !current)}
+                aria-label={isVideoLandscape ? '切换为竖屏播放' : '切换为横屏播放'}
+              >
+                {isVideoLandscape ? '竖屏' : '横屏'}
+              </button>
               <button type="button" className="student-player__close" onClick={closeVideo} aria-label="关闭视频">
                 <X size={20} />
               </button>
