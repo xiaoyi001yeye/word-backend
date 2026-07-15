@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowRight,
   BookOpen,
-  ChatCircleText,
+  CheckCircle,
+  ClipboardText,
+  PencilSimple,
   PlayCircle,
+  PaperPlaneTilt,
   SpinnerGap,
   UsersThree,
   VideoCamera,
@@ -14,9 +18,11 @@ import type { Classroom, ClassroomGroupFeedMessage, VideoAccessResponse } from '
 
 interface StudentClassroomsProps {
   onOpenDictionary: (dictionaryId: number) => void;
+  onOpenStudyPlan: () => void;
 }
 
 const FEED_PAGE_SIZE = 20;
+const POSTED_NOTICE_DURATION_MS = 2200;
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -36,11 +42,22 @@ function formatDateTime(value?: string | null) {
 
 function messageLabel(message: ClassroomGroupFeedMessage) {
   if (message.messageType === 'DICTIONARY') return '词书';
+  if (message.messageType === 'STUDY_PLAN') return '学习计划';
   if (message.messageType === 'VIDEO') return '视频';
   return '留言';
 }
 
-export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) {
+function resourceAction(message: ClassroomGroupFeedMessage) {
+  if (message.messageType === 'DICTIONARY') {
+    return { icon: BookOpen, label: '打开词书' };
+  }
+  if (message.messageType === 'STUDY_PLAN') {
+    return { icon: ClipboardText, label: '查看今日任务' };
+  }
+  return { icon: PlayCircle, label: '播放视频' };
+}
+
+export function StudentClassrooms({ onOpenDictionary, onOpenStudyPlan }: StudentClassroomsProps) {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [selectedClassroomId, setSelectedClassroomId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ClassroomGroupFeedMessage[]>([]);
@@ -48,12 +65,15 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
+  const [postedNotice, setPostedNotice] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [text, setText] = useState('');
   const [posting, setPosting] = useState(false);
   const [playingMessage, setPlayingMessage] = useState<ClassroomGroupFeedMessage | null>(null);
   const [videoAccess, setVideoAccess] = useState<VideoAccessResponse | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const composerTextAreaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +119,44 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
     return () => { active = false; };
   }, [selectedClassroomId]);
 
+  useEffect(() => {
+    if (!postedNotice) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setPostedNotice(null), POSTED_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [postedNotice]);
+
+  useEffect(() => {
+    if (!playingMessage) {
+      return undefined;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeVideo();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [playingMessage]);
+
+  useEffect(() => {
+    if (!composeOpen) {
+      return undefined;
+    }
+    const focusTimer = window.setTimeout(() => composerTextAreaRef.current?.focus(), 120);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !posting) {
+        setComposeOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [composeOpen, posting]);
+
   const selectedClassroom = classrooms.find((classroom) => classroom.id === selectedClassroomId) ?? null;
 
   const refreshMessages = async () => {
@@ -117,10 +175,13 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
     }
     setPosting(true);
     setMessageError(null);
+    setPostedNotice(null);
     try {
       await studentApi.createClassroomGroupFeedTextMessage(selectedClassroomId, { content });
       setText('');
+      setPostedNotice('已发布到班级');
       await refreshMessages();
+      setComposeOpen(false);
     } catch (postError) {
       setMessageError(postError instanceof Error ? postError.message : '留言发布失败');
     } finally {
@@ -160,11 +221,22 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
     setVideoError(null);
   };
 
+  const openResource = (message: ClassroomGroupFeedMessage) => {
+    if (message.messageType === 'DICTIONARY') {
+      void openDictionary(message);
+      return;
+    }
+    if (message.messageType === 'STUDY_PLAN') {
+      onOpenStudyPlan();
+      return;
+    }
+    void openVideo(message);
+  };
+
   return (
     <>
       <div className="section-header">
         <div><p className="eyebrow">Classrooms</p><h2>我的班级</h2></div>
-        <span className="subtle-count">{classrooms.length} 个</span>
       </div>
 
       {classroomsLoading && (
@@ -177,19 +249,22 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
 
       {!classroomsLoading && !error && classrooms.length > 0 && (
         <>
-          <section className="student-classroom-strip" aria-label="班级列表">
-            {classrooms.map((classroom) => (
-              <button
-                type="button"
-                key={classroom.id}
-                className={classroom.id === selectedClassroomId ? 'is-active' : ''}
-                onClick={() => setSelectedClassroomId(classroom.id)}
-              >
-                <strong>{classroom.name}</strong>
-                <span>{classroom.teacherName || '负责老师'} · {classroom.studentCount} 人</span>
-              </button>
-            ))}
-          </section>
+          {classrooms.length > 1 && (
+            <section className="student-classroom-strip" aria-label="班级列表">
+              {classrooms.map((classroom) => (
+                <button
+                  type="button"
+                  key={classroom.id}
+                  className={classroom.id === selectedClassroomId ? 'is-active' : ''}
+                  aria-pressed={classroom.id === selectedClassroomId}
+                  onClick={() => setSelectedClassroomId(classroom.id)}
+                >
+                  <strong>{classroom.name}</strong>
+                  <span>{classroom.teacherName || '负责老师'} · {classroom.studentCount} 人</span>
+                </button>
+              ))}
+            </section>
+          )}
 
           {selectedClassroom && (
             <section className="student-classroom-panel">
@@ -199,62 +274,110 @@ export function StudentClassrooms({ onOpenDictionary }: StudentClassroomsProps) 
                   <h2>{selectedClassroom.name}</h2>
                   <span>{selectedClassroom.description || '班级群消息流'}</span>
                 </div>
-                <ChatCircleText size={30} />
-              </div>
-
-              <div className="student-feed-composer">
-                <textarea
-                  placeholder="给班级发一条留言"
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                />
-                <button type="button" disabled={posting || !text.trim()} onClick={() => void postText()}>
-                  {posting ? '发布中' : '发布'}
+                <button
+                  type="button"
+                  className="student-compose-trigger"
+                  onClick={() => {
+                    setMessageError(null);
+                    setComposeOpen(true);
+                  }}
+                >
+                  <PencilSimple size={18} />
+                  <span>发布消息</span>
                 </button>
               </div>
 
               {messageError && <p className="inline-error" role="alert">{messageError}</p>}
+              {postedNotice && <p className="student-posted-notice" role="status"><CheckCircle size={18} />{postedNotice}</p>}
               {messagesLoading && <p className="inline-note">正在加载班级群消息...</p>}
               {!messagesLoading && messages.length === 0 && <p className="inline-note">这个班级还没有群消息。</p>}
 
               <div className="student-feed-list">
-                {messages.map((message) => (
-                  <article key={message.id} className="student-feed-message">
-                    <div className="student-feed-message__meta">
-                      <span>{messageLabel(message)}</span>
-                      <strong>{message.authorName}</strong>
-                      <time>{formatDateTime(message.createdAt)}</time>
-                    </div>
-                    {message.messageType === 'TEXT' ? (
-                      <p>{message.content}</p>
-                    ) : (
-                      <div className="student-feed-resource">
-                        <div>
-                          <h3>{message.resourceTitle || '学习资源'}</h3>
-                          {message.resourceSummary && <p>{message.resourceSummary}</p>}
-                        </div>
-                        {message.messageType === 'DICTIONARY' ? (
-                          <button type="button" onClick={() => void openDictionary(message)}>
-                            <BookOpen size={18} />打开词书
-                          </button>
-                        ) : (
-                          <button type="button" onClick={() => void openVideo(message)}>
-                            <PlayCircle size={18} />播放视频
-                          </button>
-                        )}
+                {messages.map((message) => {
+                  const action = resourceAction(message);
+                  const ResourceIcon = action.icon;
+                  return (
+                    <article key={message.id} className={`student-feed-message student-feed-message--${message.messageType.toLowerCase().replace('_', '-')}`}>
+                      <div className="student-feed-message__meta">
+                        <span>{messageLabel(message)}</span>
+                        <strong>{message.authorName}</strong>
+                        <time>{formatDateTime(message.createdAt)}</time>
                       </div>
-                    )}
-                  </article>
-                ))}
+                      {message.messageType === 'TEXT' ? (
+                        <p>{message.content}</p>
+                      ) : (
+                        <div className="student-feed-resource">
+                          <div>
+                            <h3>{message.resourceTitle || '学习资源'}</h3>
+                            {message.resourceSummary && <p>{message.resourceSummary}</p>}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={videoLoading && playingMessage?.id === message.id}
+                            onClick={() => openResource(message)}
+                          >
+                            <ResourceIcon size={18} />
+                            {videoLoading && playingMessage?.id === message.id ? '准备播放' : action.label}
+                            <ArrowRight size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           )}
         </>
       )}
 
+      {composeOpen && (
+        <div className="student-compose-layer" role="dialog" aria-modal="true" aria-label="发布班级留言">
+          <button
+            type="button"
+            className="student-compose-layer__scrim"
+            aria-label="关闭发布留言"
+            disabled={posting}
+            onClick={() => setComposeOpen(false)}
+          />
+          <section className="student-compose-sheet">
+            <div className="student-compose-sheet__header">
+              <div>
+                <p className="eyebrow">Message</p>
+                <h2>发布班级留言</h2>
+              </div>
+              <button
+                type="button"
+                className="student-compose-sheet__close"
+                aria-label="关闭"
+                disabled={posting}
+                onClick={() => setComposeOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <textarea
+              ref={composerTextAreaRef}
+              aria-label="班级留言"
+              placeholder="给班级发一条留言"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+            />
+            {messageError && <p className="inline-error" role="alert">{messageError}</p>}
+            <div className="student-compose-sheet__actions">
+              <button type="button" disabled={posting} onClick={() => setComposeOpen(false)}>取消</button>
+              <button type="button" disabled={posting || !text.trim()} onClick={() => void postText()}>
+                <PaperPlaneTilt size={18} />
+                {posting ? '发布中' : '发布'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {playingMessage && (
-        <div className="student-player" role="dialog" aria-modal="true" aria-label={playingMessage.resourceTitle || '学习视频'}>
-          <section className="student-player__panel">
+        <div className="student-player" role="dialog" aria-modal="true" aria-label={playingMessage.resourceTitle || '学习视频'} onClick={closeVideo}>
+          <section className="student-player__panel" onClick={(event) => event.stopPropagation()}>
             <div className="student-player__media">
               {videoLoading ? (
                 <div className="student-player__loading"><SpinnerGap size={34} />正在获取播放地址</div>
