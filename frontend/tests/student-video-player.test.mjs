@@ -26,23 +26,27 @@ test('student video player panel fills the playback dialog', () => {
   assert.doesNotMatch(mediaRule, /aspect-ratio:\s*16\s*\/\s*9/);
 });
 
-test('student video player uses fullscreen entry instead of orientation toggle text', () => {
-  assert.match(playerSource, /student-player__fullscreen/);
-  assert.match(playerSource, /requestFullscreen/);
-  assert.match(playerSource, /fullscreenchange/);
-  assert.match(playerSource, /全屏/);
-  assert.doesNotMatch(playerSource, /横屏/);
-  assert.doesNotMatch(playerSource, /竖屏/);
+test('student video player uses a landscape toggle next to the close button', () => {
+  assert.match(playerSource, /isVideoLandscape/);
+  assert.match(playerSource, /student-player__orientation/);
+  assert.match(playerSource, /student-player__panel--landscape/);
+  assert.match(playerSource, /横屏/);
+  assert.match(playerSource, /竖屏/);
+  assert.doesNotMatch(playerSource, /requestFullscreen/);
+  assert.doesNotMatch(playerSource, /全屏/);
 });
 
-test('student video player rotates the fullscreen panel ninety degrees', () => {
-  const fullscreenButtonRule = ruleFor('.student-player__fullscreen');
-  const fullscreenLandscapeRule = ruleFor('.student-player__panel--fullscreen-landscape');
+test('student video player landscape panel uses the portrait height as its width', () => {
+  const orientationButtonRule = ruleFor('.student-player__orientation');
+  const landscapePanelRule = ruleFor('.student-player__panel--landscape');
 
-  assert.match(fullscreenButtonRule, /position:\s*absolute/);
-  assert.match(fullscreenButtonRule, /top:\s*10px/);
-  assert.match(fullscreenButtonRule, /left:\s*10px/);
-  assert.match(fullscreenLandscapeRule, /transform:\s*rotate\(90deg\)/);
-  assert.match(fullscreenLandscapeRule, /width:\s*100vh/);
-  assert.match(fullscreenLandscapeRule, /height:\s*100vw/);
+  assert.match(orientationButtonRule, /position:\s*absolute/);
+  assert.match(orientationButtonRule, /top:\s*10px/);
+  assert.match(orientationButtonRule, /right:\s*56px/);
+  assert.match(landscapePanelRule, /position:\s*absolute/);
+  assert.match(landscapePanelRule, /top:\s*50%/);
+  assert.match(landscapePanelRule, /left:\s*50%/);
+  assert.match(landscapePanelRule, /transform:\s*translate\(-50%,\s*-50%\)\s*rotate\(90deg\)/);
+  assert.match(landscapePanelRule, /width:\s*calc\(100vh\s*-\s*32px\)/);
+  assert.match(landscapePanelRule, /height:\s*calc\(100vw\s*-\s*32px\)/);
 });
