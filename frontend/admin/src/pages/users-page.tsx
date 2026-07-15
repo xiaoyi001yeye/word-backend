@@ -199,7 +199,7 @@ export function UsersPage() {
             >
                 <Card>
                     <CardHeader class="gap-4">
-                        <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div class="flex flex-col gap-4">
                             <div>
                                 <CardTitle>{isAdmin() ? "用户清单" : "我的学生清单"}</CardTitle>
                                 <CardDescription>
@@ -209,9 +209,10 @@ export function UsersPage() {
                                 </CardDescription>
                             </div>
                             <div
+                                data-testid="user-list-filters"
                                 class={
                                     isAdmin()
-                                        ? "grid w-full gap-3 md:w-auto md:min-w-[420px] md:grid-cols-[180px_minmax(0,1fr)]"
+                                        ? "grid w-full gap-3 md:grid-cols-[180px_minmax(0,320px)]"
                                         : "w-full md:w-[280px]"
                                 }
                             >
