@@ -20,3 +20,38 @@ test('student API exposes classroom and group feed methods', () => {
   assert.match(api, /listClassroomGroupFeedMessages:/);
   assert.match(api, /createClassroomGroupFeedTextMessage:/);
 });
+
+test('student classroom feed treats study plan messages as learning resources', () => {
+  const classrooms = read('src/student/StudentClassrooms.tsx');
+  const types = read('src/types/index.ts');
+
+  assert.match(types, /'STUDY_PLAN'/);
+  assert.match(classrooms, /message\.messageType === 'STUDY_PLAN'/);
+  assert.match(classrooms, /查看今日任务/);
+});
+
+test('student classroom switcher only appears when there are multiple classrooms', () => {
+  const classrooms = read('src/student/StudentClassrooms.tsx');
+
+  assert.match(classrooms, /classrooms\.length > 1 && \(/);
+  assert.match(classrooms, /className="student-classroom-strip"/);
+});
+
+test('student classroom header does not show a classroom count', () => {
+  const classrooms = read('src/student/StudentClassrooms.tsx');
+
+  assert.doesNotMatch(classrooms, /subtle-count/);
+});
+
+test('student classroom composer opens in a floating layer', () => {
+  const classrooms = read('src/student/StudentClassrooms.tsx');
+  const styles = read('src/student/student-workspace.css');
+
+  assert.match(classrooms, /className="student-compose-trigger"/);
+  assert.match(classrooms, /setComposeOpen\(true\)/);
+  assert.match(classrooms, /className="student-compose-layer"/);
+  assert.match(classrooms, /aria-label="发布班级留言"/);
+  assert.doesNotMatch(classrooms, /className="student-feed-composer"/);
+  assert.match(styles, /student-compose-sheet/);
+  assert.doesNotMatch(styles, /\.student-feed-composer/);
+});

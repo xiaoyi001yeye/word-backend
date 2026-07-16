@@ -142,7 +142,7 @@ export interface Classroom {
   updatedAt?: string | null;
 }
 
-export type ClassroomGroupFeedMessageType = 'TEXT' | 'DICTIONARY' | 'VIDEO';
+export type ClassroomGroupFeedMessageType = 'TEXT' | 'DICTIONARY' | 'STUDY_PLAN' | 'VIDEO';
 
 export interface ClassroomGroupFeedMessage {
   id: number;

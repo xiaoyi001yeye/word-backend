@@ -96,6 +96,10 @@ export function StudentWorkspace({ user, dictionaries, onSignOut }: StudentWorks
                 setLibraryDictionaryId(dictionaryId);
                 setTab('library');
               }}
+              onOpenStudyPlan={() => {
+                setTab('study');
+                void loadDashboard();
+              }}
             />
           )}
           {tab === 'profile' && <StudentProfile user={user} onSignOut={onSignOut} />}
