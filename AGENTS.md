@@ -65,6 +65,11 @@ docker-compose up -d --build frontend
 - After modifying files under `frontend/`, rebuild and restart the unified `frontend` container with Docker before considering the change complete.
 - Admin frontend code now lives under `frontend/admin/`; it is built and served by the same `frontend` container.
 
+### Production Public Port
+- The production environment must expose the unified `frontend` service on host port `80` (`80:80`).
+- Do not expose PostgreSQL or the Spring Boot backend directly to the public network; route `/api` traffic through the frontend Nginx container.
+- After changing the production port mapping, recreate the `frontend` container and verify both public port `80` and the `/api` proxy before considering deployment complete.
+
 ## Code Style Guidelines
 
 ### Imports
