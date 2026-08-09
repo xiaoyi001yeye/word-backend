@@ -8,3 +8,4 @@ logs/
 /maven-repo
 /.worktrees/
 /.superpowers/
+.serena

@@ -1,0 +1,6 @@
+environment: production
+host: 124.174.44.175
+ssh:
+  alias: word-prod
+  user: root
+project_directory: /opt/word-backend
