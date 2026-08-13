@@ -3,6 +3,7 @@ package com.example.words.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.words.exception.StudentPointOperationException;
@@ -24,6 +25,9 @@ class StudentPointQueryServiceTest {
     private StudentPointAccountRepository accountRepository;
 
     @Mock
+    private StudentPointAccountService accountService;
+
+    @Mock
     private StudentPointTransactionRepository transactionRepository;
 
     @Mock
@@ -33,7 +37,7 @@ class StudentPointQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StudentPointQueryService(accountRepository, transactionRepository, teacherStudentService);
+        service = new StudentPointQueryService(accountRepository, accountService, transactionRepository, teacherStudentService);
     }
 
     @Test
@@ -48,18 +52,23 @@ class StudentPointQueryServiceTest {
 
         var response = service.getSummary(8L);
 
-        assertEquals(35, response.availablePoints());
+        assertEquals(BigDecimal.valueOf(35), response.availablePoints());
         assertEquals(BigDecimal.valueOf(12), response.todayEarnedPoints());
     }
 
     @Test
-    void missingAccountReturnsStableErrorCode() {
+    void missingAccountIsCreatedAsZeroBalanceAccountForSummary() {
+        StudentPointAccount account = StudentPointAccount.create(8L);
         when(accountRepository.findByStudentId(8L)).thenReturn(Optional.empty());
+        when(accountService.getOrCreateForStudent(8L)).thenReturn(account);
+        when(transactionRepository.sumEarnedByStudentIdBetween(
+                org.mockito.ArgumentMatchers.eq(8L), any(), any())).thenReturn(BigDecimal.ZERO);
 
-        StudentPointOperationException failure = assertThrows(
-                StudentPointOperationException.class, () -> service.getSummary(8L));
+        var response = service.getSummary(8L);
 
-        assertEquals("POINT_ACCOUNT_NOT_FOUND", failure.getCode());
+        assertEquals(BigDecimal.ZERO, response.availablePoints());
+        assertEquals(BigDecimal.ZERO, response.todayEarnedPoints());
+        verify(accountService).getOrCreateForStudent(8L);
     }
 
     @Test

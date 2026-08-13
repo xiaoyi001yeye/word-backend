@@ -29,6 +29,7 @@ public class StudentPointLedgerService {
     private static final String IDEMPOTENCY_CONSTRAINT = "uk_student_point_transactions_idempotency";
 
     private final StudentPointAccountRepository accountRepository;
+    private final StudentPointAccountService accountService;
     private final StudentPointTransactionRepository transactionRepository;
     private final StudentPointAdjustmentRequestRepository adjustmentRequestRepository;
 
@@ -262,11 +263,15 @@ public class StudentPointLedgerService {
 
     private StudentPointAccount lockActiveAccount(Long studentId) {
         StudentPointAccount account = accountRepository.findByStudentIdForUpdate(studentId)
-                .orElseThrow(() -> error(
-                        "POINT_ACCOUNT_NOT_FOUND",
-                        HttpStatus.NOT_FOUND,
-                        "Student point account does not exist"
-                ));
+                .orElseGet(() -> {
+                    accountService.getOrCreateForStudent(studentId);
+                    return accountRepository.findByStudentIdForUpdate(studentId)
+                            .orElseThrow(() -> error(
+                                    "POINT_ACCOUNT_NOT_FOUND",
+                                    HttpStatus.NOT_FOUND,
+                                    "Student point account does not exist"
+                            ));
+                });
         if (account.getStatus() != PointAccountStatus.ACTIVE) {
             throw error("POINT_ACCOUNT_FROZEN", HttpStatus.CONFLICT, "Student point account is frozen");
         }
