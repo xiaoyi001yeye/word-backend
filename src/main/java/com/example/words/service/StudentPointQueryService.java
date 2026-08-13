@@ -11,6 +11,7 @@ import com.example.words.repository.StudentPointTransactionRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,23 +31,24 @@ public class StudentPointQueryService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final StudentPointAccountRepository accountRepository;
+    private final StudentPointAccountService accountService;
     private final StudentPointTransactionRepository transactionRepository;
     private final TeacherStudentService teacherStudentService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public StudentPointSummaryResponse getSummary(Long studentId) {
         StudentPointAccount account = requireAccount(studentId);
         return StudentPointSummaryResponse.from(account, todayEarned(studentId));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<StudentPointTransactionResponse> getTransactions(Long studentId, int page, int size) {
         requireAccount(studentId);
         return transactionRepository.findByStudentId(studentId, page(page, size))
                 .map(StudentPointTransactionResponse::from);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<TeacherStudentPointResponse> getManagedStudents(
             Long teacherId,
             int page,
@@ -54,19 +56,12 @@ public class StudentPointQueryService {
             String name
     ) {
         Page<UserResponse> students = teacherStudentService.getStudentsForTeacher(teacherId, page + 1, size, name);
-        Map<Long, StudentPointAccount> accounts = accountRepository.findAllByStudentIdIn(
-                        students.stream().map(UserResponse::getId).toList()
-                ).stream()
+        List<Long> studentIds = students.stream().map(UserResponse::getId).toList();
+        Map<Long, StudentPointAccount> accounts = accountService.getOrCreateForStudents(studentIds).stream()
                 .collect(Collectors.toMap(StudentPointAccount::getStudentId, Function.identity()));
-        Map<Long, BigDecimal> todayEarned = todayEarned(
-                students.stream().map(UserResponse::getId).toList()
-        );
+        Map<Long, BigDecimal> todayEarned = todayEarned(studentIds);
         return students.map(student -> {
             StudentPointAccount account = accounts.get(student.getId());
-            if (account == null) {
-                throw error("POINT_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND,
-                        "Student point account does not exist: " + student.getId());
-            }
             return new TeacherStudentPointResponse(
                     student.getId(),
                     student.getDisplayName(),
@@ -78,13 +73,13 @@ public class StudentPointQueryService {
         });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public StudentPointSummaryResponse getManagedStudentSummary(Long teacherId, Long studentId) {
         requireManagedStudent(teacherId, studentId);
         return getSummary(studentId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<StudentPointTransactionResponse> getManagedStudentTransactions(
             Long teacherId,
             Long studentId,
@@ -112,8 +107,7 @@ public class StudentPointQueryService {
 
     private StudentPointAccount requireAccount(Long studentId) {
         return accountRepository.findByStudentId(studentId)
-                .orElseThrow(() -> error("POINT_ACCOUNT_NOT_FOUND", HttpStatus.NOT_FOUND,
-                        "Student point account does not exist"));
+                .orElseGet(() -> accountService.getOrCreateForStudent(studentId));
     }
 
     private BigDecimal todayEarned(Long studentId) {

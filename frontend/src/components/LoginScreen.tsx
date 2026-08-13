@@ -108,11 +108,6 @@ export function LoginScreen({ loading, error, quote, onSubmit }: LoginScreenProp
             {loading ? '正在登录...' : '登录并进入对应主页'}
           </button>
         </form>
-
-        <div className="auth-shell__demo">
-          <p className="auth-shell__demo-label">默认测试账号</p>
-          <p className="auth-shell__demo-value">admin / admin123456</p>
-        </div>
       </section>
     </div>
   );

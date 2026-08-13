@@ -45,6 +45,9 @@ class StudentPointLedgerServiceTest {
     private StudentPointAccountRepository accountRepository;
 
     @Mock
+    private StudentPointAccountService accountService;
+
+    @Mock
     private StudentPointTransactionRepository transactionRepository;
 
     @Mock
@@ -56,6 +59,7 @@ class StudentPointLedgerServiceTest {
     void setUp() {
         ledgerService = new StudentPointLedgerService(
                 accountRepository,
+                accountService,
                 transactionRepository,
                 adjustmentRequestRepository
         );
@@ -82,11 +86,11 @@ class StudentPointLedgerServiceTest {
         ));
 
         assertEquals(PointTransactionType.EARN, result.getTransactionType());
-        assertEquals(5, result.getAmount());
-        assertEquals(12, result.getBalanceBefore());
-        assertEquals(17, result.getBalanceAfter());
-        assertEquals(3, result.getFrozenBefore());
-        assertEquals(3, result.getFrozenAfter());
+        assertAmount(5, result.getAmount());
+        assertAmount(12, result.getBalanceBefore());
+        assertAmount(17, result.getBalanceAfter());
+        assertAmount(3, result.getFrozenBefore());
+        assertAmount(3, result.getFrozenAfter());
         assertEquals(7L, result.getAccountId());
         assertEquals(42L, result.getStudentId());
         assertEquals(99L, result.getSourceId());
@@ -95,9 +99,9 @@ class StudentPointLedgerServiceTest {
         assertEquals(9L, result.getOperatorId());
         assertEquals("SYSTEM", result.getOperatorRole());
         assertEquals("答对单词", result.getReason());
-        assertEquals(17, account.getAvailablePoints());
-        assertEquals(25, account.getLifetimeEarnedPoints());
-        assertEquals(5, account.getLifetimeSpentPoints());
+        assertAmount(17, account.getAvailablePoints());
+        assertAmount(25, account.getLifetimeEarnedPoints());
+        assertAmount(5, account.getLifetimeSpentPoints());
         verify(accountRepository).save(account);
     }
 
@@ -217,8 +221,8 @@ class StudentPointLedgerServiceTest {
         StudentPointTransaction result = ledgerService.post(postRequest(42L, 5, "late-key"));
 
         assertSame(existing, result);
-        assertEquals(12, account.getAvailablePoints());
-        assertEquals(20, account.getLifetimeEarnedPoints());
+        assertAmount(12, account.getAvailablePoints());
+        assertAmount(20, account.getLifetimeEarnedPoints());
         verify(accountRepository, never()).save(any());
         verify(transactionRepository, never()).saveAndFlush(any());
     }
@@ -233,7 +237,7 @@ class StudentPointLedgerServiceTest {
 
         assertIdempotencyConflict(postRequest(42L, 5, "late-key"));
 
-        assertEquals(12, account.getAvailablePoints());
+        assertAmount(12, account.getAvailablePoints());
         verify(accountRepository, never()).save(any());
         verify(transactionRepository, never()).saveAndFlush(any());
     }
@@ -291,8 +295,8 @@ class StudentPointLedgerServiceTest {
         ));
 
         assertEquals(PointTransactionType.DEDUCT, result.getTransactionType());
-        assertEquals(5, account.getAvailablePoints());
-        assertEquals(12, account.getLifetimeSpentPoints());
+        assertAmount(5, account.getAvailablePoints());
+        assertAmount(12, account.getLifetimeSpentPoints());
 
         StudentPointAccount insufficient = account(8L, 43L, 2, 0, 2, 0, PointAccountStatus.ACTIVE);
         when(transactionRepository.findByIdempotencyKey("deduct:2")).thenReturn(Optional.empty());
@@ -307,21 +311,27 @@ class StudentPointLedgerServiceTest {
         );
         assertEquals("INSUFFICIENT_POINTS", failure.getCode());
         assertEquals(HttpStatus.BAD_REQUEST, failure.getStatus());
-        assertEquals(2, insufficient.getAvailablePoints());
+        assertAmount(2, insufficient.getAvailablePoints());
     }
 
     @Test
-    void postShouldRejectMissingOrFrozenAccount() {
+    void postShouldCreateMissingAccountBeforePosting() {
+        StudentPointAccount created = account(9L, 42L, 0, 0, 0, 0, PointAccountStatus.ACTIVE);
         when(transactionRepository.findByIdempotencyKey("missing")).thenReturn(Optional.empty());
-        when(accountRepository.findByStudentIdForUpdate(42L)).thenReturn(Optional.empty());
+        when(accountRepository.findByStudentIdForUpdate(42L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(created));
+        when(accountService.getOrCreateForStudent(42L)).thenReturn(created);
 
-        StudentPointOperationException missing = assertThrows(
-                StudentPointOperationException.class,
-                () -> ledgerService.post(postRequest(42L, 1, "missing"))
-        );
-        assertEquals("POINT_ACCOUNT_NOT_FOUND", missing.getCode());
-        assertEquals(HttpStatus.NOT_FOUND, missing.getStatus());
+        StudentPointTransaction transaction = ledgerService.post(postRequest(42L, 1, "missing"));
 
+        assertEquals(9L, transaction.getAccountId());
+        assertAmount(1, transaction.getBalanceAfter());
+        verify(accountService).getOrCreateForStudent(42L);
+    }
+
+    @Test
+    void postShouldRejectFrozenAccount() {
         StudentPointAccount frozen = account(7L, 43L, 3, 0, 3, 0, PointAccountStatus.FROZEN);
         when(transactionRepository.findByIdempotencyKey("frozen")).thenReturn(Optional.empty());
         when(accountRepository.findByStudentIdForUpdate(43L)).thenReturn(Optional.of(frozen));
@@ -353,9 +363,9 @@ class StudentPointLedgerServiceTest {
         StudentPointTransaction reversal = ledgerService.reverse(77L, ADMIN_ACTOR, "误发积分");
 
         assertEquals(PointTransactionType.REVERSE, reversal.getTransactionType());
-        assertEquals(-10, reversal.getAmount());
-        assertEquals(15, reversal.getBalanceBefore());
-        assertEquals(5, reversal.getBalanceAfter());
+        assertAmount(-10, reversal.getAmount());
+        assertAmount(15, reversal.getBalanceBefore());
+        assertAmount(5, reversal.getBalanceAfter());
         assertEquals(PointSourceType.ADMIN_CORRECTION, reversal.getSourceType());
         assertEquals(77L, reversal.getSourceId());
         assertEquals("reverse:77", reversal.getSourceKey());
@@ -364,9 +374,9 @@ class StudentPointLedgerServiceTest {
         assertEquals(1L, reversal.getOperatorId());
         assertEquals("ADMIN", reversal.getOperatorRole());
         assertEquals("误发积分", reversal.getReason());
-        assertEquals(5, account.getAvailablePoints());
-        assertEquals(30, account.getLifetimeEarnedPoints());
-        assertEquals(4, account.getLifetimeSpentPoints());
+        assertAmount(5, account.getAvailablePoints());
+        assertAmount(30, account.getLifetimeEarnedPoints());
+        assertAmount(4, account.getLifetimeSpentPoints());
     }
 
     @Test
@@ -377,10 +387,10 @@ class StudentPointLedgerServiceTest {
 
         StudentPointTransaction reversal = ledgerService.reverse(78L, ADMIN_ACTOR, "撤销扣减");
 
-        assertEquals(4, reversal.getAmount());
-        assertEquals(10, account.getAvailablePoints());
-        assertEquals(20, account.getLifetimeEarnedPoints());
-        assertEquals(10, account.getLifetimeSpentPoints());
+        assertAmount(4, reversal.getAmount());
+        assertAmount(10, account.getAvailablePoints());
+        assertAmount(20, account.getLifetimeEarnedPoints());
+        assertAmount(10, account.getLifetimeSpentPoints());
     }
 
     @Test
@@ -420,7 +430,7 @@ class StudentPointLedgerServiceTest {
         when(accountRepository.findByStudentIdForUpdate(42L)).thenReturn(Optional.of(account));
 
         assertIdempotencyConflict(() -> ledgerService.reverse(77L, ADMIN_ACTOR, "occupied after lock"));
-        assertEquals(10, account.getAvailablePoints());
+        assertAmount(10, account.getAvailablePoints());
         verify(accountRepository, never()).save(any());
     }
 
@@ -438,7 +448,7 @@ class StudentPointLedgerServiceTest {
 
         assertEquals("INSUFFICIENT_POINTS_FOR_REVERSAL", failure.getCode());
         assertEquals(HttpStatus.CONFLICT, failure.getStatus());
-        assertEquals(5, account.getAvailablePoints());
+        assertAmount(5, account.getAvailablePoints());
         verify(accountRepository, never()).save(any());
     }
 
@@ -615,5 +625,9 @@ class StudentPointLedgerServiceTest {
         );
         assertEquals("IDEMPOTENCY_KEY_CONFLICT", failure.getCode());
         assertEquals(HttpStatus.CONFLICT, failure.getStatus());
+    }
+
+    private void assertAmount(int expected, BigDecimal actual) {
+        assertEquals(0, BigDecimal.valueOf(expected).compareTo(actual));
     }
 }
