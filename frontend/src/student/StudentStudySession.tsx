@@ -71,39 +71,39 @@ export function StudentStudySession({ dashboard, onDashboardChange, onBackHome }
     setSubmitting(true);
     setError(null);
     setNotice(result === 'CORRECT' ? '已记录：我会了' : result === 'INCORRECT' ? '已移到队尾，稍后再学' : '已跳过当前单词');
-    const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAtRef.current) / 1000));
-    const currentHiddenSeconds = hiddenAtRef.current === null ? 0 : Math.floor((Date.now() - hiddenAtRef.current) / 1000);
-    const idleSeconds = Math.min(durationSeconds, hiddenSecondsRef.current + currentHiddenSeconds);
-    const focusSeconds = Math.max(0, durationSeconds - idleSeconds);
-    const focusRatio = focusSeconds / durationSeconds;
-    const identity = [
-      current.studentStudyPlanId,
-      current.studyDayTaskItemId,
-      result,
-    ].join(':');
-    const persistence = {
-      storageKey: `word:student-dashboard-study:${current.studentStudyPlanId}`,
-    };
-    const pending = preparePendingStudySubmission<StudentDashboardRecordAttempt>(
-      pendingSubmissionRef.current,
-      identity,
-      () => ({
-        studentStudyPlanId: current.studentStudyPlanId,
-        metaWordId: current.metaWordId,
-        actionType: current.taskType === 'NEW_LEARN' ? 'LEARN' : 'REVIEW',
-        result,
-        durationSeconds,
-        focusSeconds,
-        idleSeconds,
-        interactionCount: interactionCountRef.current,
-        attentionState: focusRatio >= 0.8 ? 'FOCUSED' : focusRatio >= 0.45 ? 'MIXED' : 'IDLE',
-      }),
-      undefined,
-      persistence,
-    );
-    pendingSubmissionRef.current = pending;
 
     try {
+      const durationSeconds = Math.max(1, Math.floor((Date.now() - startedAtRef.current) / 1000));
+      const currentHiddenSeconds = hiddenAtRef.current === null ? 0 : Math.floor((Date.now() - hiddenAtRef.current) / 1000);
+      const idleSeconds = Math.min(durationSeconds, hiddenSecondsRef.current + currentHiddenSeconds);
+      const focusSeconds = Math.max(0, durationSeconds - idleSeconds);
+      const focusRatio = focusSeconds / durationSeconds;
+      const identity = [
+        current.studentStudyPlanId,
+        current.studyDayTaskItemId,
+        result,
+      ].join(':');
+      const persistence = {
+        storageKey: `word:student-dashboard-study:${current.studentStudyPlanId}`,
+      };
+      const pending = preparePendingStudySubmission<StudentDashboardRecordAttempt>(
+        pendingSubmissionRef.current,
+        identity,
+        () => ({
+          studentStudyPlanId: current.studentStudyPlanId,
+          metaWordId: current.metaWordId,
+          actionType: current.taskType === 'NEW_LEARN' ? 'LEARN' : 'REVIEW',
+          result,
+          durationSeconds,
+          focusSeconds,
+          idleSeconds,
+          interactionCount: interactionCountRef.current,
+          attentionState: focusRatio >= 0.8 ? 'FOCUSED' : focusRatio >= 0.45 ? 'MIXED' : 'IDLE',
+        }),
+        undefined,
+        persistence,
+      );
+      pendingSubmissionRef.current = pending;
       const nextDashboard = await studentDashboardApi.record(pending.payload);
       pendingSubmissionRef.current = clearPendingStudySubmission(
         pendingSubmissionRef.current,
