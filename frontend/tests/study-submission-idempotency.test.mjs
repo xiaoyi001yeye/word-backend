@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   clearPendingStudySubmission,
+  createStudyRequestKey,
   preparePendingStudySubmission,
 } from '../src/student/study-submission-idempotency.ts';
 
@@ -171,6 +172,54 @@ test('continues without persistence when session storage is unavailable', () => 
 
   assert.equal(pending.payload.requestKey, 'request-1');
   assert.doesNotThrow(() => clearPendingStudySubmission(pending, persistence));
+});
+
+test('creates request keys without crypto.randomUUID for insecure HTTP contexts', () => {
+  let seed = 0;
+  const cryptoWithoutRandomUuid = {
+    getRandomValues(bytes) {
+      for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = seed;
+        seed = (seed + 17) % 256;
+      }
+      return bytes;
+    },
+  };
+
+  const requestKey = createStudyRequestKey(cryptoWithoutRandomUuid);
+
+  assert.match(
+    requestKey,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
+});
+
+test('default pending submission key generation does not require crypto.randomUUID', () => {
+  const originalCrypto = globalThis.crypto;
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      getRandomValues(bytes) {
+        bytes.fill(1);
+        return bytes;
+      },
+    },
+  });
+
+  try {
+    const pending = preparePendingStudySubmission(
+      null,
+      'item:400:CORRECT',
+      () => ({ result: 'CORRECT' }),
+    );
+
+    assert.match(pending.payload.requestKey, /^[0-9a-f-]+$/);
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: originalCrypto,
+    });
+  }
 });
 
 function createStorage() {

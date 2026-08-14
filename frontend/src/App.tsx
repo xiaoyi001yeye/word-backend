@@ -66,6 +66,7 @@ const FALLBACK_LOGIN_QUOTE: FamousQuote = {
   translation: '学习从不会使头脑疲惫。',
   author: 'Leonardo da Vinci',
 };
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 8000;
 
 function redirectTo(destination: string) {
   if (typeof window === 'undefined') {
@@ -73,6 +74,25 @@ function redirectTo(destination: string) {
   }
 
   window.location.replace(destination);
+}
+
+function timeoutAfter<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timerId = window.setTimeout(() => {
+      reject(new Error(message));
+    }, milliseconds);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timerId);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timerId);
+        reject(error);
+      },
+    );
+  });
 }
 
 function App() {
@@ -211,7 +231,11 @@ function App() {
 
     const bootstrap = async () => {
       try {
-        const user = await authApi.me();
+        const user = await timeoutAfter(
+          authApi.me(),
+          AUTH_BOOTSTRAP_TIMEOUT_MS,
+          '登录状态恢复超时，请重新登录。',
+        );
         if (mounted) {
           const destination = postLoginDestination(user.role);
           if (destination !== '/') {
