@@ -47,6 +47,9 @@ class ClassroomServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private StudyPlanService studyPlanService;
+
     private ClassroomService classroomService;
 
     @BeforeEach
@@ -56,7 +59,8 @@ class ClassroomServiceTest {
                 classroomMemberRepository,
                 studyPlanClassroomRepository,
                 classroomDictionaryAssignmentRepository,
-                userService
+                userService,
+                studyPlanService
         );
     }
 
@@ -147,6 +151,51 @@ class ClassroomServiceTest {
 
         assertEquals("Archived classroom cannot accept new students", exception.getMessage());
         verify(classroomMemberRepository, never()).save(any(ClassroomMember.class));
+    }
+
+    @Test
+    void addStudentToClassroomShouldEnrollStudentInPublishedStudyPlans() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+        AppUser student = student(20L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+        when(userService.getUserEntity(20L)).thenReturn(student);
+        when(classroomMemberRepository.existsByClassroomIdAndStudentId(100L, 20L)).thenReturn(false);
+
+        classroomService.addStudentToClassroom(100L, 20L, teacher);
+
+        verify(classroomMemberRepository).save(any(ClassroomMember.class));
+        verify(studyPlanService).enrollStudentInPublishedPlansForClassroom(100L, 20L, teacher);
+    }
+
+    @Test
+    void addExistingStudentToClassroomShouldRepairMissingStudyPlanEnrollment() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+        AppUser student = student(20L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+        when(userService.getUserEntity(20L)).thenReturn(student);
+        when(classroomMemberRepository.existsByClassroomIdAndStudentId(100L, 20L)).thenReturn(true);
+
+        classroomService.addStudentToClassroom(100L, 20L, teacher);
+
+        verify(classroomMemberRepository, never()).save(any(ClassroomMember.class));
+        verify(studyPlanService).enrollStudentInPublishedPlansForClassroom(100L, 20L, teacher);
+    }
+
+    @Test
+    void removeStudentFromClassroomShouldDropStudentFromClassroomStudyPlans() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+
+        classroomService.removeStudentFromClassroom(100L, 20L, teacher);
+
+        verify(classroomMemberRepository).deleteByClassroomIdAndStudentId(100L, 20L);
+        verify(studyPlanService).dropStudentFromClassroomStudyPlans(100L, 20L, teacher);
     }
 
     @Test

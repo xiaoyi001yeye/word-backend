@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
         listClassrooms: vi.fn(),
         listDictionaries: vi.fn(),
         createStudyPlan: vi.fn(),
+        updateStudyPlan: vi.fn(),
         getStudyPlanOverview: vi.fn(),
         getStudyPlanStudents: vi.fn(),
         publishStudyPlan: vi.fn(),
@@ -62,6 +63,7 @@ describe("StudyPlansPage", () => {
             { id: 8, name: "考研英语高频词", wordCount: 860 },
         ]);
         vi.mocked(api.createStudyPlan).mockResolvedValue(createdPlan);
+        vi.mocked(api.updateStudyPlan).mockResolvedValue({ ...createdPlan, name: "四级计划更新" });
         vi.mocked(api.getStudyPlanOverview).mockResolvedValue({
             studyPlanId: 99,
             studyPlanName: "四级计划",
@@ -76,6 +78,41 @@ describe("StudyPlansPage", () => {
             averageAttentionScore: 0,
         });
         vi.mocked(api.getStudyPlanStudents).mockResolvedValue([]);
+    });
+
+    it("loads a draft study plan into the form and submits updates", async () => {
+        vi.mocked(api.listStudyPlans).mockResolvedValue([createdPlan]);
+        vi.mocked(api.listClassrooms).mockResolvedValue([
+            {
+                id: 12,
+                name: "高一 1 班",
+                description: null,
+                teacherId: 1,
+                teacherName: "Admin",
+                studentCount: 3,
+            },
+        ]);
+
+        render(() => <StudyPlansPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "编辑" }));
+        fireEvent.input(screen.getByLabelText("计划名称"), {
+            target: { value: "四级计划更新" },
+        });
+        const saveButton = screen.getByRole("button", { name: "保存修改" });
+        await waitFor(() => expect(saveButton).toBeEnabled());
+        fireEvent.click(saveButton);
+
+        await waitFor(() => {
+            expect(api.updateStudyPlan).toHaveBeenCalledWith(
+                99,
+                expect.objectContaining({
+                    name: "四级计划更新",
+                    dictionaryId: 7,
+                    classroomIds: [12],
+                }),
+            );
+        });
     });
 
     it("submits the ID selected from the searchable dictionary picker", async () => {

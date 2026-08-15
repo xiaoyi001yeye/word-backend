@@ -41,18 +41,21 @@ public class ClassroomService {
     private final StudyPlanClassroomRepository studyPlanClassroomRepository;
     private final ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository;
     private final UserService userService;
+    private final StudyPlanService studyPlanService;
 
     public ClassroomService(
             ClassroomRepository classroomRepository,
             ClassroomMemberRepository classroomMemberRepository,
             StudyPlanClassroomRepository studyPlanClassroomRepository,
             ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository,
-            UserService userService) {
+            UserService userService,
+            StudyPlanService studyPlanService) {
         this.classroomRepository = classroomRepository;
         this.classroomMemberRepository = classroomMemberRepository;
         this.studyPlanClassroomRepository = studyPlanClassroomRepository;
         this.classroomDictionaryAssignmentRepository = classroomDictionaryAssignmentRepository;
         this.userService = userService;
+        this.studyPlanService = studyPlanService;
     }
 
     @Transactional(readOnly = true)
@@ -171,10 +174,12 @@ public class ClassroomService {
         }
 
         if (classroomMemberRepository.existsByClassroomIdAndStudentId(classroomId, studentId)) {
+            studyPlanService.enrollStudentInPublishedPlansForClassroom(classroomId, studentId, actor);
             return;
         }
 
         classroomMemberRepository.save(new ClassroomMember(null, classroomId, studentId, null));
+        studyPlanService.enrollStudentInPublishedPlansForClassroom(classroomId, studentId, actor);
     }
 
     @Transactional
@@ -182,6 +187,7 @@ public class ClassroomService {
         Classroom classroom = getClassroomEntity(classroomId);
         ensureCanManageClassroom(actor, classroom);
         classroomMemberRepository.deleteByClassroomIdAndStudentId(classroomId, studentId);
+        studyPlanService.dropStudentFromClassroomStudyPlans(classroomId, studentId, actor);
     }
 
     @Transactional(readOnly = true)
