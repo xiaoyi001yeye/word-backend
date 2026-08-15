@@ -93,7 +93,11 @@ public class UserService {
     public UserResponse updateRole(Long id, UpdateUserRoleRequest request) {
         AppUser user = getUserEntity(id);
         user.setRole(request.getRole());
-        return UserResponse.from(appUserRepository.save(user));
+        AppUser savedUser = appUserRepository.save(user);
+        if (savedUser.getRole() == UserRole.STUDENT) {
+            studentPointAccountService.getOrCreateForStudent(savedUser.getId());
+        }
+        return UserResponse.from(savedUser);
     }
 
     @Transactional

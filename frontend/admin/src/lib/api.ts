@@ -349,6 +349,8 @@ export const api = {
     listStudyPlans: () => request<StudyPlanResponse[]>("/api/study-plans"),
     createStudyPlan: (payload: Record<string, unknown>) =>
         request<StudyPlanResponse>("/api/study-plans", { method: "POST", body: payload }),
+    updateStudyPlan: (planId: number, payload: Record<string, unknown>) =>
+        request<StudyPlanResponse>(`/api/study-plans/${planId}`, { method: "PUT", body: payload }),
     publishStudyPlan: (planId: number) =>
         request<StudyPlanResponse>(`/api/study-plans/${planId}/publish`, { method: "POST" }),
     getStudyPlanOverview: (planId: number) =>

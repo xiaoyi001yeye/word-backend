@@ -152,29 +152,39 @@ public class StudyPlanService {
         Long teacherId = resolvePlanTeacherId(classrooms, actor);
 
         StudyPlan studyPlan = new StudyPlan();
-        studyPlan.setName(request.getName().trim());
-        studyPlan.setDescription(trimToNull(request.getDescription()));
-        studyPlan.setTeacherId(teacherId);
-        studyPlan.setDictionaryId(request.getDictionaryId());
-        studyPlan.setStartDate(request.getStartDate());
-        studyPlan.setEndDate(request.getEndDate());
-        studyPlan.setTimezone(request.getTimezone().trim());
-        studyPlan.setDailyNewCount(request.getDailyNewCount());
-        studyPlan.setDailyReviewLimit(request.getDailyReviewLimit());
-        studyPlan.setReviewMode(request.getReviewMode());
-        studyPlan.setReviewIntervalsJson(serializeReviewIntervals(normalizeReviewIntervals(request.getReviewIntervals())));
-        studyPlan.setCompletionThreshold(request.getCompletionThreshold().setScale(2, RoundingMode.HALF_UP));
-        studyPlan.setDailyDeadlineTime(request.getDailyDeadlineTime());
-        studyPlan.setAttentionTrackingEnabled(request.getAttentionTrackingEnabled());
-        studyPlan.setMinFocusSecondsPerWord(request.getMinFocusSecondsPerWord());
-        studyPlan.setMaxFocusSecondsPerWord(request.getMaxFocusSecondsPerWord());
-        studyPlan.setLongStayWarningSeconds(request.getLongStayWarningSeconds());
-        studyPlan.setIdleTimeoutSeconds(request.getIdleTimeoutSeconds());
+        applyStudyPlanRequest(studyPlan, request, teacherId);
         studyPlan.setStatus(StudyPlanStatus.DRAFT);
 
         StudyPlan savedStudyPlan = studyPlanRepository.save(studyPlan);
         for (Classroom classroom : classrooms) {
             studyPlanClassroomRepository.save(new StudyPlanClassroom(null, savedStudyPlan.getId(), classroom.getId(), null));
+        }
+
+        return toStudyPlanResponse(savedStudyPlan, dictionary, classrooms.stream().map(Classroom::getId).toList(), 0L);
+    }
+
+    @Transactional
+    public StudyPlanResponse updateStudyPlan(Long studyPlanId, CreateStudyPlanRequest request, AppUser actor) {
+        StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+        ensureCanManageStudyPlan(actor, studyPlan);
+        if (studyPlan.getStatus() != StudyPlanStatus.DRAFT) {
+            throw new BadRequestException("Only draft study plans can be edited");
+        }
+        validateRequest(request);
+
+        List<Classroom> classrooms = resolveManagedClassrooms(request.getClassroomIds(), actor);
+        Dictionary dictionary = dictionaryService.findById(request.getDictionaryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + request.getDictionaryId()));
+        accessControlService.ensureCanViewDictionary(actor, dictionary);
+        ensureDictionaryAvailableForClassrooms(request.getDictionaryId(), classrooms, actor);
+        Long teacherId = resolvePlanTeacherId(classrooms, actor);
+
+        applyStudyPlanRequest(studyPlan, request, teacherId);
+        StudyPlan savedStudyPlan = studyPlanRepository.save(studyPlan);
+        studyPlanClassroomRepository.deleteByStudyPlanId(savedStudyPlan.getId());
+        for (Classroom classroom : classrooms) {
+            studyPlanClassroomRepository.save(
+                    new StudyPlanClassroom(null, savedStudyPlan.getId(), classroom.getId(), null));
         }
 
         return toStudyPlanResponse(savedStudyPlan, dictionary, classrooms.stream().map(Classroom::getId).toList(), 0L);
@@ -287,6 +297,64 @@ public class StudyPlanService {
     }
 
     @Transactional
+    public void enrollStudentInPublishedPlansForClassroom(Long classroomId, Long studentId, AppUser actor) {
+        List<Long> studyPlanIds = studyPlanClassroomRepository.findByClassroomId(classroomId).stream()
+                .map(StudyPlanClassroom::getStudyPlanId)
+                .distinct()
+                .toList();
+        if (studyPlanIds.isEmpty()) {
+            return;
+        }
+
+        for (Long studyPlanId : studyPlanIds) {
+            StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+            ensureCanManageStudyPlan(actor, studyPlan);
+            if (studyPlan.getStatus() != StudyPlanStatus.PUBLISHED) {
+                continue;
+            }
+
+            Dictionary dictionary = dictionaryService.findById(studyPlan.getDictionaryId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Dictionary not found: " + studyPlan.getDictionaryId()));
+            accessControlService.ensureCanAssignDictionaryToStudent(actor, dictionary, studentId);
+            dictionaryAssignmentService.assignDictionaryToStudents(dictionary, actor, List.of(studentId));
+            getOrCreateStudentStudyPlan(studyPlan.getId(), studentId, resolveNow(studyPlan));
+        }
+    }
+
+    @Transactional
+    public void dropStudentFromClassroomStudyPlans(Long classroomId, Long studentId, AppUser actor) {
+        List<Long> studyPlanIds = studyPlanClassroomRepository.findByClassroomId(classroomId).stream()
+                .map(StudyPlanClassroom::getStudyPlanId)
+                .distinct()
+                .toList();
+        if (studyPlanIds.isEmpty()) {
+            return;
+        }
+
+        for (Long studyPlanId : studyPlanIds) {
+            StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+            ensureCanManageStudyPlan(actor, studyPlan);
+            List<Long> remainingClassroomIds = studyPlanClassroomRepository.findByStudyPlanId(studyPlanId).stream()
+                    .map(StudyPlanClassroom::getClassroomId)
+                    .filter(id -> !Objects.equals(id, classroomId))
+                    .distinct()
+                    .toList();
+            if (!remainingClassroomIds.isEmpty()
+                    && classroomMemberRepository.existsByClassroomIdInAndStudentId(remainingClassroomIds, studentId)) {
+                continue;
+            }
+
+            findStudentStudyPlanByPlanAndStudent(studyPlanId, studentId)
+                    .filter(studentStudyPlan -> studentStudyPlan.getStatus() != StudentStudyPlanStatus.DROPPED)
+                    .ifPresent(studentStudyPlan -> {
+                        studentStudyPlan.setStatus(StudentStudyPlanStatus.DROPPED);
+                        studentStudyPlanRepository.save(studentStudyPlan);
+                    });
+        }
+    }
+
+    @Transactional
     public StudyPlanOverviewResponse getOverview(Long studyPlanId, AppUser actor) {
         StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
         ensureCanManageStudyPlan(actor, studyPlan);
@@ -373,6 +441,7 @@ public class StudyPlanService {
             StudyPlan studyPlan = getStudyPlanEntity(studentStudyPlan.getStudyPlanId());
             LocalDate taskDate = resolveToday(studyPlan);
             markExpiredTasks(studentStudyPlan, taskDate);
+            completeEndedStudentStudyPlan(studentStudyPlan, studyPlan, taskDate);
             StudyDayTask studyDayTask = canGenerateTodayTask(studyPlan, taskDate) && isPublished(studyPlan)
                     ? getOrCreateTodayTask(studentStudyPlan, studyPlan, taskDate)
                     : null;
@@ -683,6 +752,28 @@ public class StudyPlanService {
             throw new BadRequestException("maxFocusSecondsPerWord cannot be less than minFocusSecondsPerWord");
         }
         normalizeReviewIntervals(request.getReviewIntervals());
+    }
+
+    private void applyStudyPlanRequest(StudyPlan studyPlan, CreateStudyPlanRequest request, Long teacherId) {
+        studyPlan.setName(request.getName().trim());
+        studyPlan.setDescription(trimToNull(request.getDescription()));
+        studyPlan.setTeacherId(teacherId);
+        studyPlan.setDictionaryId(request.getDictionaryId());
+        studyPlan.setStartDate(request.getStartDate());
+        studyPlan.setEndDate(request.getEndDate());
+        studyPlan.setTimezone(request.getTimezone().trim());
+        studyPlan.setDailyNewCount(request.getDailyNewCount());
+        studyPlan.setDailyReviewLimit(request.getDailyReviewLimit());
+        studyPlan.setReviewMode(request.getReviewMode());
+        studyPlan.setReviewIntervalsJson(
+                serializeReviewIntervals(normalizeReviewIntervals(request.getReviewIntervals())));
+        studyPlan.setCompletionThreshold(request.getCompletionThreshold().setScale(2, RoundingMode.HALF_UP));
+        studyPlan.setDailyDeadlineTime(request.getDailyDeadlineTime());
+        studyPlan.setAttentionTrackingEnabled(request.getAttentionTrackingEnabled());
+        studyPlan.setMinFocusSecondsPerWord(request.getMinFocusSecondsPerWord());
+        studyPlan.setMaxFocusSecondsPerWord(request.getMaxFocusSecondsPerWord());
+        studyPlan.setLongStayWarningSeconds(request.getLongStayWarningSeconds());
+        studyPlan.setIdleTimeoutSeconds(request.getIdleTimeoutSeconds());
     }
 
     private List<Classroom> resolveManagedClassrooms(Collection<Long> classroomIds, AppUser actor) {
@@ -1272,6 +1363,18 @@ public class StudyPlanService {
                 && (studyPlan.getEndDate() == null || !taskDate.isAfter(studyPlan.getEndDate()));
     }
 
+    private void completeEndedStudentStudyPlan(
+            StudentStudyPlan studentStudyPlan,
+            StudyPlan studyPlan,
+            LocalDate taskDate) {
+        if (studentStudyPlan.getStatus() == StudentStudyPlanStatus.ACTIVE
+                && studyPlan.getEndDate() != null
+                && taskDate.isAfter(studyPlan.getEndDate())) {
+            studentStudyPlan.setStatus(StudentStudyPlanStatus.COMPLETED);
+            studentStudyPlanRepository.save(studentStudyPlan);
+        }
+    }
+
     private void ensurePlanActiveOnDate(StudyPlan studyPlan, LocalDate taskDate) {
         if (taskDate.isBefore(studyPlan.getStartDate())) {
             throw new BadRequestException("Study plan has not started yet");
@@ -1477,7 +1580,13 @@ public class StudyPlanService {
     private StudentStudyPlan getOrCreateStudentStudyPlan(Long studyPlanId, Long studentId, LocalDateTime joinedAt) {
         Optional<StudentStudyPlan> existingStudentStudyPlan = findStudentStudyPlanByPlanAndStudent(studyPlanId, studentId);
         if (existingStudentStudyPlan.isPresent()) {
-            return existingStudentStudyPlan.get();
+            StudentStudyPlan studentStudyPlan = existingStudentStudyPlan.get();
+            if (studentStudyPlan.getStatus() == StudentStudyPlanStatus.DROPPED) {
+                studentStudyPlan.setStatus(StudentStudyPlanStatus.ACTIVE);
+                studentStudyPlan.setJoinedAt(joinedAt);
+                return studentStudyPlanRepository.save(studentStudyPlan);
+            }
+            return studentStudyPlan;
         }
 
         try {

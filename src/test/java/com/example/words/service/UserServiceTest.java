@@ -7,10 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.words.dto.CreateUserRequest;
+import com.example.words.dto.UpdateUserRoleRequest;
 import com.example.words.dto.UserResponse;
 import com.example.words.model.AppUser;
 import com.example.words.model.UserRole;
 import com.example.words.repository.AppUserRepository;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -82,6 +84,23 @@ class UserServiceTest {
         assertEquals(301L, response.getId());
         assertEquals(UserRole.ADMIN, response.getRole());
         verify(appUserRepository).save(any(AppUser.class));
+        verify(studentPointAccountService, never()).createForStudent(any());
+    }
+
+    @Test
+    void updateRoleShouldCreatePointAccountWhenChangedToStudent() {
+        AppUser user = new AppUser();
+        user.setId(401L);
+        user.setUsername("teacher.one");
+        user.setDisplayName("Teacher One");
+        user.setRole(UserRole.TEACHER);
+        when(appUserRepository.findById(401L)).thenReturn(Optional.of(user));
+        when(appUserRepository.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserResponse response = userService.updateRole(401L, new UpdateUserRoleRequest(UserRole.STUDENT));
+
+        assertEquals(UserRole.STUDENT, response.getRole());
+        verify(studentPointAccountService).getOrCreateForStudent(401L);
         verify(studentPointAccountService, never()).createForStudent(any());
     }
 

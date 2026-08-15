@@ -30,6 +30,27 @@ interface StudyPlansPageData {
 const dictionaryClassroomMismatchMessage = "所选词书未分配给全部班级，请重新选择。";
 const reviewIntervalsStartMessage = "复习间隔必须从 0 开始，例如：0,1,3,7,14。";
 
+const createDefaultForm = () => ({
+    name: "",
+    description: "",
+    dictionaryId: "",
+    classroomIds: [] as number[],
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: "",
+    timezone: "Asia/Shanghai",
+    dailyNewCount: "20",
+    dailyReviewLimit: "60",
+    reviewMode: "FIXED_INTERVAL",
+    reviewIntervals: "0,1,3,7,14",
+    completionThreshold: "85",
+    dailyDeadlineTime: "21:00",
+    attentionTrackingEnabled: true,
+    minFocusSecondsPerWord: "2",
+    maxFocusSecondsPerWord: "18",
+    longStayWarningSeconds: "25",
+    idleTimeoutSeconds: "12",
+});
+
 const toStudyPlanCreateError = (error: unknown) => {
     const message = error instanceof Error ? error.message : "创建学习计划失败，请稍后重试。";
     if (message.includes("dictionaryId is not associated with all selected classrooms")) {
@@ -47,26 +68,8 @@ export function StudyPlansPage() {
     const [createError, setCreateError] = createSignal("");
     const [creating, setCreating] = createSignal(false);
     const [selectedPlanId, setSelectedPlanId] = createSignal<number | null>(null);
-    const [form, setForm] = createStore({
-        name: "",
-        description: "",
-        dictionaryId: "",
-        classroomIds: [] as number[],
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: "",
-        timezone: "Asia/Shanghai",
-        dailyNewCount: "20",
-        dailyReviewLimit: "60",
-        reviewMode: "FIXED_INTERVAL",
-        reviewIntervals: "0,1,3,7,14",
-        completionThreshold: "85",
-        dailyDeadlineTime: "21:00",
-        attentionTrackingEnabled: true,
-        minFocusSecondsPerWord: "2",
-        maxFocusSecondsPerWord: "18",
-        longStayWarningSeconds: "25",
-        idleTimeoutSeconds: "12",
-    });
+    const [editingPlanId, setEditingPlanId] = createSignal<number | null>(null);
+    const [form, setForm] = createStore(createDefaultForm());
 
     const [pageData, { refetch }] = createResource(
         () => auth.user(),
@@ -119,6 +122,7 @@ export function StudyPlansPage() {
     );
 
     const selectedPlan = createMemo(() => pageData()?.plans.find((plan) => plan.id === selectedPlanId()) ?? null);
+    const editingPlan = createMemo(() => pageData()?.plans.find((plan) => plan.id === editingPlanId()) ?? null);
 
     const mutateWithRefetch = async (runner: () => Promise<unknown>, successMessage: string) => {
         setFeedback("");
@@ -139,7 +143,61 @@ export function StudyPlansPage() {
         );
     };
 
-    const handleCreate = async (event: SubmitEvent) => {
+    const resetForm = () => {
+        setEditingPlanId(null);
+        setCreateError("");
+        setForm(createDefaultForm());
+    };
+
+    const handleEditPlan = (plan: StudyPlanResponse) => {
+        setFeedback("");
+        setCreateError("");
+        setSelectedPlanId(plan.id);
+        setEditingPlanId(plan.id);
+        setForm({
+            name: plan.name,
+            description: plan.description ?? "",
+            dictionaryId: String(plan.dictionaryId),
+            classroomIds: [...plan.classroomIds],
+            startDate: plan.startDate,
+            endDate: plan.endDate ?? "",
+            timezone: plan.timezone,
+            dailyNewCount: String(plan.dailyNewCount),
+            dailyReviewLimit: String(plan.dailyReviewLimit),
+            reviewMode: plan.reviewMode,
+            reviewIntervals: plan.reviewIntervals.join(","),
+            completionThreshold: String(plan.completionThreshold),
+            dailyDeadlineTime: plan.dailyDeadlineTime,
+            attentionTrackingEnabled: plan.attentionTrackingEnabled,
+            minFocusSecondsPerWord: String(plan.minFocusSecondsPerWord),
+            maxFocusSecondsPerWord: String(plan.maxFocusSecondsPerWord),
+            longStayWarningSeconds: String(plan.longStayWarningSeconds),
+            idleTimeoutSeconds: String(plan.idleTimeoutSeconds),
+        });
+    };
+
+    const buildStudyPlanPayload = (reviewIntervals: number[]) => ({
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        dictionaryId: Number(form.dictionaryId),
+        classroomIds: form.classroomIds,
+        startDate: form.startDate,
+        endDate: form.endDate || null,
+        timezone: form.timezone,
+        dailyNewCount: Number(form.dailyNewCount),
+        dailyReviewLimit: Number(form.dailyReviewLimit),
+        reviewMode: form.reviewMode,
+        reviewIntervals,
+        completionThreshold: Number(form.completionThreshold),
+        dailyDeadlineTime: form.dailyDeadlineTime,
+        attentionTrackingEnabled: form.attentionTrackingEnabled,
+        minFocusSecondsPerWord: Number(form.minFocusSecondsPerWord),
+        maxFocusSecondsPerWord: Number(form.maxFocusSecondsPerWord),
+        longStayWarningSeconds: Number(form.longStayWarningSeconds),
+        idleTimeoutSeconds: Number(form.idleTimeoutSeconds),
+    });
+
+    const handleSave = async (event: SubmitEvent) => {
         event.preventDefault();
         setFeedback("");
         setCreateError("");
@@ -153,28 +211,15 @@ export function StudyPlansPage() {
         }
         setCreating(true);
         try {
-            const created = await api.createStudyPlan({
-                name: form.name.trim(),
-                description: form.description.trim() || undefined,
-                dictionaryId: Number(form.dictionaryId),
-                classroomIds: form.classroomIds,
-                startDate: form.startDate,
-                endDate: form.endDate || null,
-                timezone: form.timezone,
-                dailyNewCount: Number(form.dailyNewCount),
-                dailyReviewLimit: Number(form.dailyReviewLimit),
-                reviewMode: form.reviewMode,
-                reviewIntervals,
-                completionThreshold: Number(form.completionThreshold),
-                dailyDeadlineTime: form.dailyDeadlineTime,
-                attentionTrackingEnabled: form.attentionTrackingEnabled,
-                minFocusSecondsPerWord: Number(form.minFocusSecondsPerWord),
-                maxFocusSecondsPerWord: Number(form.maxFocusSecondsPerWord),
-                longStayWarningSeconds: Number(form.longStayWarningSeconds),
-                idleTimeoutSeconds: Number(form.idleTimeoutSeconds),
-            });
-            setFeedback("学习计划已创建。");
-            setSelectedPlanId(created.id);
+            const editingId = editingPlanId();
+            const saved = editingId
+                ? await api.updateStudyPlan(editingId, buildStudyPlanPayload(reviewIntervals))
+                : await api.createStudyPlan(buildStudyPlanPayload(reviewIntervals));
+            setFeedback(editingId ? "学习计划已更新。" : "学习计划已创建。");
+            setSelectedPlanId(saved.id);
+            if (editingId) {
+                resetForm();
+            }
             await refetch();
             await refetchInsights();
         } catch (error) {
@@ -213,11 +258,15 @@ export function StudyPlansPage() {
                     <div class="space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>创建学习计划</CardTitle>
-                                <CardDescription>按班级交集筛出可分发的词书，然后生成统一学习编排。</CardDescription>
+                                <CardTitle>{editingPlan() ? "编辑学习计划" : "创建学习计划"}</CardTitle>
+                                <CardDescription>
+                                    {editingPlan()
+                                        ? "调整草稿计划的词书、班级和每日学习规则。"
+                                        : "按班级交集筛出可分发的词书，然后生成统一学习编排。"}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <form class="grid gap-5" onSubmit={handleCreate}>
+                                <form class="grid gap-5" onSubmit={handleSave}>
                                     <div class="grid gap-4 md:grid-cols-2">
                                         <div class="space-y-2">
                                             <Label for="study-plan-name">计划名称</Label>
@@ -368,19 +417,32 @@ export function StudyPlansPage() {
                                         </Alert>
                                     </Show>
 
-                                    <Button
-                                        class="w-full md:w-auto"
-                                        disabled={
-                                            form.classroomIds.length === 0 ||
-                                            !form.name.trim() ||
-                                            !form.dictionaryId ||
-                                            availableDictionaries.loading ||
-                                            creating()
-                                        }
-                                        type="submit"
-                                    >
-                                        {creating() ? "正在创建..." : "创建计划"}
-                                    </Button>
+                                    <div class="flex flex-wrap gap-3">
+                                        <Button
+                                            class="w-full md:w-auto"
+                                            disabled={
+                                                form.classroomIds.length === 0 ||
+                                                !form.name.trim() ||
+                                                !form.dictionaryId ||
+                                                availableDictionaries.loading ||
+                                                creating()
+                                            }
+                                            type="submit"
+                                        >
+                                            {creating()
+                                                ? editingPlan()
+                                                    ? "正在保存..."
+                                                    : "正在创建..."
+                                                : editingPlan()
+                                                    ? "保存修改"
+                                                    : "创建计划"}
+                                        </Button>
+                                        <Show when={editingPlan()}>
+                                            <Button class="w-full md:w-auto" type="button" variant="outline" onClick={resetForm}>
+                                                取消编辑
+                                            </Button>
+                                        </Show>
+                                    </div>
                                 </form>
                             </CardContent>
                         </Card>
@@ -395,25 +457,36 @@ export function StudyPlansPage() {
                                     <Show when={data().plans.length > 0} fallback={<EmptyState title="暂无学习计划" description="创建第一份计划后，这里会成为日常编排入口。" />}>
                                         <For each={data().plans}>
                                             {(plan) => (
-                                                <button
+                                                <div
                                                     class={`w-full rounded-2xl border px-4 py-4 text-left transition ${selectedPlanId() === plan.id ? "border-primary bg-primary/5" : "border-border/70 bg-background/60 hover:border-primary/40"}`}
-                                                    onClick={() => setSelectedPlanId(plan.id)}
                                                 >
-                                                    <div class="flex items-start justify-between gap-4">
-                                                        <div>
-                                                            <p class="font-medium text-foreground">{plan.name}</p>
-                                                            <p class="mt-1 text-sm text-muted-foreground">{plan.dictionaryName}</p>
+                                                    <button class="w-full text-left" onClick={() => setSelectedPlanId(plan.id)}>
+                                                        <div class="flex items-start justify-between gap-4">
+                                                            <div>
+                                                                <p class="font-medium text-foreground">{plan.name}</p>
+                                                                <p class="mt-1 text-sm text-muted-foreground">{plan.dictionaryName}</p>
+                                                            </div>
+                                                            <Badge variant={plan.status === "PUBLISHED" ? "success" : "outline"}>
+                                                                {plan.status}
+                                                            </Badge>
                                                         </div>
-                                                        <Badge variant={plan.status === "PUBLISHED" ? "success" : "outline"}>
-                                                            {plan.status}
-                                                        </Badge>
-                                                    </div>
-                                                    <div class="mt-4 flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                                        <span>{formatDate(plan.startDate)}</span>
-                                                        <span>{plan.studentCount} students</span>
-                                                        <span>{plan.dailyNewCount} new/day</span>
-                                                    </div>
-                                                </button>
+                                                        <div class="mt-4 flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                                                            <span>{formatDate(plan.startDate)}</span>
+                                                            <span>{plan.studentCount} students</span>
+                                                            <span>{plan.dailyNewCount} new/day</span>
+                                                        </div>
+                                                    </button>
+                                                    <Show when={plan.status === "DRAFT"}>
+                                                        <Button
+                                                            class="mt-4"
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => handleEditPlan(plan)}
+                                                        >
+                                                            编辑
+                                                        </Button>
+                                                    </Show>
+                                                </div>
                                             )}
                                         </For>
                                     </Show>
