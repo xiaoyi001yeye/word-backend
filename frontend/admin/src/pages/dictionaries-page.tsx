@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Plus, X } from "lucide-solid";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-solid";
 import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Alert } from "@/components/ui/alert";
@@ -64,6 +64,7 @@ const compareLabels = (left: string, right: string) => {
 export function DictionariesPage() {
     const auth = useAuth();
     const [feedback, setFeedback] = createSignal("");
+    const [feedbackIsError, setFeedbackIsError] = createSignal(false);
     const [entryAiLoading, setEntryAiLoading] = createSignal<Record<number, boolean>>({});
     const [isCreateDialogOpen, setIsCreateDialogOpen] = createSignal(false);
     const [selectedDictionaryId, setSelectedDictionaryId] = createSignal<number | null>(null);
@@ -74,6 +75,10 @@ export function DictionariesPage() {
     const [dictionaryKeyword, setDictionaryKeyword] = createSignal("");
     const [dictionaryViewMode, setDictionaryViewMode] = createSignal<DictionaryViewMode>("compact");
     const [isAddWordDialogOpen, setIsAddWordDialogOpen] = createSignal(false);
+    const [isRenameDialogOpen, setIsRenameDialogOpen] = createSignal(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = createSignal(false);
+    const [dictionaryActionPending, setDictionaryActionPending] = createSignal(false);
+    const [renameName, setRenameName] = createSignal("");
     const [form, setForm] = createStore(createDefaultForm());
     const [expandedGroups, setExpandedGroups] = createStore<Record<string, boolean>>({});
 
@@ -221,6 +226,7 @@ export function DictionariesPage() {
     const handleCreate = async (event: SubmitEvent) => {
         event.preventDefault();
         setFeedback("");
+        setFeedbackIsError(false);
         const createdDictionary = await api.createDictionary({
             name: form.name.trim(),
             category: form.category.trim() || undefined,
@@ -230,6 +236,62 @@ export function DictionariesPage() {
         await refetch();
         setSelectedDictionaryId(createdDictionary.id);
         setEntryPage(1);
+    };
+
+    const openRenameDialog = () => {
+        const dictionary = selectedDictionary();
+        if (!dictionary) {
+            return;
+        }
+        setRenameName(dictionary.name);
+        setIsRenameDialogOpen(true);
+    };
+
+    const handleRename = async (event: SubmitEvent) => {
+        event.preventDefault();
+        const dictionary = selectedDictionary();
+        const name = renameName().trim();
+        if (!dictionary || !name) {
+            return;
+        }
+
+        setDictionaryActionPending(true);
+        setFeedback("");
+        setFeedbackIsError(false);
+        try {
+            await api.renameDictionary(dictionary.id, name);
+            await refetch();
+            setIsRenameDialogOpen(false);
+            setFeedback(`词书已重命名为“${name}”，现有关联保持不变。`);
+        } catch (error) {
+            setFeedbackIsError(true);
+            setFeedback(error instanceof Error ? error.message : "词书重命名失败");
+        } finally {
+            setDictionaryActionPending(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        const dictionary = selectedDictionary();
+        if (!dictionary) {
+            return;
+        }
+
+        setDictionaryActionPending(true);
+        setFeedback("");
+        setFeedbackIsError(false);
+        try {
+            await api.deleteDictionary(dictionary.id);
+            setIsDeleteDialogOpen(false);
+            setSelectedDictionaryId(null);
+            await refetch();
+            setFeedback(`词书“${dictionary.name}”已删除。`);
+        } catch (error) {
+            setFeedbackIsError(true);
+            setFeedback(error instanceof Error ? error.message : "词书删除失败");
+        } finally {
+            setDictionaryActionPending(false);
+        }
     };
 
     const handleSelectDictionary = (dictionaryId: number) => {
@@ -307,6 +369,7 @@ export function DictionariesPage() {
 
     const handleEntryAiGenerate = async (entry: DictionaryWordEntryResponse) => {
         if (!entry.word || !selectedDictionaryId()) {
+            setFeedbackIsError(true);
             setFeedback("当前词条缺少单词内容，无法使用单词AI。");
             return;
         }
@@ -316,6 +379,7 @@ export function DictionariesPage() {
             [entry.entryId]: true,
         }));
         setFeedback("");
+        setFeedbackIsError(false);
 
         try {
             const response = await api.generateDictionaryWordWithAi(selectedDictionaryId()!, {
@@ -329,6 +393,7 @@ export function DictionariesPage() {
                     : `单词AI已更新元单词数据：${response.word}`,
             );
         } catch (error) {
+            setFeedbackIsError(true);
             setFeedback(error instanceof Error ? error.message : "单词AI处理失败");
         } finally {
             setEntryAiLoading((previous) => ({
@@ -358,7 +423,13 @@ export function DictionariesPage() {
             />
 
             <Show when={feedback()}>
-                <Alert class="border-success/20 bg-success/10 text-success">{feedback()}</Alert>
+                <Alert
+                    class={feedbackIsError()
+                        ? "border-destructive/30 bg-destructive/10 text-destructive"
+                        : "border-success/20 bg-success/10 text-success"}
+                >
+                    {feedback()}
+                </Alert>
             </Show>
 
             <Show
@@ -582,6 +653,21 @@ export function DictionariesPage() {
                                                 <div class="flex flex-wrap items-center gap-2">
                                                     <Badge variant="outline">{dictionary().scopeType || "SYSTEM"}</Badge>
                                                     <Badge variant="outline">{getDictionaryCategoryLabel(dictionary())}</Badge>
+                                                    <Show when={canManageSelectedDictionary()}>
+                                                        <Button size="sm" variant="outline" onClick={openRenameDialog}>
+                                                            <Pencil class="h-4 w-4" />
+                                                            重命名词书
+                                                        </Button>
+                                                        <Button
+                                                            class="text-destructive hover:text-destructive"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setIsDeleteDialogOpen(true)}
+                                                        >
+                                                            <Trash2 class="h-4 w-4" />
+                                                            删除词书
+                                                        </Button>
+                                                    </Show>
                                                 </div>
                                             </div>
                                         </CardHeader>
@@ -876,6 +962,90 @@ export function DictionariesPage() {
                                 <Button type="submit">创建词书</Button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </Show>
+
+            <Show when={isRenameDialogOpen() && selectedDictionary()}>
+                <div
+                    class="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 pt-[50px] backdrop-blur-sm"
+                    onClick={() => !dictionaryActionPending() && setIsRenameDialogOpen(false)}
+                >
+                    <div
+                        aria-labelledby="rename-dictionary-dialog-title"
+                        aria-modal="true"
+                        class="w-full max-w-lg rounded-[28px] border border-border/70 bg-background p-6 shadow-2xl"
+                        role="dialog"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h2 class="font-display text-2xl font-semibold tracking-tight" id="rename-dictionary-dialog-title">
+                            重命名词书
+                        </h2>
+                        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                            重命名不会改变词书 ID，班级、学生、学习计划和试卷等现有关联会继续生效。
+                        </p>
+                        <form class="mt-6 space-y-4" onSubmit={handleRename}>
+                            <div class="space-y-2">
+                                <Label for="rename-dictionary-name">词书名称</Label>
+                                <Input
+                                    id="rename-dictionary-name"
+                                    maxlength={500}
+                                    required
+                                    value={renameName()}
+                                    onInput={(event) => setRenameName(event.currentTarget.value)}
+                                />
+                            </div>
+                            <div class="flex justify-end gap-3">
+                                <Button
+                                    disabled={dictionaryActionPending()}
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setIsRenameDialogOpen(false)}
+                                >
+                                    取消
+                                </Button>
+                                <Button disabled={dictionaryActionPending() || !renameName().trim()} type="submit">
+                                    保存名称
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </Show>
+
+            <Show when={isDeleteDialogOpen() && selectedDictionary()}>
+                <div
+                    class="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 pt-[50px] backdrop-blur-sm"
+                    onClick={() => !dictionaryActionPending() && setIsDeleteDialogOpen(false)}
+                >
+                    <div
+                        aria-labelledby="delete-dictionary-dialog-title"
+                        aria-modal="true"
+                        class="w-full max-w-lg rounded-[28px] border border-border/70 bg-background p-6 shadow-2xl"
+                        role="dialog"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h2 class="font-display text-2xl font-semibold tracking-tight" id="delete-dictionary-dialog-title">
+                            删除词书
+                        </h2>
+                        <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                            仅未被学生、班级、学习计划、测验、题库或试卷关联的词书可以删除。服务器会在删除前再次检查。
+                        </p>
+                        <Alert class="mt-4 border-destructive/30 bg-destructive/10 text-destructive">
+                            确认删除“{selectedDictionary()!.name}”？词书内的词条和章节将一并移除，此操作不可撤销。
+                        </Alert>
+                        <div class="mt-6 flex justify-end gap-3">
+                            <Button
+                                disabled={dictionaryActionPending()}
+                                variant="outline"
+                                onClick={() => setIsDeleteDialogOpen(false)}
+                            >
+                                取消
+                            </Button>
+                            <Button disabled={dictionaryActionPending()} variant="destructive" onClick={() => void handleDelete()}>
+                                确认删除
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Show>

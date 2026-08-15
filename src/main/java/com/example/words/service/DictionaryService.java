@@ -1,5 +1,6 @@
 package com.example.words.service;
 
+import com.example.words.exception.ConflictException;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
@@ -9,6 +10,7 @@ import com.example.words.model.ResourceScopeType;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomRepository;
 import com.example.words.repository.DictionaryRepository;
+import com.example.words.repository.DictionaryDependencyRepository;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -32,18 +34,21 @@ public class DictionaryService {
     private final ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService;
     private final AccessControlService accessControlService;
     private final ClassroomRepository classroomRepository;
+    private final DictionaryDependencyRepository dictionaryDependencyRepository;
 
     public DictionaryService(
             DictionaryRepository dictionaryRepository,
             DictionaryAssignmentService dictionaryAssignmentService,
             ClassroomDictionaryAssignmentService classroomDictionaryAssignmentService,
             AccessControlService accessControlService,
-            ClassroomRepository classroomRepository) {
+            ClassroomRepository classroomRepository,
+            DictionaryDependencyRepository dictionaryDependencyRepository) {
         this.dictionaryRepository = dictionaryRepository;
         this.dictionaryAssignmentService = dictionaryAssignmentService;
         this.classroomDictionaryAssignmentService = classroomDictionaryAssignmentService;
         this.accessControlService = accessControlService;
         this.classroomRepository = classroomRepository;
+        this.dictionaryDependencyRepository = dictionaryDependencyRepository;
     }
 
     public List<Dictionary> findAll() {
@@ -151,6 +156,23 @@ public class DictionaryService {
     }
 
     @Transactional
+    public Dictionary rename(Long id, String name, AppUser actor) {
+        Dictionary dictionary = dictionaryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Dictionary not found: " + id));
+        accessControlService.ensureCanManageDictionary(actor, dictionary);
+
+        String normalizedName = name.trim();
+        if (dictionaryRepository.existsByNameAndIdNot(normalizedName, id)) {
+            throw new ConflictException("Dictionary name already exists: " + normalizedName);
+        }
+
+        dictionary.setName(normalizedName);
+        Dictionary renamed = dictionaryRepository.save(dictionary);
+        log.info("Renamed dictionary {} to '{}' by user {}", id, normalizedName, actor.getId());
+        return renamed;
+    }
+
+    @Transactional
     public int importFromDirectory() {
         java.io.File dir = new java.io.File(TRANSLATION_DIR);
         if (!dir.exists() || !dir.isDirectory()) {
@@ -221,12 +243,18 @@ public class DictionaryService {
 
     @Transactional
     public void deleteAll() {
-        dictionaryRepository.deleteAll();
+        for (Dictionary dictionary : dictionaryRepository.findAll()) {
+            deleteSafely(dictionary);
+        }
     }
 
     @Transactional
     public int deleteUserCreatedDictionaries() {
-        int deletedCount = dictionaryRepository.deleteByCreationType(DictionaryCreationType.USER_CREATED);
+        List<Dictionary> dictionaries = dictionaryRepository.findByCreationType(DictionaryCreationType.USER_CREATED);
+        for (Dictionary dictionary : dictionaries) {
+            deleteSafely(dictionary);
+        }
+        int deletedCount = dictionaries.size();
         log.info("Deleted {} user-created dictionaries", deletedCount);
         return deletedCount;
     }
@@ -236,7 +264,7 @@ public class DictionaryService {
         return dictionaryRepository.findById(id)
                 .map(dictionary -> {
                     if (dictionary.getCreationType() == DictionaryCreationType.USER_CREATED) {
-                        dictionaryRepository.delete(dictionary);
+                        deleteSafely(dictionary);
                         log.info("Deleted user-created dictionary: {} (ID: {})", dictionary.getName(), id);
                         return true;
                     } else {
@@ -252,11 +280,34 @@ public class DictionaryService {
         return dictionaryRepository.findById(id)
                 .map(dictionary -> {
                     accessControlService.ensureCanManageDictionary(actor, dictionary);
-                    dictionaryRepository.delete(dictionary);
+                    deleteSafely(dictionary);
                     log.info("Deleted dictionary: {} (ID: {}) by user {}", dictionary.getName(), id, actor.getId());
                     return true;
                 })
                 .orElse(false);
+    }
+
+    @Transactional
+    public boolean deleteUnreferencedById(Long id) {
+        return dictionaryRepository.findById(id)
+                .map(dictionary -> {
+                    deleteSafely(dictionary);
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    private void deleteSafely(Dictionary dictionary) {
+        List<String> blockingReferences = dictionaryDependencyRepository.findBlockingReferenceTypes(dictionary.getId());
+        if (!blockingReferences.isEmpty()) {
+            throw new ConflictException(
+                    "Dictionary is referenced by other resources and cannot be deleted: "
+                            + String.join("、", blockingReferences)
+            );
+        }
+
+        dictionaryDependencyRepository.deleteOwnedContent(dictionary.getId());
+        dictionaryRepository.delete(dictionary);
     }
 
     public String extractCategory(String fileName) {

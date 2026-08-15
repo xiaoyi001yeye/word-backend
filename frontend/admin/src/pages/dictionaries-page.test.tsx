@@ -11,6 +11,8 @@ vi.mock("@/lib/api", () => ({
         addDictionaryWordList: vi.fn(),
         generateDictionaryWordWithAi: vi.fn(),
         createDictionary: vi.fn(),
+        renameDictionary: vi.fn(),
+        deleteDictionary: vi.fn(),
     },
 }));
 
@@ -79,6 +81,11 @@ describe("DictionariesPage", () => {
             added: 0,
             failed: 0,
         });
+        vi.mocked(api.renameDictionary).mockResolvedValue({
+            id: 7,
+            name: "新词书名称",
+        });
+        vi.mocked(api.deleteDictionary).mockResolvedValue({ message: "deleted", id: 7 });
     });
 
     it("opens the add-word dialog when clicking the add-word button", async () => {
@@ -122,5 +129,28 @@ describe("DictionariesPage", () => {
 
         expect(await screen.findByText("apple")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "单词AI" })).toBeInTheDocument();
+    });
+
+    it("renames a dictionary without changing its identity", async () => {
+        render(() => <DictionariesPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "重命名词书" }));
+        const input = screen.getByLabelText("词书名称");
+        fireEvent.input(input, { target: { value: "新词书名称" } });
+        fireEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+        expect(api.renameDictionary).toHaveBeenCalledWith(7, "新词书名称");
+        expect(await screen.findByText("词书已重命名为“新词书名称”，现有关联保持不变。")).toBeInTheDocument();
+    });
+
+    it("asks for confirmation before deleting a dictionary", async () => {
+        render(() => <DictionariesPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "删除词书" }));
+        expect(screen.getByText(/服务器会在删除前再次检查/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+        expect(api.deleteDictionary).toHaveBeenCalledWith(7);
+        expect(await screen.findByText("词书“测试词书”已删除。")).toBeInTheDocument();
     });
 });
