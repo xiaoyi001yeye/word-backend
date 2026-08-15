@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: words-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: words
+      POSTGRES_USER: words_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U words_app -d words"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: words-app:latest
+    container_name: words-app
+    restart: unless-stopped
+    entrypoint: ["java", "-Xms512m", "-Xmx2g", "-Duser.timezone=Asia/Shanghai", "-jar", "app.jar"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/words?serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: words_app
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_JPA_SHOW_SQL: "false"
+      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
+      AI_CONFIG_ENCRYPTION_KEY: ${AI_CONFIG_ENCRYPTION_KEY}
+      VIDEO_STORAGE_CONFIG_ENCRYPTION_KEY: ${VIDEO_STORAGE_CONFIG_ENCRYPTION_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/api/auth/quote"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    volumes:
+      - ./logs:/app/logs
+
+  frontend:
+    image: words-frontend:latest
+    container_name: words-frontend
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
