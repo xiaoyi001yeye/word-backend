@@ -1,10 +1,14 @@
 package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.words.exception.ConflictException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
 import com.example.words.model.Dictionary;
@@ -12,6 +16,7 @@ import com.example.words.model.ResourceScopeType;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomRepository;
 import com.example.words.repository.DictionaryRepository;
+import com.example.words.repository.DictionaryDependencyRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -40,6 +45,9 @@ class DictionaryServiceTest {
     @Mock
     private ClassroomRepository classroomRepository;
 
+    @Mock
+    private DictionaryDependencyRepository dictionaryDependencyRepository;
+
     private DictionaryService dictionaryService;
 
     @BeforeEach
@@ -49,8 +57,67 @@ class DictionaryServiceTest {
                 dictionaryAssignmentService,
                 classroomDictionaryAssignmentService,
                 accessControlService,
-                classroomRepository
+                classroomRepository,
+                dictionaryDependencyRepository
         );
+    }
+
+    @Test
+    void deleteByIdShouldRejectDictionaryReferencedByOtherResources() {
+        AppUser admin = actor(1L, UserRole.ADMIN);
+        Dictionary dictionary = dictionary(10L, "关联词书", ResourceScopeType.SYSTEM);
+        when(dictionaryRepository.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryDependencyRepository.findBlockingReferenceTypes(10L))
+                .thenReturn(List.of("学习计划", "班级分配"));
+
+        ConflictException exception = assertThrows(
+                ConflictException.class,
+                () -> dictionaryService.deleteById(10L, admin)
+        );
+
+        assertTrue(exception.getMessage().contains("学习计划、班级分配"));
+        verify(dictionaryDependencyRepository, never()).deleteOwnedContent(10L);
+        verify(dictionaryRepository, never()).delete(dictionary);
+    }
+
+    @Test
+    void deleteByIdShouldExplicitlyRemoveOwnedContentWhenUnreferenced() {
+        AppUser admin = actor(1L, UserRole.ADMIN);
+        Dictionary dictionary = dictionary(10L, "无关联词书", ResourceScopeType.SYSTEM);
+        when(dictionaryRepository.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryDependencyRepository.findBlockingReferenceTypes(10L)).thenReturn(List.of());
+
+        assertTrue(dictionaryService.deleteById(10L, admin));
+
+        verify(dictionaryDependencyRepository).deleteOwnedContent(10L);
+        verify(dictionaryRepository).delete(dictionary);
+    }
+
+    @Test
+    void renameShouldKeepIdentityEvenWhenDictionaryIsReferenced() {
+        AppUser admin = actor(1L, UserRole.ADMIN);
+        Dictionary dictionary = dictionary(10L, "旧名称", ResourceScopeType.SYSTEM);
+        when(dictionaryRepository.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryRepository.existsByNameAndIdNot("新名称", 10L)).thenReturn(false);
+        when(dictionaryRepository.save(dictionary)).thenReturn(dictionary);
+
+        Dictionary renamed = dictionaryService.rename(10L, "  新名称  ", admin);
+
+        assertEquals(10L, renamed.getId());
+        assertEquals("新名称", renamed.getName());
+        verify(dictionaryDependencyRepository, never()).findBlockingReferenceTypes(10L);
+    }
+
+    @Test
+    void renameShouldRejectDuplicateName() {
+        AppUser admin = actor(1L, UserRole.ADMIN);
+        Dictionary dictionary = dictionary(10L, "旧名称", ResourceScopeType.SYSTEM);
+        when(dictionaryRepository.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(dictionaryRepository.existsByNameAndIdNot("重复名称", 10L)).thenReturn(true);
+
+        assertThrows(ConflictException.class, () -> dictionaryService.rename(10L, "重复名称", admin));
+
+        verify(dictionaryRepository, never()).save(dictionary);
     }
 
     @Test
@@ -148,5 +215,12 @@ class DictionaryServiceTest {
         classroom.setName(name);
         classroom.setTeacherId(teacherId);
         return classroom;
+    }
+
+    private AppUser actor(Long id, UserRole role) {
+        AppUser actor = new AppUser();
+        actor.setId(id);
+        actor.setRole(role);
+        return actor;
     }
 }

@@ -340,6 +340,10 @@ export const api = {
         }),
     createDictionary: (payload: { name: string; category?: string; scopeType?: string | null }) =>
         request<Dictionary>("/api/dictionaries", { method: "POST", body: payload }),
+    renameDictionary: (dictionaryId: number, name: string) =>
+        request<Dictionary>(`/api/dictionaries/${dictionaryId}/name`, { method: "PUT", body: { name } }),
+    deleteDictionary: (dictionaryId: number) =>
+        request<{ message: string; id: number }>(`/api/dictionaries/${dictionaryId}`, { method: "DELETE" }),
     assignDictionaryToClassrooms: (dictionaryId: number, classroomIds: number[]) =>
         request<{ message: string; assignedCount: number }>(`/api/dictionaries/${dictionaryId}/assign/classrooms`, {
             method: "POST",

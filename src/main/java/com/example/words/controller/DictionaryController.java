@@ -3,6 +3,7 @@ package com.example.words.controller;
 import com.example.words.dto.AssignStudentsRequest;
 import com.example.words.dto.AssignClassroomsRequest;
 import com.example.words.dto.BooksImportJobResponse;
+import com.example.words.dto.RenameDictionaryRequest;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Dictionary;
@@ -14,6 +15,7 @@ import com.example.words.service.DictionaryAssignmentService;
 import com.example.words.service.DictionaryService;
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -75,6 +78,18 @@ public class DictionaryController {
     public ResponseEntity<Dictionary> create(@RequestBody Dictionary dictionary) {
         Dictionary savedDictionary = dictionaryService.createDictionary(dictionary, currentUserService.getCurrentUser());
         return ResponseEntity.ok(savedDictionary);
+    }
+
+    @PutMapping("/{id}/name")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Dictionary> rename(
+            @PathVariable Long id,
+            @Valid @RequestBody RenameDictionaryRequest request) {
+        return ResponseEntity.ok(dictionaryService.rename(
+                id,
+                request.getName(),
+                currentUserService.getCurrentUser()
+        ));
     }
 
     @PostMapping("/import")

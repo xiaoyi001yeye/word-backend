@@ -18,7 +18,13 @@ public interface DictionaryRepository extends JpaRepository<Dictionary, Long> {
 
     boolean existsByName(String name);
 
+    boolean existsByNameAndIdNot(String name, Long id);
+
+    Optional<Dictionary> findByFilePath(String filePath);
+
     List<Dictionary> findByCategory(String category);
+
+    List<Dictionary> findByCreationType(DictionaryCreationType creationType);
 
     @Modifying
     @Query("DELETE FROM Dictionary d WHERE d.creationType = :creationType")

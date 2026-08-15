@@ -71,6 +71,23 @@ docker load -i release/words-images-1.0.0.tar.gz
 ./load release/words-images-1.0.0.tar.gz
 ```
 
+### Production 部署
+
+Production 使用 `compose.production.yml`。后端镜像已经包含构建时的 `books/` 目录，生产编排不得将宿主机
+`./books` 挂载到 `/app/books`，否则空的宿主机目录会覆盖镜像内的词书文件，导致词书导入失败。
+
+导入发布镜像后，使用以下命令重新创建应用并等待健康检查：
+
+```bash
+docker compose --env-file .env -f compose.production.yml up -d --no-build --wait --wait-timeout 240
+```
+
+部署后确认容器使用镜像内的词书文件：
+
+```bash
+docker exec words-app sh -lc "find /app/books -maxdepth 1 -type f | wc -l"
+```
+
 ### 数据库配置
 
 默认数据库连接信息：

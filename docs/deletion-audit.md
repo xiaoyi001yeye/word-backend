@@ -83,7 +83,7 @@
 
 | 候选项 | 为什么不要删 |
 | --- | --- |
-| `books/` | 应用会从这个目录导入辞书，并且 Docker Compose 挂载了 `./books:/app/books`。它很大，但属于功能数据。 |
+| `books/` | 应用会从这个目录导入辞书。生产镜像会将其复制到 `/app/books`，生产编排不得使用宿主机空目录覆盖该路径。它很大，但属于功能数据。 |
 | `maven-repo/` | 它被忽略，看起来像缓存，但 `Dockerfile` 明确执行 `COPY maven-repo ./maven-repo`，并用 `-Dmaven.repo.local=/workspace/maven-repo` 构建。除非先修改 Dockerfile，否则删除它可能导致 Docker 构建失败。 |
 | `pom.xml` 中的 checkstyle 插件块 | 它指向缺失的 `checkstyle.xml`，所以质量检查命令很可能是坏的，但删除这个块属于规范策略决定。更安全的做法是补上 `checkstyle.xml`，或同时移除 AGENTS/README 中对 checkstyle 的承诺。 |
 

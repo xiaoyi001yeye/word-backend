@@ -1325,8 +1325,9 @@ public class BooksImportJobService {
         if (dictionaryIds.isEmpty()) {
             return;
         }
-        dictionaryRepository.deleteAllByIdInBatch(dictionaryIds);
-        dictionaryRepository.flush();
+        for (Long dictionaryId : dictionaryIds) {
+            dictionaryService.deleteUnreferencedById(dictionaryId);
+        }
     }
 
     private void deleteBatchCreatedMetaWords(String batchId) {
@@ -1378,13 +1379,15 @@ public class BooksImportJobService {
             String fileName,
             Long fileSize,
             List<ResolvedDictionaryEntry> dictionaryEntries) {
-        Dictionary dictionary = dictionaryRepository.findByName(dictionaryName)
+        String dictionaryFilePath = buildDictionaryFilePath(fileName);
+        Dictionary dictionary = dictionaryRepository.findByFilePath(dictionaryFilePath)
+                .or(() -> dictionaryRepository.findByName(dictionaryName))
                 .map(existing -> {
                     if (existing.getCreationType() == DictionaryCreationType.USER_CREATED) {
                         throw new ConflictException("Dictionary name conflicts with user-created dictionary: " + dictionaryName);
                     }
                     existing.setCategory(category);
-                    existing.setFilePath(buildDictionaryFilePath(fileName));
+                    existing.setFilePath(dictionaryFilePath);
                     existing.setFileSize(fileSize);
                     existing.setCreationType(DictionaryCreationType.IMPORTED);
                     existing.setScopeType(ResourceScopeType.SYSTEM);

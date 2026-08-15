@@ -119,8 +119,8 @@ class BooksImportJobServiceTest {
 
         assertDoesNotThrow(() -> booksImportJobService.deleteBatch("batch-1"));
 
-        verify(dictionaryRepository).deleteAllByIdInBatch(List.of(11L, 12L));
-        verify(dictionaryRepository).flush();
+        verify(dictionaryService).deleteUnreferencedById(11L);
+        verify(dictionaryService).deleteUnreferencedById(12L);
         verify(jdbcTemplate).update(anyString(), eq("batch-1"), eq("AUTO_CREATE"), eq("MANUALLY_RESOLVED"));
         verify(booksImportJobRepository).deleteById("batch-1");
     }
