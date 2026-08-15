@@ -14,8 +14,9 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 COPY --from=builder /workspace/target/words-1.0.0.jar app.jar
+COPY books ./books
 
-RUN mkdir -p /app/books /app/logs
+RUN mkdir -p /app/logs
 
 EXPOSE 8080
 

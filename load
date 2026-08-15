@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_DIR="${PROJECT_DIR}/release"
+
+if (( $# > 1 )); then
+    echo "用法：$0 [镜像压缩包路径]" >&2
+    exit 1
+fi
+
+if (( $# == 1 )); then
+    ARCHIVE="$1"
+    if [[ "${ARCHIVE}" != /* ]]; then
+        ARCHIVE="$(pwd)/${ARCHIVE}"
+    fi
+else
+    shopt -s nullglob
+    ARCHIVES=("${RELEASE_DIR}"/words-images-*.tar.gz)
+    shopt -u nullglob
+
+    if (( ${#ARCHIVES[@]} == 0 )); then
+        echo "未在 ${RELEASE_DIR} 中找到 words-images-*.tar.gz。" >&2
+        exit 1
+    fi
+
+    ARCHIVE="${ARCHIVES[0]}"
+    for candidate in "${ARCHIVES[@]:1}"; do
+        if [[ "${candidate}" -nt "${ARCHIVE}" ]]; then
+            ARCHIVE="${candidate}"
+        fi
+    done
+fi
+
+if [[ ! -f "${ARCHIVE}" ]]; then
+    echo "镜像压缩包不存在：${ARCHIVE}" >&2
+    exit 1
+fi
+
+CHECKSUM="${ARCHIVE}.sha256"
+if [[ -f "${CHECKSUM}" ]]; then
+    echo "正在校验 $(basename "${ARCHIVE}") ..."
+    (
+        cd "$(dirname "${ARCHIVE}")"
+        if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 -c "$(basename "${CHECKSUM}")"
+        elif command -v sha256sum >/dev/null 2>&1; then
+            sha256sum -c "$(basename "${CHECKSUM}")"
+        else
+            echo "找不到 shasum 或 sha256sum，无法校验发布包。" >&2
+            exit 1
+        fi
+    )
+else
+    echo "警告：未找到校验文件 ${CHECKSUM}，跳过完整性校验。" >&2
+fi
+
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker daemon 未运行，请先启动 Docker。" >&2
+    exit 1
+fi
+
+echo "正在从 ${ARCHIVE} 导入镜像 ..."
+docker load -i "${ARCHIVE}"
+
+docker image inspect words-app:latest words-frontend:latest >/dev/null
+
+echo "正在启动服务并等待健康检查 ..."
+cd "${PROJECT_DIR}"
+docker compose up -d --no-build --wait --wait-timeout 180
+
+echo "服务已启动："
+docker compose ps

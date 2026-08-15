@@ -39,6 +39,38 @@ docker-compose ps
 docker-compose down
 ```
 
+### 构建发布镜像
+
+重新构建后端和前端镜像，并将它们导出到 `release/`：
+
+```bash
+./build-release.sh
+```
+
+也可以指定发布版本号，版本号会写入归档文件名：
+
+```bash
+./build-release.sh 1.0.0
+```
+
+后端镜像包含构建时的 `books/` 目录。生成的 `.tar.gz` 文件可以通过以下命令导入：
+
+```bash
+docker load -i release/words-images-1.0.0.tar.gz
+```
+
+也可以使用 `load` 脚本自动校验并导入 `release/` 中最新的发布包，然后启动服务：
+
+```bash
+./load
+```
+
+手动指定发布包：
+
+```bash
+./load release/words-images-1.0.0.tar.gz
+```
+
 ### 数据库配置
 
 默认数据库连接信息：
