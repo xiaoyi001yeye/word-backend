@@ -1,6 +1,7 @@
 package com.example.words.repository;
 
 import com.example.words.model.StudentStudyPlan;
+import com.example.words.model.StudentStudyPlanStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +21,12 @@ public interface StudentStudyPlanRepository extends JpaRepository<StudentStudyPl
     List<StudentStudyPlan> findByStudentIdOrderByCreatedAtDesc(Long studentId);
 
     List<StudentStudyPlan> findByStudyPlanIdOrderByStudentIdAsc(Long studyPlanId);
+
+    List<StudentStudyPlan> findByStudyPlanIdAndStatusNotOrderByStudentIdAsc(
+            Long studyPlanId,
+            StudentStudyPlanStatus status);
+
+    long countByStudyPlanIdAndStatusNot(Long studyPlanId, StudentStudyPlanStatus status);
 
     List<StudentStudyPlan> findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(Long studyPlanId, Long studentId);
 }
