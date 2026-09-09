@@ -167,4 +167,28 @@ describe("AddWordListModal", () => {
 
         expect(screen.getByText("处理结果")).toBeInTheDocument();
     });
+
+    it("splits large JSON imports into API-sized batches", async () => {
+        const entries = Array.from({ length: 1001 }, (_, index) => ({ word: `word-${index}` }));
+
+        render(() => (
+            <AddWordListModal
+                dictionary={dictionary}
+                isOpen={true}
+                onClose={vi.fn()}
+            />
+        ));
+
+        fireEvent.click(screen.getByRole("button", { name: "JSON 高级版" }));
+        fireEvent.input(screen.getByRole("textbox"), {
+            currentTarget: { value: JSON.stringify(entries) },
+            target: { value: JSON.stringify(entries) },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "导入 JSON" }));
+
+        await waitFor(() => {
+            expect(api.addDictionaryWordList).toHaveBeenCalledTimes(2);
+        });
+        expect(vi.mocked(api.addDictionaryWordList).mock.calls.map(([_, words]) => words.length)).toEqual([1000, 1]);
+    });
 });
