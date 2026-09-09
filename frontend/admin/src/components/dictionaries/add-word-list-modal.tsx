@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { chunkEntries } from "@/components/dictionaries/manual-entry-utils";
 import type {
     Dictionary,
     MetaWordEntryPayload,
@@ -42,7 +43,6 @@ interface ParsedEntryResult {
 }
 
 const INITIAL_QUICK_ROW_COUNT = 1;
-const MAX_ENTRY_COUNT = 1000;
 const QUICK_SUGGESTION_LIMIT = 8;
 const QUICK_SUGGESTION_DEBOUNCE_MS = 180;
 const BULK_EXAMPLE = `apple | 苹果 | noun | /ˈaepəl/ | a fruit that grows on trees | I ate an apple for breakfast. | 2
@@ -661,11 +661,24 @@ export function AddWordListModal(props: AddWordListModalProps) {
                 throw new Error("请至少录入一个单词");
             }
 
-            if (entries.length > MAX_ENTRY_COUNT) {
-                throw new Error(`每次最多添加 ${MAX_ENTRY_COUNT} 个词条`);
+            const batchResults: WordListProcessResult[] = [];
+            for (const batch of chunkEntries(entries)) {
+                batchResults.push(await api.addDictionaryWordList(props.dictionary.id, batch));
             }
 
-            const response = await api.addDictionaryWordList(props.dictionary.id, entries);
+            const response = batchResults.reduce<WordListProcessResult>((summary, batch) => ({
+                total: summary.total + batch.total,
+                existed: summary.existed + batch.existed,
+                created: summary.created + batch.created,
+                added: summary.added + batch.added,
+                failed: summary.failed + batch.failed,
+            }), {
+                total: 0,
+                existed: 0,
+                created: 0,
+                added: 0,
+                failed: 0,
+            });
             setResult(response);
             resetCurrentMode();
             await props.onSuccess?.();
