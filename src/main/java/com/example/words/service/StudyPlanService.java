@@ -190,14 +190,28 @@ public class StudyPlanService {
         return toStudyPlanResponse(savedStudyPlan, dictionary, classrooms.stream().map(Classroom::getId).toList(), 0L);
     }
 
+    @Transactional
+    public void archiveStudyPlan(Long studyPlanId, AppUser actor) {
+        StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+        ensureCanManageStudyPlan(actor, studyPlan);
+        if (studyPlan.getStatus() == StudyPlanStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Study plan not found: " + studyPlanId);
+        }
+        studyPlan.setStatus(StudyPlanStatus.ARCHIVED);
+        studyPlanRepository.save(studyPlan);
+    }
+
     @Transactional(readOnly = true)
     public List<StudyPlanResponse> listVisibleStudyPlans(AppUser actor) {
         List<StudyPlan> studyPlans = actor.getRole() == UserRole.ADMIN
                 ? studyPlanRepository.findAll().stream()
+                        .filter(studyPlan -> studyPlan.getStatus() != StudyPlanStatus.ARCHIVED)
                         .sorted(Comparator.comparing(StudyPlan::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                                 .reversed())
                         .toList()
-                : studyPlanRepository.findByTeacherIdOrderByCreatedAtDesc(actor.getId());
+                : studyPlanRepository.findByTeacherIdOrderByCreatedAtDesc(actor.getId()).stream()
+                        .filter(studyPlan -> studyPlan.getStatus() != StudyPlanStatus.ARCHIVED)
+                        .toList();
 
         return studyPlans.stream()
                 .map(this::toStudyPlanResponse)
@@ -727,6 +741,9 @@ public class StudyPlanService {
     }
 
     private void ensureCanManageStudyPlan(AppUser actor, StudyPlan studyPlan) {
+        if (studyPlan.getStatus() == StudyPlanStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Study plan not found: " + studyPlan.getId());
+        }
         if (actor.getRole() == UserRole.ADMIN || Objects.equals(actor.getId(), studyPlan.getTeacherId())) {
             return;
         }

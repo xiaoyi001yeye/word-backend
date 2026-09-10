@@ -219,6 +219,35 @@ class StudyPlanServiceTest {
     }
 
     @Test
+    void archiveStudyPlanShouldAllowAdminAndPlanOwnerOnly() {
+        StudyPlan studyPlan = new StudyPlan();
+        studyPlan.setId(55L);
+        studyPlan.setTeacherId(7L);
+        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studyPlanRepository.save(any(StudyPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+        studyPlanService.archiveStudyPlan(55L, teacher);
+        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
+
+        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+        AppUser otherTeacher = new AppUser();
+        otherTeacher.setId(8L);
+        otherTeacher.setRole(UserRole.TEACHER);
+        assertThrows(AccessDeniedException.class, () -> studyPlanService.archiveStudyPlan(55L, otherTeacher));
+        assertEquals(StudyPlanStatus.PUBLISHED, studyPlan.getStatus());
+
+        AppUser admin = new AppUser();
+        admin.setId(1L);
+        admin.setRole(UserRole.ADMIN);
+        studyPlanService.archiveStudyPlan(55L, admin);
+        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
+    }
+
+    @Test
     void createStudyPlanShouldRejectDictionaryOutsideSelectedClassroomIntersection() {
         AppUser teacher = new AppUser();
         teacher.setId(7L);

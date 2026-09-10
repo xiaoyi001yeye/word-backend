@@ -14,6 +14,7 @@ import { SearchableDictionarySelect } from "@/components/study-plans/searchable-
 import { useAuth } from "@/features/auth/auth-context";
 import { api } from "@/lib/api";
 import { formatDate, formatPercent } from "@/lib/format";
+import { Trash2 } from "lucide-solid";
 import type {
     ClassroomResponse,
     Dictionary,
@@ -174,6 +175,27 @@ export function StudyPlansPage() {
             longStayWarningSeconds: String(plan.longStayWarningSeconds),
             idleTimeoutSeconds: String(plan.idleTimeoutSeconds),
         });
+    };
+
+    const handleDeletePlan = async (plan: StudyPlanResponse) => {
+        const role = auth.user()?.role;
+        const canDelete = role === "ADMIN" || (role === "TEACHER" && auth.user()?.id === plan.teacherId);
+        if (!canDelete || !window.confirm(`确认删除学习计划“${plan.name}”？删除后将从计划列表隐藏，但学生学习记录会保留。`)) {
+            return;
+        }
+        setFeedback("");
+        setCreateError("");
+        try {
+            await api.deleteStudyPlan(plan.id);
+            if (selectedPlanId() === plan.id) {
+                setSelectedPlanId(null);
+                setEditingPlanId(null);
+            }
+            setFeedback("学习计划已删除。");
+            await refetch();
+        } catch (error) {
+            setCreateError(error instanceof Error ? error.message : "删除学习计划失败，请稍后重试。");
+        }
     };
 
     const buildStudyPlanPayload = (reviewIntervals: number[]) => ({
@@ -476,16 +498,29 @@ export function StudyPlansPage() {
                                                             <span>{plan.dailyNewCount} new/day</span>
                                                         </div>
                                                     </button>
-                                                    <Show when={plan.status === "DRAFT"}>
-                                                        <Button
-                                                            class="mt-4"
-                                                            type="button"
-                                                            variant="outline"
-                                                            onClick={() => handleEditPlan(plan)}
-                                                        >
-                                                            编辑
-                                                        </Button>
-                                                    </Show>
+                                                    <div class="mt-4 flex flex-wrap gap-2">
+                                                        <Show when={plan.status === "DRAFT"}>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() => handleEditPlan(plan)}
+                                                            >
+                                                                编辑
+                                                            </Button>
+                                                        </Show>
+                                                        <Show when={auth.user()?.role === "ADMIN" || (auth.user()?.role === "TEACHER" && auth.user()?.id === plan.teacherId)}>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                class="text-destructive hover:text-destructive"
+                                                                aria-label={`删除学习计划 ${plan.name}`}
+                                                                onClick={() => void handleDeletePlan(plan)}
+                                                            >
+                                                                <Trash2 class="mr-2 h-4 w-4" />
+                                                                删除
+                                                            </Button>
+                                                        </Show>
+                                                    </div>
                                                 </div>
                                             )}
                                         </For>

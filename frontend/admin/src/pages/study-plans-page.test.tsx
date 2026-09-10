@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
         listDictionaries: vi.fn(),
         createStudyPlan: vi.fn(),
         updateStudyPlan: vi.fn(),
+        deleteStudyPlan: vi.fn(),
         getStudyPlanOverview: vi.fn(),
         getStudyPlanStudents: vi.fn(),
         publishStudyPlan: vi.fn(),
@@ -64,6 +65,7 @@ describe("StudyPlansPage", () => {
         ]);
         vi.mocked(api.createStudyPlan).mockResolvedValue(createdPlan);
         vi.mocked(api.updateStudyPlan).mockResolvedValue({ ...createdPlan, name: "四级计划更新" });
+        vi.mocked(api.deleteStudyPlan).mockResolvedValue(undefined);
         vi.mocked(api.getStudyPlanOverview).mockResolvedValue({
             studyPlanId: 99,
             studyPlanName: "四级计划",
@@ -113,6 +115,23 @@ describe("StudyPlansPage", () => {
                 }),
             );
         });
+    });
+
+    it("archives a study plan after confirmation and refreshes the list", async () => {
+        vi.mocked(api.listStudyPlans)
+            .mockResolvedValueOnce([createdPlan])
+            .mockResolvedValueOnce([]);
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        render(() => <StudyPlansPage />);
+
+        const deleteButton = await screen.findByRole("button", { name: "删除学习计划 四级计划" });
+        fireEvent.click(deleteButton);
+
+        await waitFor(() => expect(api.deleteStudyPlan).toHaveBeenCalledWith(99));
+        await waitFor(() => expect(screen.queryByText("四级计划")).not.toBeInTheDocument());
+        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("确认删除学习计划"));
+        confirmSpy.mockRestore();
     });
 
     it("submits the ID selected from the searchable dictionary picker", async () => {

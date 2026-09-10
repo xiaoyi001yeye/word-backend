@@ -43,7 +43,7 @@ public class AiPromptService {
                 {
                   "word": "%s",
                   "translation": "中文释义，简洁自然",
-                  "partOfSpeech": "常见词性，如 noun / verb / adjective",
+                  "partOfSpeech": "词典缩写，如 n. / vt. / vi. / adj. / adv.",
                   "phonetic": "常见国际音标，格式如 /.../",
                   "definition": "简洁英文释义",
                   "exampleSentence": "自然、简短、适合学习的英文例句"
@@ -51,9 +51,10 @@ public class AiPromptService {
                 要求：
                 1. word 字段返回规范拼写。
                 2. translation 返回最常见、最适合学习者理解的中文释义。
-                3. definition 用简洁英文解释。
-                4. exampleSentence 使用该单词本身，避免过长。
-                5. 只返回一个 JSON 对象。
+                3. partOfSpeech 必须使用英语词典常见缩写，不得返回 noun、verb、adjective 等完整单词；及物动词使用 vt.，不及物动词使用 vi.，无法判断时使用 v.。
+                4. definition 用简洁英文解释。
+                5. exampleSentence 使用该单词本身，避免过长。
+                6. 只返回一个 JSON 对象。
                 """.formatted(
                 request.getWord().trim(),
                 request.getWord().trim()
@@ -94,7 +95,7 @@ public class AiPromptService {
                   },
                   "partOfSpeech": [
                     {
-                      "pos": "noun",
+                      "pos": "n.",
                       "definitions": [
                         {
                           "definition": "简洁英文释义",
@@ -116,10 +117,11 @@ public class AiPromptService {
                 要求：
                 1. word 使用规范拼写。
                 2. 至少返回一个词性对象和一个 definitions 对象。
-                3. translation 放在 definitions.translation 中，不要额外扩展字段。
-                4. exampleSentences 尽量给一个常见、自然的例句。
-                5. difficulty 取 1-5 的整数，默认按常见学习难度估计。
-                6. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
+                3. partOfSpeech[].pos 必须使用英语词典常见缩写：名词 n.，及物动词 vt.，不及物动词 vi.，动词无法判断时 v.，形容词 adj.，副词 adv.；不得返回 noun、verb、adjective 等完整单词。例如 abandon 的词性必须返回 vt.，不能返回 verb。
+                4. translation 放在 definitions.translation 中，不要额外扩展字段。
+                5. exampleSentences 尽量给一个常见、自然的例句。
+                6. difficulty 取 1-5 的整数，默认按常见学习难度估计。
+                7. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
                 """.formatted(word, word);
 
         return List.of(
