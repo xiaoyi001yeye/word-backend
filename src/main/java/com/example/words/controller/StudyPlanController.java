@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,6 +57,13 @@ public class StudyPlanController {
             @PathVariable Long id,
             @Valid @RequestBody CreateStudyPlanRequest request) {
         return ResponseEntity.ok(studyPlanService.updateStudyPlan(id, request, currentUserService.getCurrentUser()));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Void> deleteStudyPlan(@PathVariable Long id) {
+        studyPlanService.archiveStudyPlan(id, currentUserService.getCurrentUser());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/publish")

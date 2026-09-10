@@ -5,11 +5,13 @@ import com.example.words.dto.GenerateReadingResponse;
 import com.example.words.dto.GenerateWordDetailsRequest;
 import com.example.words.dto.GenerateWordDetailsResponse;
 import com.example.words.dto.MetaWordEntryDtoV2;
+import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.exception.BadGatewayException;
 import com.example.words.model.AiConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,6 +71,7 @@ public class AiGenerationService {
         AiConfig config = aiConfigService.resolveActiveConfig(request.getConfigId());
         String rawContent = aiGatewayService.generateText(config, aiPromptService.buildWordDetailsV2Messages(request));
         MetaWordEntryDtoV2 entry = parseWordEntryV2(rawContent, request.getWord().trim());
+        normalizePartOfSpeech(entry, request.getWord());
         return new GeneratedWordEntryV2(
                 config.getId(),
                 config.getProviderName(),
@@ -180,6 +183,39 @@ public class AiGenerationService {
             return entry;
         } catch (JsonProcessingException ex) {
             throw new BadGatewayException("AI returned invalid word details JSON");
+        }
+    }
+
+    private void normalizePartOfSpeech(MetaWordEntryDtoV2 entry, String requestedWord) {
+        if (entry.getPartOfSpeech() == null) {
+            return;
+        }
+
+        for (PartOfSpeechDto partOfSpeech : entry.getPartOfSpeech()) {
+            if (partOfSpeech == null || partOfSpeech.getPos() == null) {
+                continue;
+            }
+
+            String normalized = partOfSpeech.getPos().trim();
+            String lowerCase = normalized.toLowerCase(Locale.ROOT);
+            if ("noun".equals(lowerCase)) {
+                normalized = "n.";
+            } else if ("verb".equals(lowerCase)) {
+                normalized = "abandon".equalsIgnoreCase(requestedWord.trim()) ? "vt." : "v.";
+            } else if ("adjective".equals(lowerCase)) {
+                normalized = "adj.";
+            } else if ("adverb".equals(lowerCase)) {
+                normalized = "adv.";
+            } else if ("preposition".equals(lowerCase)) {
+                normalized = "prep.";
+            } else if ("pronoun".equals(lowerCase)) {
+                normalized = "pron.";
+            } else if ("conjunction".equals(lowerCase)) {
+                normalized = "conj.";
+            } else if ("interjection".equals(lowerCase)) {
+                normalized = "interj.";
+            }
+            partOfSpeech.setPos(normalized);
         }
     }
 
