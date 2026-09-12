@@ -190,14 +190,28 @@ public class StudyPlanService {
         return toStudyPlanResponse(savedStudyPlan, dictionary, classrooms.stream().map(Classroom::getId).toList(), 0L);
     }
 
+    @Transactional
+    public void archiveStudyPlan(Long studyPlanId, AppUser actor) {
+        StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+        ensureCanManageStudyPlan(actor, studyPlan);
+        if (studyPlan.getStatus() == StudyPlanStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Study plan not found: " + studyPlanId);
+        }
+        studyPlan.setStatus(StudyPlanStatus.ARCHIVED);
+        studyPlanRepository.save(studyPlan);
+    }
+
     @Transactional(readOnly = true)
     public List<StudyPlanResponse> listVisibleStudyPlans(AppUser actor) {
         List<StudyPlan> studyPlans = actor.getRole() == UserRole.ADMIN
                 ? studyPlanRepository.findAll().stream()
+                        .filter(studyPlan -> studyPlan.getStatus() != StudyPlanStatus.ARCHIVED)
                         .sorted(Comparator.comparing(StudyPlan::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
                                 .reversed())
                         .toList()
-                : studyPlanRepository.findByTeacherIdOrderByCreatedAtDesc(actor.getId());
+                : studyPlanRepository.findByTeacherIdOrderByCreatedAtDesc(actor.getId()).stream()
+                        .filter(studyPlan -> studyPlan.getStatus() != StudyPlanStatus.ARCHIVED)
+                        .toList();
 
         return studyPlans.stream()
                 .map(this::toStudyPlanResponse)
@@ -309,6 +323,10 @@ public class StudyPlanService {
         for (Long studyPlanId : studyPlanIds) {
             StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
             ensureCanManageStudyPlan(actor, studyPlan);
+            if (studyPlan.getStatus() == StudyPlanStatus.DRAFT) {
+                getOrCreateStudentStudyPlan(studyPlan.getId(), studentId, resolveNow(studyPlan));
+                continue;
+            }
             if (studyPlan.getStatus() != StudyPlanStatus.PUBLISHED) {
                 continue;
             }
@@ -359,7 +377,7 @@ public class StudyPlanService {
         StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
         ensureCanManageStudyPlan(actor, studyPlan);
 
-        List<StudentStudyPlan> studentStudyPlans = studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(studyPlanId);
+        List<StudentStudyPlan> studentStudyPlans = findVisibleStudentStudyPlansForAdmin(studyPlan, actor);
         LocalDate taskDate = resolveToday(studyPlan);
         long completedStudents = 0;
         long notStartedStudents = 0;
@@ -370,7 +388,7 @@ public class StudyPlanService {
 
         for (StudentStudyPlan studentStudyPlan : studentStudyPlans) {
             markExpiredTasks(studentStudyPlan, taskDate);
-            StudyDayTask studyDayTask = canGenerateTodayTask(studyPlan, taskDate)
+            StudyDayTask studyDayTask = canGenerateTodayTask(studyPlan, taskDate) && isPublished(studyPlan)
                     ? getOrCreateTodayTask(studentStudyPlan, studyPlan, taskDate)
                     : null;
             if (studyDayTask == null) {
@@ -413,11 +431,11 @@ public class StudyPlanService {
         ensureCanManageStudyPlan(actor, studyPlan);
 
         LocalDate taskDate = resolveToday(studyPlan);
-        List<StudentStudyPlan> studentStudyPlans = studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(studyPlanId);
+        List<StudentStudyPlan> studentStudyPlans = findVisibleStudentStudyPlansForAdmin(studyPlan, actor);
         List<StudyPlanStudentSummaryResponse> responses = new ArrayList<>();
         for (StudentStudyPlan studentStudyPlan : studentStudyPlans) {
             markExpiredTasks(studentStudyPlan, taskDate);
-            StudyDayTask studyDayTask = canGenerateTodayTask(studyPlan, taskDate)
+            StudyDayTask studyDayTask = canGenerateTodayTask(studyPlan, taskDate) && isPublished(studyPlan)
                     ? getOrCreateTodayTask(studentStudyPlan, studyPlan, taskDate)
                     : null;
             if (studyDayTask != null) {
@@ -439,6 +457,9 @@ public class StudyPlanService {
         List<StudentStudyPlanSummaryResponse> responses = new ArrayList<>();
         for (StudentStudyPlan studentStudyPlan : studentStudyPlans) {
             StudyPlan studyPlan = getStudyPlanEntity(studentStudyPlan.getStudyPlanId());
+            if (studentStudyPlan.getStatus() == StudentStudyPlanStatus.DROPPED || !isPublished(studyPlan)) {
+                continue;
+            }
             LocalDate taskDate = resolveToday(studyPlan);
             markExpiredTasks(studentStudyPlan, taskDate);
             completeEndedStudentStudyPlan(studentStudyPlan, studyPlan, taskDate);
@@ -720,6 +741,9 @@ public class StudyPlanService {
     }
 
     private void ensureCanManageStudyPlan(AppUser actor, StudyPlan studyPlan) {
+        if (studyPlan.getStatus() == StudyPlanStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Study plan not found: " + studyPlan.getId());
+        }
         if (actor.getRole() == UserRole.ADMIN || Objects.equals(actor.getId(), studyPlan.getTeacherId())) {
             return;
         }
@@ -828,8 +852,89 @@ public class StudyPlanService {
         List<Long> classroomIds = studyPlanClassroomRepository.findByStudyPlanId(studyPlan.getId()).stream()
                 .map(StudyPlanClassroom::getClassroomId)
                 .toList();
-        long studentCount = studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(studyPlan.getId()).size();
+        long studentCount = studyPlan.getStatus() == StudyPlanStatus.DRAFT
+                ? countClassroomStudents(classroomIds)
+                : countVisibleStudentStudyPlans(studyPlan.getId());
         return toStudyPlanResponse(studyPlan, dictionary, classroomIds, studentCount);
+    }
+
+    private List<StudentStudyPlan> findVisibleStudentStudyPlansForAdmin(StudyPlan studyPlan, AppUser actor) {
+        if (studyPlan.getStatus() == StudyPlanStatus.DRAFT) {
+            return synchronizeDraftPlanStudentsFromClassrooms(studyPlan, actor);
+        }
+        return findVisibleStudentStudyPlans(studyPlan.getId());
+    }
+
+    private List<StudentStudyPlan> findVisibleStudentStudyPlans(Long studyPlanId) {
+        return studentStudyPlanRepository.findByStudyPlanIdAndStatusNotOrderByStudentIdAsc(
+                studyPlanId,
+                StudentStudyPlanStatus.DROPPED);
+    }
+
+    private long countVisibleStudentStudyPlans(Long studyPlanId) {
+        return studentStudyPlanRepository.countByStudyPlanIdAndStatusNot(
+                studyPlanId,
+                StudentStudyPlanStatus.DROPPED);
+    }
+
+    private List<StudentStudyPlan> synchronizeDraftPlanStudentsFromClassrooms(StudyPlan studyPlan, AppUser actor) {
+        List<Long> classroomIds = studyPlanClassroomRepository.findByStudyPlanId(studyPlan.getId()).stream()
+                .map(StudyPlanClassroom::getClassroomId)
+                .distinct()
+                .toList();
+        if (classroomIds.isEmpty()) {
+            return List.of();
+        }
+
+        resolveManagedClassrooms(classroomIds, actor);
+        Set<Long> targetStudentIds = findStudentIdsInClassrooms(classroomIds);
+        Map<Long, StudentStudyPlan> existingByStudentId = findVisibleStudentStudyPlans(studyPlan.getId()).stream()
+                .collect(Collectors.toMap(
+                        StudentStudyPlan::getStudentId,
+                        studentStudyPlan -> studentStudyPlan,
+                        this::selectPreferredStudentStudyPlan,
+                        LinkedHashMap::new));
+
+        List<StudentStudyPlan> synchronizedPlans = new ArrayList<>();
+        LocalDateTime joinedAt = resolveNow(studyPlan);
+        for (Long studentId : targetStudentIds) {
+            StudentStudyPlan studentStudyPlan = existingByStudentId.get(studentId);
+            if (studentStudyPlan == null) {
+                studentStudyPlan = getOrCreateStudentStudyPlan(studyPlan.getId(), studentId, joinedAt);
+            }
+            if (studentStudyPlan.getStatus() != StudentStudyPlanStatus.DROPPED) {
+                synchronizedPlans.add(studentStudyPlan);
+            }
+        }
+
+        for (StudentStudyPlan studentStudyPlan : existingByStudentId.values()) {
+            if (!targetStudentIds.contains(studentStudyPlan.getStudentId())) {
+                studentStudyPlan.setStatus(StudentStudyPlanStatus.DROPPED);
+                studentStudyPlanRepository.save(studentStudyPlan);
+            }
+        }
+
+        synchronizedPlans.sort(Comparator.comparing(StudentStudyPlan::getStudentId));
+        return synchronizedPlans;
+    }
+
+    private long countClassroomStudents(List<Long> classroomIds) {
+        return findStudentIdsInClassrooms(classroomIds).size();
+    }
+
+    private Set<Long> findStudentIdsInClassrooms(List<Long> classroomIds) {
+        if (classroomIds == null || classroomIds.isEmpty()) {
+            return Set.of();
+        }
+        return classroomMemberRepository.findByClassroomIdIn(classroomIds).stream()
+                .map(ClassroomMember::getStudentId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private StudentStudyPlan selectPreferredStudentStudyPlan(StudentStudyPlan left, StudentStudyPlan right) {
+        return Comparator.comparing(StudentStudyPlan::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(StudentStudyPlan::getId, Comparator.nullsLast(Comparator.naturalOrder()))
+                .compare(left, right) >= 0 ? left : right;
     }
 
     private StudyPlanResponse toStudyPlanResponse(

@@ -16,13 +16,16 @@ import com.example.words.dto.AppendStudyPlanStudentsRequest;
 import com.example.words.dto.CreateStudyPlanRequest;
 import com.example.words.dto.RecordStudyRequest;
 import com.example.words.dto.StudentStudyPlanSummaryResponse;
+import com.example.words.dto.StudyPlanOverviewResponse;
 import com.example.words.dto.StudyPlanResponse;
+import com.example.words.dto.StudyPlanStudentSummaryResponse;
 import com.example.words.dto.StudyTaskResponse;
 import com.example.words.exception.BadRequestException;
 import com.example.words.exception.StudentPointOperationException;
 import com.example.words.model.AppUser;
 import com.example.words.model.AttentionState;
 import com.example.words.model.Classroom;
+import com.example.words.model.ClassroomMember;
 import com.example.words.model.ClassroomStatus;
 import com.example.words.model.Dictionary;
 import com.example.words.model.DictionaryWord;
@@ -216,6 +219,35 @@ class StudyPlanServiceTest {
     }
 
     @Test
+    void archiveStudyPlanShouldAllowAdminAndPlanOwnerOnly() {
+        StudyPlan studyPlan = new StudyPlan();
+        studyPlan.setId(55L);
+        studyPlan.setTeacherId(7L);
+        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studyPlanRepository.save(any(StudyPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+        studyPlanService.archiveStudyPlan(55L, teacher);
+        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
+
+        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+        AppUser otherTeacher = new AppUser();
+        otherTeacher.setId(8L);
+        otherTeacher.setRole(UserRole.TEACHER);
+        assertThrows(AccessDeniedException.class, () -> studyPlanService.archiveStudyPlan(55L, otherTeacher));
+        assertEquals(StudyPlanStatus.PUBLISHED, studyPlan.getStatus());
+
+        AppUser admin = new AppUser();
+        admin.setId(1L);
+        admin.setRole(UserRole.ADMIN);
+        studyPlanService.archiveStudyPlan(55L, admin);
+        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
+    }
+
+    @Test
     void createStudyPlanShouldRejectDictionaryOutsideSelectedClassroomIntersection() {
         AppUser teacher = new AppUser();
         teacher.setId(7L);
@@ -381,8 +413,8 @@ class StudyPlanServiceTest {
             studentStudyPlan.setId(222L);
             return studentStudyPlan;
         });
-        when(studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(55L))
-                .thenReturn(List.of(new StudentStudyPlan(), new StudentStudyPlan()));
+        when(studentStudyPlanRepository.countByStudyPlanIdAndStatusNot(55L, StudentStudyPlanStatus.DROPPED))
+                .thenReturn(2L);
 
         StudyPlanResponse response = studyPlanService.appendStudents(
                 55L,
@@ -425,7 +457,7 @@ class StudyPlanServiceTest {
     }
 
     @Test
-    void enrollStudentInPublishedPlansForClassroomShouldCreateAssignmentsForPublishedPlansOnly() {
+    void enrollStudentInPublishedPlansForClassroomShouldCreateDraftAndPublishedPlanMemberships() {
         AppUser teacher = new AppUser();
         teacher.setId(7L);
         teacher.setRole(UserRole.TEACHER);
@@ -443,6 +475,8 @@ class StudyPlanServiceTest {
         when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary));
         when(studentStudyPlanRepository.findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(55L, 22L))
                 .thenReturn(List.of());
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(56L, 22L))
+                .thenReturn(List.of());
         when(studentStudyPlanRepository.save(any(StudentStudyPlan.class))).thenAnswer(invocation -> {
             StudentStudyPlan studentStudyPlan = invocation.getArgument(0);
             studentStudyPlan.setId(222L);
@@ -453,8 +487,28 @@ class StudyPlanServiceTest {
 
         verify(accessControlService).ensureCanAssignDictionaryToStudent(teacher, dictionary, 22L);
         verify(dictionaryAssignmentService).assignDictionaryToStudents(dictionary, teacher, List.of(22L));
-        verify(studentStudyPlanRepository).save(any(StudentStudyPlan.class));
+        verify(studentStudyPlanRepository, times(2)).save(any(StudentStudyPlan.class));
         verify(dictionaryService, never()).findById(11L);
+    }
+
+    @Test
+    void listStudentStudyPlansShouldHideDraftPlans() {
+        AppUser student = new AppUser();
+        student.setId(20L);
+        student.setRole(UserRole.STUDENT);
+
+        StudyPlan draftPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        Dictionary dictionary = dictionary(10L, "高考词汇");
+        StudentStudyPlan draftStudentStudyPlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+
+        when(studentStudyPlanRepository.findByStudentIdOrderByCreatedAtDesc(20L))
+                .thenReturn(List.of(draftStudentStudyPlan));
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(draftPlan));
+        lenient().when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary));
+
+        List<StudentStudyPlanSummaryResponse> responses = studyPlanService.listStudentStudyPlans(student);
+
+        assertTrue(responses.isEmpty());
     }
 
     @Test
@@ -523,6 +577,117 @@ class StudyPlanServiceTest {
         assertEquals(StudentStudyPlanStatus.DROPPED, studentStudyPlan.getStatus());
         verify(studentStudyPlanRepository).save(studentStudyPlan);
         verify(studentStudyPlanRepository, never()).findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(56L, 22L);
+    }
+
+    @Test
+    void getOverviewShouldExcludeDroppedStudentsFromTotals() {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        studyPlan.setEndDate(today.minusDays(1));
+        StudentStudyPlan activePlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStatusNotOrderByStudentIdAsc(
+                55L,
+                StudentStudyPlanStatus.DROPPED)).thenReturn(List.of(activePlan));
+        when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateBeforeOrderByTaskDateAsc(200L, today))
+                .thenReturn(List.of());
+
+        StudyPlanOverviewResponse response = studyPlanService.getOverview(55L, teacher);
+
+        assertEquals(1L, response.getTotalStudents());
+        assertEquals(1L, response.getNotStartedStudents());
+    }
+
+    @Test
+    void listPlanStudentsShouldExcludeDroppedStudents() {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+        AppUser student = new AppUser();
+        student.setId(20L);
+        student.setDisplayName("student01");
+
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        studyPlan.setEndDate(today.minusDays(1));
+        StudentStudyPlan activePlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStatusNotOrderByStudentIdAsc(
+                55L,
+                StudentStudyPlanStatus.DROPPED)).thenReturn(List.of(activePlan));
+        when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateBeforeOrderByTaskDateAsc(200L, today))
+                .thenReturn(List.of());
+        when(userService.getUserEntity(20L)).thenReturn(student);
+
+        List<StudyPlanStudentSummaryResponse> responses = studyPlanService.listPlanStudents(55L, teacher);
+
+        assertEquals(1, responses.size());
+        assertEquals(20L, responses.get(0).getStudentId());
+        assertEquals("student01", responses.get(0).getStudentName());
+    }
+
+    @Test
+    void getStudyPlanShouldCountDraftPlanClassroomStudents() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        Dictionary dictionary = dictionary(10L, "高考词汇");
+
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary));
+        when(studyPlanClassroomRepository.findByStudyPlanId(55L))
+                .thenReturn(List.of(new StudyPlanClassroom(1L, 55L, 100L, null)));
+        when(classroomMemberRepository.findByClassroomIdIn(List.of(100L)))
+                .thenReturn(List.of(new ClassroomMember(1L, 100L, 20L, null)));
+
+        StudyPlanResponse response = studyPlanService.getStudyPlan(55L, teacher);
+
+        assertEquals(1L, response.getStudentCount());
+    }
+
+    @Test
+    void listPlanStudentsShouldRepairDraftMembershipFromClassrooms() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+        AppUser student = new AppUser();
+        student.setId(20L);
+        student.setDisplayName("小王");
+
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        StudentStudyPlan repairedPlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studyPlanClassroomRepository.findByStudyPlanId(55L))
+                .thenReturn(List.of(new StudyPlanClassroom(1L, 55L, 100L, null)));
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom(100L, "2026初中七年级", 7L)));
+        when(classroomMemberRepository.findByClassroomIdIn(List.of(100L)))
+                .thenReturn(List.of(new ClassroomMember(1L, 100L, 20L, null)));
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStatusNotOrderByStudentIdAsc(
+                55L,
+                StudentStudyPlanStatus.DROPPED)).thenReturn(List.of());
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(55L, 20L))
+                .thenReturn(List.of());
+        when(studentStudyPlanRepository.save(any(StudentStudyPlan.class))).thenReturn(repairedPlan);
+        when(studyDayTaskRepository.findByStudentStudyPlanIdAndTaskDateBeforeOrderByTaskDateAsc(
+                eq(200L),
+                any(LocalDate.class))).thenReturn(List.of());
+        when(userService.getUserEntity(20L)).thenReturn(student);
+
+        List<StudyPlanStudentSummaryResponse> responses = studyPlanService.listPlanStudents(55L, teacher);
+
+        assertEquals(1, responses.size());
+        assertEquals(20L, responses.get(0).getStudentId());
+        assertEquals("小王", responses.get(0).getStudentName());
+        verify(studentStudyPlanRepository).save(any(StudentStudyPlan.class));
     }
 
     @Test
@@ -1283,6 +1448,21 @@ class StudyPlanServiceTest {
         studyPlan.setCompletionThreshold(BigDecimal.valueOf(100));
         studyPlan.setStatus(status);
         return studyPlan;
+    }
+
+    private StudentStudyPlan studentStudyPlan(
+            Long id,
+            Long studyPlanId,
+            Long studentId,
+            StudentStudyPlanStatus status) {
+        StudentStudyPlan studentStudyPlan = new StudentStudyPlan();
+        studentStudyPlan.setId(id);
+        studentStudyPlan.setStudyPlanId(studyPlanId);
+        studentStudyPlan.setStudentId(studentId);
+        studentStudyPlan.setStatus(status);
+        studentStudyPlan.setMissedDays(0);
+        studentStudyPlan.setCurrentStreak(0);
+        return studentStudyPlan;
     }
 
     private MetaWord metaWord(Long id, String word) {

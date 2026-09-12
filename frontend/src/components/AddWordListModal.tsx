@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { dictionaryWordApi } from '../api';
 import type { WordListProcessResult } from '../api';
 import type { Dictionary, MetaWord, MetaWordEntry } from '../types';
+import { chunkEntries } from './manual-entry-utils';
 import './AddWordListModal.css';
 
 interface AddWordListModalProps {
@@ -33,7 +34,6 @@ interface ParsedEntryResult {
 }
 
 const INITIAL_QUICK_ROW_COUNT = 1;
-const MAX_ENTRY_COUNT = 1000;
 const QUICK_SUGGESTION_LIMIT = 8;
 const QUICK_SUGGESTION_DEBOUNCE_MS = 180;
 const BULK_EXAMPLE = `apple | 苹果 | noun | /ˈaepəl/ | a fruit that grows on trees | I ate an apple for breakfast. | 2
@@ -615,11 +615,28 @@ export function AddWordListModal({ isOpen, onClose, dictionary, onSuccess }: Add
         throw new Error('请至少录入一个单词');
       }
 
-      if (entries.length > MAX_ENTRY_COUNT) {
-        throw new Error(`每次最多添加 ${MAX_ENTRY_COUNT} 个词条`);
+      const batchResults: WordListProcessResult[] = [];
+      for (const batch of chunkEntries(entries)) {
+        batchResults.push(await dictionaryWordApi.addWordList(dictionary.id, batch));
       }
 
-      const response = await dictionaryWordApi.addWordList(dictionary.id, entries);
+      const response = batchResults.reduce<WordListProcessResult>((summary, batch) => ({
+        message: batch.message,
+        dictionaryId: batch.dictionaryId,
+        total: summary.total + batch.total,
+        existed: summary.existed + batch.existed,
+        created: summary.created + batch.created,
+        added: summary.added + batch.added,
+        failed: summary.failed + batch.failed,
+      }), {
+        message: 'Word list processed successfully',
+        dictionaryId: dictionary.id,
+        total: 0,
+        existed: 0,
+        created: 0,
+        added: 0,
+        failed: 0,
+      });
       setResult(response);
       resetCurrentMode();
       onSuccess?.();

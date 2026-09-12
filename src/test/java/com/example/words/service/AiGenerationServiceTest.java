@@ -1,6 +1,7 @@
 package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,6 +88,46 @@ class AiGenerationServiceTest {
         );
 
         assertEquals("AI returned invalid word details JSON", exception.getMessage());
+    }
+
+    @Test
+    void generateWordEntryV2ShouldUseDictionaryAbbreviationForAbandon() {
+        AiConfig config = config();
+        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "abandon");
+        List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "fill abandon"));
+
+        when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
+        when(aiPromptService.buildWordDetailsV2Messages(request)).thenReturn(messages);
+        when(aiGatewayService.generateText(config, messages)).thenReturn("""
+                {
+                  "word": "abandon",
+                  "partOfSpeech": [{
+                    "pos": "verb",
+                    "definitions": [{
+                      "definition": "to leave someone or something",
+                      "translation": "放弃"
+                    }]
+                  }],
+                  "difficulty": 2
+                }
+                """);
+
+        AiGenerationService.GeneratedWordEntryV2 result = aiGenerationService.generateWordEntryV2(request);
+
+        assertEquals("vt.", result.entry().getPartOfSpeech().get(0).getPos());
+    }
+
+    @Test
+    void wordDetailsV2PromptShouldRequireDictionaryPartOfSpeechAbbreviations() {
+        AiPromptService promptService = new AiPromptService();
+
+        List<AiChatMessageRequest> messages = promptService.buildWordDetailsV2Messages(
+                new GenerateWordDetailsRequest(null, "abandon")
+        );
+
+        String prompt = messages.get(1).getContent();
+        assertTrue(prompt.contains("abandon 的词性必须返回 vt."));
+        assertTrue(prompt.contains("不得返回 noun、verb、adjective 等完整单词"));
     }
 
     private AiConfig config() {
