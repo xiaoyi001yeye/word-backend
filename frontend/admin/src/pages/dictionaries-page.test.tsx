@@ -7,6 +7,7 @@ vi.mock("@/lib/api", () => ({
     api: {
         listDictionaries: vi.fn(),
         listDictionaryEntriesPage: vi.fn(),
+        getMetaWord: vi.fn(),
         listDictionaryMetaWordSuggestions: vi.fn(),
         addDictionaryWordList: vi.fn(),
         generateDictionaryWordWithAi: vi.fn(),
@@ -61,6 +62,37 @@ describe("DictionariesPage", () => {
             empty: true,
         });
         vi.mocked(api.listDictionaryMetaWordSuggestions).mockResolvedValue([]);
+        vi.mocked(api.getMetaWord).mockResolvedValue({
+            id: 21,
+            word: "apple",
+            normalizedWord: "apple",
+            phonetic: "/ˈæp.əl/",
+            phoneticDetail: { uk: "/ˈæp.əl/", us: "/ˈæp.əl/" },
+            syllableDetail: {
+                segments: [
+                    { text: "ap", ukPhonetic: "/æp/", usPhonetic: "/æp/" },
+                    { text: "ple", ukPhonetic: "/əl/", usPhonetic: "/əl/" },
+                ],
+            },
+            partOfSpeech: "n.",
+            partOfSpeechDetail: [
+                {
+                    pos: "n.",
+                    definitions: [
+                        {
+                            definition: "a round fruit",
+                            translation: "苹果",
+                            exampleSentences: [
+                                { sentence: "I ate an apple.", translation: "我吃了一个苹果。" },
+                            ],
+                        },
+                    ],
+                    synonyms: ["fruit"],
+                    antonyms: [],
+                },
+            ],
+            difficulty: 2,
+        });
         vi.mocked(api.generateDictionaryWordWithAi).mockResolvedValue({
             dictionaryId: 7,
             metaWordId: 1,
@@ -129,6 +161,74 @@ describe("DictionariesPage", () => {
 
         expect(await screen.findByText("apple")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "单词AI" })).toBeInTheDocument();
+    });
+
+    it("shows structured word arrays as nested form fields", async () => {
+        vi.mocked(api.listDictionaryEntriesPage).mockResolvedValue({
+            content: [
+                {
+                    entryId: 11,
+                    dictionaryId: 7,
+                    metaWordId: 21,
+                    word: "apple",
+                    translation: "苹果",
+                    entryOrder: 1,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            size: 20,
+            number: 0,
+            numberOfElements: 1,
+            first: true,
+            last: true,
+            empty: false,
+        });
+
+        render(() => <DictionariesPage />);
+        fireEvent.click(await screen.findByRole("button", { name: "查看详细数据" }));
+
+        expect(api.getMetaWord).toHaveBeenCalledWith(21);
+        expect(await screen.findByText("词性与释义")).toBeInTheDocument();
+        expect(screen.getByLabelText("中文释义")).toHaveValue("苹果");
+        expect(screen.getByLabelText("英文例句 1")).toHaveValue("I ate an apple.");
+        expect(screen.getByLabelText("第 1 段拼写")).toHaveValue("ap");
+    });
+
+    it("generates and refreshes the structured detail from its AI button", async () => {
+        vi.mocked(api.listDictionaryEntriesPage).mockResolvedValue({
+            content: [
+                {
+                    entryId: 11,
+                    dictionaryId: 7,
+                    metaWordId: 21,
+                    word: "apple",
+                    translation: "苹果",
+                    entryOrder: 1,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            size: 20,
+            number: 0,
+            numberOfElements: 1,
+            first: true,
+            last: true,
+            empty: false,
+        });
+
+        render(() => <DictionariesPage />);
+        fireEvent.click(await screen.findByRole("button", { name: "查看详细数据" }));
+        await screen.findByText("词性与释义");
+
+        fireEvent.click(screen.getByRole("button", { name: "AI 自动补全" }));
+
+        expect(api.generateDictionaryWordWithAi).toHaveBeenCalledWith(7, {
+            metaWordId: 21,
+            word: "apple",
+        });
+        expect(await screen.findByText("单词AI已更新元单词数据：apple")).toBeInTheDocument();
+        expect(api.getMetaWord).toHaveBeenCalledTimes(2);
     });
 
     it("renames a dictionary without changing its identity", async () => {

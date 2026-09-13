@@ -17,6 +17,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { AddWordListModal } from "@/components/dictionaries/add-word-list-modal";
+import { MetaWordDetailModal } from "@/components/dictionaries/meta-word-detail-modal";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/features/auth/auth-context";
@@ -25,6 +26,7 @@ import { compactFileSize, formatDateTime } from "@/lib/format";
 import type {
     Dictionary,
     DictionaryWordEntryResponse,
+    MetaWordDetail,
     PaginatedResponse,
 } from "@/types/api";
 
@@ -66,6 +68,11 @@ export function DictionariesPage() {
     const [feedback, setFeedback] = createSignal("");
     const [feedbackIsError, setFeedbackIsError] = createSignal(false);
     const [entryAiLoading, setEntryAiLoading] = createSignal<Record<number, boolean>>({});
+    const [selectedMetaWord, setSelectedMetaWord] = createSignal<MetaWordDetail | null>(null);
+    const [selectedMetaWordEntry, setSelectedMetaWordEntry] = createSignal<DictionaryWordEntryResponse | null>(null);
+    const [isMetaWordDetailOpen, setIsMetaWordDetailOpen] = createSignal(false);
+    const [metaWordDetailLoading, setMetaWordDetailLoading] = createSignal(false);
+    const [metaWordDetailError, setMetaWordDetailError] = createSignal("");
     const [isCreateDialogOpen, setIsCreateDialogOpen] = createSignal(false);
     const [selectedDictionaryId, setSelectedDictionaryId] = createSignal<number | null>(null);
     const [entryKeyword, setEntryKeyword] = createSignal("");
@@ -367,7 +374,23 @@ export function DictionariesPage() {
         }
     };
 
-    const handleEntryAiGenerate = async (entry: DictionaryWordEntryResponse) => {
+    const handleOpenMetaWordDetail = async (entry: DictionaryWordEntryResponse) => {
+        setSelectedMetaWordEntry(entry);
+        setSelectedMetaWord(null);
+        setMetaWordDetailError("");
+        setMetaWordDetailLoading(true);
+        setIsMetaWordDetailOpen(true);
+
+        try {
+            setSelectedMetaWord(await api.getMetaWord(entry.metaWordId));
+        } catch (error) {
+            setMetaWordDetailError(error instanceof Error ? error.message : "单词详情加载失败");
+        } finally {
+            setMetaWordDetailLoading(false);
+        }
+    };
+
+    const handleEntryAiGenerate = async (entry: DictionaryWordEntryResponse, refreshDetail = false) => {
         if (!entry.word || !selectedDictionaryId()) {
             setFeedbackIsError(true);
             setFeedback("当前词条缺少单词内容，无法使用单词AI。");
@@ -387,6 +410,21 @@ export function DictionariesPage() {
                 word: entry.word,
             });
             await Promise.all([refetch(), refetchEntries()]);
+
+            if (refreshDetail && selectedMetaWordEntry()?.entryId === entry.entryId) {
+                setMetaWordDetailError("");
+                setMetaWordDetailLoading(true);
+                try {
+                    setSelectedMetaWord(await api.getMetaWord(entry.metaWordId));
+                } catch (detailError) {
+                    setMetaWordDetailError(
+                        detailError instanceof Error ? detailError.message : "AI 完成后详情刷新失败",
+                    );
+                } finally {
+                    setMetaWordDetailLoading(false);
+                }
+            }
+
             setFeedback(
                 response.added > 0
                     ? `单词AI已生成并保存，已同步到当前词书：${response.word}`
@@ -400,6 +438,13 @@ export function DictionariesPage() {
                 ...previous,
                 [entry.entryId]: false,
             }));
+        }
+    };
+
+    const handleDetailAiGenerate = async () => {
+        const entry = selectedMetaWordEntry();
+        if (entry) {
+            await handleEntryAiGenerate(entry, true);
         }
     };
 
@@ -806,6 +851,13 @@ export function DictionariesPage() {
                                                                                             <p class="font-medium text-foreground">
                                                                                                 {entry.word || "-"}
                                                                                             </p>
+                                                                                            <button
+                                                                                                class="mt-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                                                                                                type="button"
+                                                                                                onClick={() => void handleOpenMetaWordDetail(entry)}
+                                                                                            >
+                                                                                                查看详细数据
+                                                                                            </button>
                                                                                             <Show
                                                                                                 when={entry.definition}
                                                                                             >
@@ -911,6 +963,20 @@ export function DictionariesPage() {
                     />
                 )}
             </Show>
+
+            <MetaWordDetailModal
+                canGenerateWithAi={canManageSelectedDictionary()}
+                error={metaWordDetailError()}
+                generating={Boolean(selectedMetaWordEntry() && entryAiLoading()[selectedMetaWordEntry()!.entryId])}
+                isOpen={isMetaWordDetailOpen()}
+                loading={metaWordDetailLoading()}
+                word={selectedMetaWord()}
+                onClose={() => {
+                    setIsMetaWordDetailOpen(false);
+                    setSelectedMetaWordEntry(null);
+                }}
+                onGenerateWithAi={() => void handleDetailAiGenerate()}
+            />
 
             <Show when={isCreateDialogOpen()}>
                 <div

@@ -1,0 +1,17 @@
+---
+word: underground
+sources:
+  - "高考英语3500单词第51讲（单词速记与拓展）.docx"
+---
+
+# underground
+
+## 来源
+
+- `高考英语3500单词第51讲（单词速记与拓展）.docx`
+
+## 内容
+
+**来源文件：** `高考英语3500单词第51讲（单词速记与拓展）.docx`
+
+54.  underground adj. 地下的 n. 地铁【词根词缀： under- 在下 + ground 地面】
