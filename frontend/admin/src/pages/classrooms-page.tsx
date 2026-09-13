@@ -63,6 +63,7 @@ export function ClassroomsPage() {
     const canUseGroupFeed = createMemo(() => auth.user()?.role === "TEACHER");
     const [feedback, setFeedback] = createSignal("");
     const [createError, setCreateError] = createSignal("");
+    const [actionError, setActionError] = createSignal("");
     const [isCreateDialogOpen, setIsCreateDialogOpen] = createSignal(false);
     const [keyword, setKeyword] = createSignal("");
     const [sortBy, setSortBy] = createSignal<"createdAt" | "updatedAt" | "name">("createdAt");
@@ -235,6 +236,7 @@ export function ClassroomsPage() {
         selectedClassroomId();
         setSelectedStudentId("");
         setSelectedDictionaryId("");
+        setActionError("");
         setGroupFeedPage(1);
         setGroupFeedText("");
         setGroupFeedError("");
@@ -244,18 +246,23 @@ export function ClassroomsPage() {
 
     const mutateAndRefresh = async (
         runner: () => Promise<unknown>,
-        successMessage: string,
+        successMessage: string | ((result: unknown) => string),
         options?: { refreshMembers?: boolean; refreshDictionaries?: boolean },
     ) => {
         setFeedback("");
-        await runner();
-        setFeedback(successMessage);
-        await refetchClassrooms();
-        if (options?.refreshMembers) {
-            await refetchMembers();
-        }
-        if (options?.refreshDictionaries) {
-            await refetchDictionaries();
+        setActionError("");
+        try {
+            const result = await runner();
+            setFeedback(typeof successMessage === "function" ? successMessage(result) : successMessage);
+            await refetchClassrooms();
+            if (options?.refreshMembers) {
+                await refetchMembers();
+            }
+            if (options?.refreshDictionaries) {
+                await refetchDictionaries();
+            }
+        } catch (error) {
+            setActionError(error instanceof Error ? error.message : "班级操作失败，请稍后重试。");
         }
     };
 
@@ -409,6 +416,10 @@ export function ClassroomsPage() {
                 <Alert class="border-success/20 bg-success/10 text-success">{feedback()}</Alert>
             </Show>
 
+            <Show when={actionError()}>
+                <Alert class="border-destructive/30 bg-destructive/10 text-destructive">{actionError()}</Alert>
+            </Show>
+
             <Show
                 when={classroomsPage()}
                 fallback={
@@ -519,14 +530,44 @@ export function ClassroomsPage() {
                                                                 </Button>
                                                                 <Button
                                                                     size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        if (!window.confirm(`确认归档班级“${classroom.name}”？归档后该班级不再出现在列表中，但学生、词书关系与学习记录都会保留。`)) {
+                                                                            return;
+                                                                        }
+                                                                        void mutateAndRefresh(
+                                                                            () => api.archiveClassroom(classroom.id),
+                                                                            `已归档班级 ${classroom.name}。`,
+                                                                        ).then(() => {
+                                                                            if (!actionError() && selectedClassroomId() === classroom.id) {
+                                                                                setSelectedClassroomId(null);
+                                                                            }
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    归档
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
                                                                     variant="destructive"
-                                                                    onClick={() =>
+                                                                    onClick={() => {
+                                                                        if (!window.confirm(`确认删除班级“${classroom.name}”？该班级的学生关系、词书关系、班级群消息会一并删除，其关联的学习计划会被归档，且不可恢复。`)) {
+                                                                            return;
+                                                                        }
                                                                         void mutateAndRefresh(
                                                                             () => api.deleteClassroom(classroom.id),
-                                                                            `已删除班级 ${classroom.name}。`,
-                                                                            { refreshMembers: selectedClassroomId() === classroom.id },
-                                                                        )
-                                                                    }
+                                                                            (result) => {
+                                                                                const archivedStudyPlanCount = (result as { archivedStudyPlanCount?: number } | null)?.archivedStudyPlanCount ?? 0;
+                                                                                return archivedStudyPlanCount > 0
+                                                                                    ? `已删除班级 ${classroom.name}，并归档 ${archivedStudyPlanCount} 个学习计划。`
+                                                                                    : `已删除班级 ${classroom.name}。`;
+                                                                            },
+                                                                        ).then(() => {
+                                                                            if (!actionError() && selectedClassroomId() === classroom.id) {
+                                                                                setSelectedClassroomId(null);
+                                                                            }
+                                                                        });
+                                                                    }}
                                                                 >
                                                                     删除
                                                                 </Button>
@@ -616,7 +657,11 @@ export function ClassroomsPage() {
                                                                 ),
                                                             `已将词书加入 ${classroom().name}。`,
                                                             { refreshDictionaries: true },
-                                                        ).then(() => setSelectedDictionaryId(""));
+                                                        ).then(() => {
+                                                            if (!actionError()) {
+                                                                setSelectedDictionaryId("");
+                                                            }
+                                                        });
                                                     }}
                                                 >
                                                     添加词书
@@ -677,7 +722,11 @@ export function ClassroomsPage() {
                                                     () => api.addStudentToClassroom(classroom().id, Number(studentId)),
                                                     `已将学生加入 ${classroom().name}。`,
                                                     { refreshMembers: true },
-                                                ).then(() => setSelectedStudentId(""));
+                                                ).then(() => {
+                                                    if (!actionError()) {
+                                                        setSelectedStudentId("");
+                                                    }
+                                                });
                                             }}
                                         >
                                             添加学生

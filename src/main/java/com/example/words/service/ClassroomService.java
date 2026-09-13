@@ -12,8 +12,10 @@ import com.example.words.model.ClassroomMember;
 import com.example.words.model.ClassroomStatus;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomDictionaryAssignmentRepository;
+import com.example.words.repository.ClassroomGroupFeedMessageRepository;
 import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
+import com.example.words.repository.PaperReleaseTargetRepository;
 import com.example.words.repository.StudyPlanClassroomRepository;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -40,6 +42,8 @@ public class ClassroomService {
     private final ClassroomMemberRepository classroomMemberRepository;
     private final StudyPlanClassroomRepository studyPlanClassroomRepository;
     private final ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository;
+    private final ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository;
+    private final PaperReleaseTargetRepository paperReleaseTargetRepository;
     private final UserService userService;
     private final StudyPlanService studyPlanService;
 
@@ -48,12 +52,16 @@ public class ClassroomService {
             ClassroomMemberRepository classroomMemberRepository,
             StudyPlanClassroomRepository studyPlanClassroomRepository,
             ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository,
+            ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository,
+            PaperReleaseTargetRepository paperReleaseTargetRepository,
             UserService userService,
             StudyPlanService studyPlanService) {
         this.classroomRepository = classroomRepository;
         this.classroomMemberRepository = classroomMemberRepository;
         this.studyPlanClassroomRepository = studyPlanClassroomRepository;
         this.classroomDictionaryAssignmentRepository = classroomDictionaryAssignmentRepository;
+        this.classroomGroupFeedMessageRepository = classroomGroupFeedMessageRepository;
+        this.paperReleaseTargetRepository = paperReleaseTargetRepository;
         this.userService = userService;
         this.studyPlanService = studyPlanService;
     }
@@ -65,6 +73,7 @@ public class ClassroomService {
                 : classroomRepository.findByTeacherId(actor.getId());
 
         return classrooms.stream()
+                .filter(classroom -> classroom.getStatus() != ClassroomStatus.ARCHIVED)
                 .map(this::toResponse)
                 .toList();
     }
@@ -137,18 +146,52 @@ public class ClassroomService {
         return toResponse(classroomRepository.save(classroom));
     }
 
+    /**
+     * Deletes the classroom together with its relations and archives the study plans that were attached to it.
+     * Returns the number of study plans that were archived.
+     */
     @Transactional
-    public boolean deleteClassroom(Long classroomId, AppUser actor) {
+    public int deleteClassroom(Long classroomId, AppUser actor) {
         Classroom classroom = getClassroomEntity(classroomId);
         ensureCanManageClassroom(actor, classroom);
-        if (canPhysicallyDelete(classroomId)) {
-            classroomRepository.delete(classroom);
-            return true;
+
+        if (paperReleaseTargetRepository.existsBySourceClassroomId(classroomId)) {
+            throw new BadRequestException(
+                    "Classroom has released exam records and cannot be deleted; archive it instead");
+        }
+
+        // Drop every member from the classroom study plans before the plan links disappear, so the
+        // students are not left enrolled in plans of a classroom they no longer belong to.
+        List<Long> studentIds = classroomMemberRepository.findByClassroomId(classroomId).stream()
+                .map(ClassroomMember::getStudentId)
+                .distinct()
+                .toList();
+        for (Long studentId : studentIds) {
+            studyPlanService.dropStudentFromClassroomStudyPlans(classroomId, studentId, actor);
+        }
+
+        // Plans must be archived while their classroom links still exist, and after the members were
+        // dropped, because dropping re-validates the plan and rejects archived plans.
+        int archivedStudyPlanCount = studyPlanService.archiveStudyPlansForClassroom(classroomId, actor);
+
+        classroomMemberRepository.deleteByClassroomId(classroomId);
+        studyPlanClassroomRepository.deleteByClassroomId(classroomId);
+        classroomDictionaryAssignmentRepository.deleteByClassroomId(classroomId);
+        classroomGroupFeedMessageRepository.deleteByClassroomId(classroomId);
+        classroomRepository.delete(classroom);
+        return archivedStudyPlanCount;
+    }
+
+    @Transactional
+    public void archiveClassroom(Long classroomId, AppUser actor) {
+        Classroom classroom = getClassroomEntity(classroomId);
+        ensureCanManageClassroom(actor, classroom);
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+            throw new BadRequestException("Classroom is already archived: " + classroomId);
         }
         classroom.setStatus(ClassroomStatus.ARCHIVED);
         classroom.setArchivedAt(LocalDateTime.now());
         classroomRepository.save(classroom);
-        return false;
     }
 
     @Transactional(readOnly = true)
@@ -282,17 +325,12 @@ public class ClassroomService {
 
     private void ensureClassroomNameAvailable(String name, Long currentClassroomId) {
         boolean duplicate = classroomRepository.findAll().stream()
-                .anyMatch(classroom -> classroom.getName().equals(name)
+                .anyMatch(classroom -> classroom.getStatus() != ClassroomStatus.ARCHIVED
+                        && classroom.getName().equals(name)
                         && !Objects.equals(classroom.getId(), currentClassroomId));
         if (duplicate) {
             throw new BadRequestException("Classroom name already exists: " + name);
         }
-    }
-
-    private boolean canPhysicallyDelete(Long classroomId) {
-        return classroomMemberRepository.countByClassroomId(classroomId) == 0
-                && !studyPlanClassroomRepository.existsByClassroomId(classroomId)
-                && !classroomDictionaryAssignmentRepository.existsByClassroomId(classroomId);
     }
 
     private void ensureClassroomActive(Classroom classroom, String message) {
@@ -329,10 +367,13 @@ public class ClassroomService {
     }
 
     private Specification<Classroom> visibleTo(AppUser actor) {
+        Specification<Classroom> notArchived = (root, query, criteriaBuilder) ->
+                criteriaBuilder.notEqual(root.get("status"), ClassroomStatus.ARCHIVED);
         if (actor.getRole() == UserRole.ADMIN) {
-            return null;
+            return notArchived;
         }
-        return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("teacherId"), actor.getId());
+        return notArchived.and((root, query, criteriaBuilder) ->
+                criteriaBuilder.equal(root.get("teacherId"), actor.getId()));
     }
 
     private Specification<Classroom> keywordLike(String keyword) {

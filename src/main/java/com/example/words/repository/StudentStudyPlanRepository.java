@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -29,4 +30,8 @@ public interface StudentStudyPlanRepository extends JpaRepository<StudentStudyPl
     long countByStudyPlanIdAndStatusNot(Long studyPlanId, StudentStudyPlanStatus status);
 
     List<StudentStudyPlan> findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(Long studyPlanId, Long studentId);
+
+    @Modifying
+    @Query("delete from StudentStudyPlan plan where plan.studyPlanId = :studyPlanId")
+    void deleteByStudyPlanId(@Param("studyPlanId") Long studyPlanId);
 }

@@ -62,7 +62,7 @@ public class StudyPlanController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<Void> deleteStudyPlan(@PathVariable Long id) {
-        studyPlanService.archiveStudyPlan(id, currentUserService.getCurrentUser());
+        studyPlanService.deleteStudyPlan(id, currentUserService.getCurrentUser());
         return ResponseEntity.noContent().build();
     }
 
@@ -70,6 +70,12 @@ public class StudyPlanController {
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<StudyPlanResponse> publishStudyPlan(@PathVariable Long id) {
         return ResponseEntity.ok(studyPlanService.publishStudyPlan(id, currentUserService.getCurrentUser()));
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<StudyPlanResponse> archiveStudyPlan(@PathVariable Long id) {
+        return ResponseEntity.ok(studyPlanService.archiveStudyPlan(id, currentUserService.getCurrentUser()));
     }
 
     @PostMapping("/{id}/students")

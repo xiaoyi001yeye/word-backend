@@ -4,6 +4,7 @@ import com.example.words.model.ClassroomMember;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -32,4 +33,8 @@ public interface ClassroomMemberRepository extends JpaRepository<ClassroomMember
     long countByClassroomId(Long classroomId);
 
     void deleteByClassroomIdAndStudentId(Long classroomId, Long studentId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ClassroomMember member WHERE member.classroomId = :classroomId")
+    int deleteByClassroomId(@Param("classroomId") Long classroomId);
 }

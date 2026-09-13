@@ -9,4 +9,6 @@ public interface PaperReleaseTargetRepository extends JpaRepository<PaperRelease
     List<PaperReleaseTarget> findByPaperReleaseId(Long paperReleaseId);
 
     List<PaperReleaseTarget> findByStudentId(Long studentId);
+
+    boolean existsBySourceClassroomId(Long sourceClassroomId);
 }

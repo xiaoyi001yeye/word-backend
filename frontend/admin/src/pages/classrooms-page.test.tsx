@@ -22,6 +22,7 @@ vi.mock("@/lib/api", () => ({
         listClassroomsPage: vi.fn(),
         createClassroom: vi.fn(),
         deleteClassroom: vi.fn(),
+        archiveClassroom: vi.fn(),
         getClassroomStudents: vi.fn(),
         getClassroomDictionaries: vi.fn(),
         listClassroomGroupFeedMessages: vi.fn(),
@@ -422,5 +423,183 @@ describe("ClassroomsPage", () => {
             expect(previewOverlay).not.toBeNull();
             expect(screen.getByTestId("shell-content")).not.toContainElement(previewOverlay);
         });
+    });
+
+    it("shows the backend reason when adding a student fails", async () => {
+        vi.mocked(api.listClassroomsPage).mockResolvedValue({
+            content: [
+                {
+                    id: 1,
+                    name: "2026初中七年级",
+                    description: "数学天才班",
+                    teacherId: 3,
+                    teacherName: "API Teacher",
+                    studentCount: 1,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+            numberOfElements: 1,
+        });
+        vi.mocked(api.listStudents).mockResolvedValue([
+            {
+                id: 5,
+                username: "student01",
+                displayName: "老张",
+                role: "STUDENT",
+                status: "ACTIVE",
+            },
+        ]);
+        vi.mocked(api.addStudentToClassroom).mockRejectedValue(new Error("Study plan not found: 5"));
+
+        render(() => <ClassroomsPage />);
+
+        const studentOption = await screen.findByRole("option", { name: "老张" });
+        fireEvent.change(studentOption.closest("select") as HTMLSelectElement, {
+            target: { value: "5" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: "添加学生" }));
+
+        expect(await screen.findByText("Study plan not found: 5")).toBeInTheDocument();
+        expect(api.addStudentToClassroom).toHaveBeenCalledWith(1, 5);
+    });
+
+    it("confirms before deleting a classroom and reports the deleted result", async () => {
+        const classroomPage = {
+            content: [
+                {
+                    id: 31,
+                    name: "初中英语词汇班",
+                    description: "25 天学习计划",
+                    teacherId: 2,
+                    teacherName: "初中英语老师",
+                    studentCount: 18,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+            numberOfElements: 1,
+        };
+        vi.mocked(api.listClassroomsPage)
+            .mockResolvedValueOnce(classroomPage)
+            .mockResolvedValueOnce(emptyClassroomsPage);
+        vi.mocked(api.deleteClassroom).mockResolvedValue({
+            message: "Classroom deleted successfully",
+            id: 31,
+            status: "DELETED",
+            archivedStudyPlanCount: 2,
+        });
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        render(() => <ClassroomsPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "删除" }));
+
+        await waitFor(() => expect(api.deleteClassroom).toHaveBeenCalledWith(31));
+        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("确认删除班级"));
+        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("关联的学习计划会被归档"));
+        expect(await screen.findByText("已删除班级 初中英语词汇班，并归档 2 个学习计划。")).toBeInTheDocument();
+        confirmSpy.mockRestore();
+    });
+
+    it("keeps the classroom when deleting is cancelled in the confirmation", async () => {
+        vi.mocked(api.listClassroomsPage).mockResolvedValue({
+            content: [
+                {
+                    id: 31,
+                    name: "初中英语词汇班",
+                    teacherId: 2,
+                    teacherName: "初中英语老师",
+                    studentCount: 18,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+            numberOfElements: 1,
+        });
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+        render(() => <ClassroomsPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "删除" }));
+
+        await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+        expect(api.deleteClassroom).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
+    });
+
+    it("shows the backend reason when a classroom still has exam release records", async () => {
+        vi.mocked(api.listClassroomsPage).mockResolvedValue({
+            content: [
+                {
+                    id: 31,
+                    name: "初中英语词汇班",
+                    teacherId: 2,
+                    teacherName: "初中英语老师",
+                    studentCount: 18,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+            numberOfElements: 1,
+        });
+        vi.mocked(api.deleteClassroom).mockRejectedValue(
+            new Error("Classroom has released exam records and cannot be deleted; archive it instead"),
+        );
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        render(() => <ClassroomsPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "删除" }));
+
+        expect(await screen.findByText(
+            "Classroom has released exam records and cannot be deleted; archive it instead",
+        )).toBeInTheDocument();
+        confirmSpy.mockRestore();
+    });
+
+    it("archives a classroom without deleting its relations", async () => {
+        const classroomPage = {
+            content: [
+                {
+                    id: 31,
+                    name: "初中英语词汇班",
+                    teacherId: 2,
+                    teacherName: "初中英语老师",
+                    studentCount: 18,
+                },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            number: 0,
+            size: 20,
+            numberOfElements: 1,
+        };
+        vi.mocked(api.listClassroomsPage)
+            .mockResolvedValueOnce(classroomPage)
+            .mockResolvedValueOnce(emptyClassroomsPage);
+        vi.mocked(api.archiveClassroom).mockResolvedValue({
+            message: "Classroom archived successfully",
+            id: 31,
+            status: "ARCHIVED",
+        });
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        render(() => <ClassroomsPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "归档" }));
+
+        await waitFor(() => expect(api.archiveClassroom).toHaveBeenCalledWith(31));
+        expect(await screen.findByText("已归档班级 初中英语词汇班。")).toBeInTheDocument();
+        expect(api.deleteClassroom).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
     });
 });

@@ -2,12 +2,15 @@ package com.example.words.repository;
 
 import com.example.words.model.StudentAttentionDailyStat;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StudentAttentionDailyStatRepository extends JpaRepository<StudentAttentionDailyStat, Long> {
+
+    long countByStudentStudyPlanIdIn(Collection<Long> studentStudyPlanIds);
 
     List<StudentAttentionDailyStat> findByStudentStudyPlanIdAndTaskDateOrderByCreatedAtAsc(
             Long studentStudyPlanId,
