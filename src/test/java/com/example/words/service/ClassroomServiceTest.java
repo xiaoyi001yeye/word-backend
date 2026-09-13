@@ -1,12 +1,15 @@
 package com.example.words.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.words.dto.ClassroomResponse;
 import com.example.words.dto.CreateClassroomRequest;
 import com.example.words.dto.UpdateClassroomRequest;
 import com.example.words.exception.BadRequestException;
@@ -16,8 +19,10 @@ import com.example.words.model.ClassroomMember;
 import com.example.words.model.ClassroomStatus;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomDictionaryAssignmentRepository;
+import com.example.words.repository.ClassroomGroupFeedMessageRepository;
 import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
+import com.example.words.repository.PaperReleaseTargetRepository;
 import com.example.words.repository.StudyPlanClassroomRepository;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +30,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -45,6 +51,12 @@ class ClassroomServiceTest {
     private ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository;
 
     @Mock
+    private ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository;
+
+    @Mock
+    private PaperReleaseTargetRepository paperReleaseTargetRepository;
+
+    @Mock
     private UserService userService;
 
     @Mock
@@ -59,6 +71,8 @@ class ClassroomServiceTest {
                 classroomMemberRepository,
                 studyPlanClassroomRepository,
                 classroomDictionaryAssignmentRepository,
+                classroomGroupFeedMessageRepository,
+                paperReleaseTargetRepository,
                 userService,
                 studyPlanService
         );
@@ -106,34 +120,162 @@ class ClassroomServiceTest {
     }
 
     @Test
-    void deleteClassroomWithHistoryShouldArchiveInsteadOfPhysicalDelete() {
+    void deleteClassroomShouldRemoveEveryRelationBeforeDeletingClassroom() {
         AppUser teacher = teacher(7L);
         Classroom classroom = classroom(100L, "一班", 7L);
 
         when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
-        when(classroomMemberRepository.countByClassroomId(100L)).thenReturn(1L);
+        when(paperReleaseTargetRepository.existsBySourceClassroomId(100L)).thenReturn(false);
+        when(classroomMemberRepository.findByClassroomId(100L)).thenReturn(List.of(
+                new ClassroomMember(1L, 100L, 20L, null),
+                new ClassroomMember(2L, 100L, 21L, null)
+        ));
 
         classroomService.deleteClassroom(100L, teacher);
 
-        assertEquals(ClassroomStatus.ARCHIVED, classroom.getStatus());
+        InOrder inOrder = inOrder(
+                studyPlanService,
+                classroomMemberRepository,
+                studyPlanClassroomRepository,
+                classroomDictionaryAssignmentRepository,
+                classroomGroupFeedMessageRepository,
+                classroomRepository);
+        inOrder.verify(studyPlanService).dropStudentFromClassroomStudyPlans(100L, 20L, teacher);
+        inOrder.verify(studyPlanService).dropStudentFromClassroomStudyPlans(100L, 21L, teacher);
+        inOrder.verify(studyPlanService).archiveStudyPlansForClassroom(100L, teacher);
+        inOrder.verify(classroomMemberRepository).deleteByClassroomId(100L);
+        inOrder.verify(studyPlanClassroomRepository).deleteByClassroomId(100L);
+        inOrder.verify(classroomDictionaryAssignmentRepository).deleteByClassroomId(100L);
+        inOrder.verify(classroomGroupFeedMessageRepository).deleteByClassroomId(100L);
+        inOrder.verify(classroomRepository).delete(classroom);
+        verify(classroomRepository, never()).save(any(Classroom.class));
+    }
+
+    @Test
+    void deleteEmptyClassroomShouldSkipRelationCleanupAndDeleteClassroom() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+        when(paperReleaseTargetRepository.existsBySourceClassroomId(100L)).thenReturn(false);
+        when(classroomMemberRepository.findByClassroomId(100L)).thenReturn(List.of());
+
+        classroomService.deleteClassroom(100L, teacher);
+
+        verify(studyPlanService, never()).dropStudentFromClassroomStudyPlans(any(), any(), any());
+        verify(classroomRepository).delete(classroom);
+    }
+
+    @Test
+    void deleteClassroomShouldReportArchivedStudyPlanCount() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+        when(paperReleaseTargetRepository.existsBySourceClassroomId(100L)).thenReturn(false);
+        when(classroomMemberRepository.findByClassroomId(100L)).thenReturn(List.of());
+        when(studyPlanService.archiveStudyPlansForClassroom(100L, teacher)).thenReturn(2);
+
+        int archivedStudyPlanCount = classroomService.deleteClassroom(100L, teacher);
+
+        assertEquals(2, archivedStudyPlanCount);
+        verify(classroomRepository).delete(classroom);
+    }
+
+    @Test
+    void deleteClassroomShouldBeRejectedWhenReleasedExamTargetsExist() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+        when(paperReleaseTargetRepository.existsBySourceClassroomId(100L)).thenReturn(true);
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> classroomService.deleteClassroom(100L, teacher)
+        );
+
+        assertEquals(
+                "Classroom has released exam records and cannot be deleted; archive it instead",
+                exception.getMessage());
         verify(classroomRepository, never()).delete(any(Classroom.class));
+        verify(classroomMemberRepository, never()).deleteByClassroomId(any());
+        verify(studyPlanClassroomRepository, never()).deleteByClassroomId(any());
+        verify(studyPlanService, never()).archiveStudyPlansForClassroom(any(), any());
+    }
+
+    @Test
+    void archiveClassroomShouldKeepRelationsAndOnlyFlagArchive() {
+        AppUser teacher = teacher(7L);
+        Classroom classroom = classroom(100L, "一班", 7L);
+
+        when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
+
+        classroomService.archiveClassroom(100L, teacher);
+
+        assertEquals(ClassroomStatus.ARCHIVED, classroom.getStatus());
+        assertNotNull(classroom.getArchivedAt());
+        verify(classroomRepository, never()).delete(any(Classroom.class));
+        verify(classroomMemberRepository, never()).deleteByClassroomId(any());
+        verify(studyPlanClassroomRepository, never()).deleteByClassroomId(any());
         verify(classroomRepository).save(classroom);
     }
 
     @Test
-    void deleteEmptyMistakenClassroomShouldPhysicallyDelete() {
+    void archiveClassroomShouldRejectAlreadyArchivedClassroom() {
         AppUser teacher = teacher(7L);
         Classroom classroom = classroom(100L, "一班", 7L);
+        classroom.setStatus(ClassroomStatus.ARCHIVED);
 
         when(classroomRepository.findById(100L)).thenReturn(Optional.of(classroom));
-        when(classroomMemberRepository.countByClassroomId(100L)).thenReturn(0L);
-        when(studyPlanClassroomRepository.existsByClassroomId(100L)).thenReturn(false);
-        when(classroomDictionaryAssignmentRepository.existsByClassroomId(100L)).thenReturn(false);
 
-        classroomService.deleteClassroom(100L, teacher);
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> classroomService.archiveClassroom(100L, teacher)
+        );
 
-        verify(classroomRepository).delete(classroom);
+        assertEquals("Classroom is already archived: 100", exception.getMessage());
         verify(classroomRepository, never()).save(any(Classroom.class));
+    }
+
+    @Test
+    void findVisibleClassroomsShouldHideArchivedClassrooms() {
+        Classroom activeClassroom = classroom(100L, "一班", 7L);
+        activeClassroom.setStatus(ClassroomStatus.ACTIVE);
+        Classroom archivedClassroom = classroom(101L, "旧班级", 7L);
+        archivedClassroom.setStatus(ClassroomStatus.ARCHIVED);
+
+        when(classroomRepository.findAll()).thenReturn(List.of(activeClassroom, archivedClassroom));
+        when(userService.getUserEntity(7L)).thenReturn(teacher(7L));
+        when(classroomMemberRepository.countByClassroomId(100L)).thenReturn(3L);
+
+        List<String> names = classroomService.findVisibleClassrooms(admin()).stream()
+                .map(ClassroomResponse::getName)
+                .toList();
+
+        assertEquals(List.of("一班"), names);
+    }
+
+    @Test
+    void createClassroomShouldReuseNameOfArchivedClassroom() {
+        Classroom archivedClassroom = classroom(100L, "一班", 7L);
+        archivedClassroom.setStatus(ClassroomStatus.ARCHIVED);
+
+        when(classroomRepository.findAll()).thenReturn(List.of(archivedClassroom));
+        when(userService.getUserEntity(7L)).thenReturn(teacher(7L));
+        when(classroomRepository.save(any(Classroom.class))).thenAnswer(invocation -> {
+            Classroom saved = invocation.getArgument(0);
+            saved.setId(102L);
+            return saved;
+        });
+        when(classroomMemberRepository.countByClassroomId(102L)).thenReturn(0L);
+
+        ClassroomResponse response = classroomService.createClassroom(
+                new CreateClassroomRequest("一班", null, 7L),
+                admin()
+        );
+
+        assertEquals("一班", response.getName());
     }
 
     @Test

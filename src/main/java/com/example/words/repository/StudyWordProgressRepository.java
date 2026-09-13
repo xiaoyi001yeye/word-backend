@@ -1,12 +1,15 @@
 package com.example.words.repository;
 
 import com.example.words.model.StudyWordProgress;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StudyWordProgressRepository extends JpaRepository<StudyWordProgress, Long> {
+
+    long countByStudentStudyPlanIdIn(Collection<Long> studentStudyPlanIds);
 
     List<StudyWordProgress> findByStudentStudyPlanId(Long studentStudyPlanId);
 

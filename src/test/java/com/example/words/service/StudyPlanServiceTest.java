@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,6 +73,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
@@ -219,32 +221,156 @@ class StudyPlanServiceTest {
     }
 
     @Test
-    void archiveStudyPlanShouldAllowAdminAndPlanOwnerOnly() {
-        StudyPlan studyPlan = new StudyPlan();
-        studyPlan.setId(55L);
-        studyPlan.setTeacherId(7L);
-        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
+    void deleteStudyPlanShouldAllowAdminAndPlanOwnerForDraftPlan() {
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
         when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
-        when(studyPlanRepository.save(any(StudyPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(55L)).thenReturn(List.of());
 
         AppUser teacher = new AppUser();
         teacher.setId(7L);
         teacher.setRole(UserRole.TEACHER);
-        studyPlanService.archiveStudyPlan(55L, teacher);
-        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
-
-        studyPlan.setStatus(StudyPlanStatus.PUBLISHED);
-        AppUser otherTeacher = new AppUser();
-        otherTeacher.setId(8L);
-        otherTeacher.setRole(UserRole.TEACHER);
-        assertThrows(AccessDeniedException.class, () -> studyPlanService.archiveStudyPlan(55L, otherTeacher));
-        assertEquals(StudyPlanStatus.PUBLISHED, studyPlan.getStatus());
+        studyPlanService.deleteStudyPlan(55L, teacher);
+        verify(studyPlanClassroomRepository).deleteByStudyPlanId(55L);
+        verify(studyPlanRepository).delete(studyPlan);
+        verify(studentStudyPlanRepository, never()).deleteByStudyPlanId(any());
 
         AppUser admin = new AppUser();
         admin.setId(1L);
         admin.setRole(UserRole.ADMIN);
-        studyPlanService.archiveStudyPlan(55L, admin);
-        assertEquals(StudyPlanStatus.ARCHIVED, studyPlan.getStatus());
+        studyPlanService.deleteStudyPlan(55L, admin);
+        verify(studyPlanRepository, times(2)).delete(studyPlan);
+    }
+
+    @Test
+    void deleteStudyPlanShouldRemoveDraftStudentPlansBeforeDeletingPlan() {
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        StudentStudyPlan studentStudyPlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(55L))
+                .thenReturn(List.of(studentStudyPlan));
+        when(studyDayTaskRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(0L);
+        when(studyRecordRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(0L);
+        when(studyWordProgressRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(0L);
+        when(studentAttentionDailyStatRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(0L);
+
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+        studyPlanService.deleteStudyPlan(55L, teacher);
+
+        InOrder inOrder = inOrder(
+                studentStudyPlanRepository,
+                studyPlanClassroomRepository,
+                studyPlanRepository);
+        inOrder.verify(studentStudyPlanRepository).deleteByStudyPlanId(55L);
+        inOrder.verify(studyPlanClassroomRepository).deleteByStudyPlanId(55L);
+        inOrder.verify(studyPlanRepository).delete(studyPlan);
+    }
+
+    @Test
+    void deleteStudyPlanShouldRejectTeacherWhoDoesNotOwnPlan() {
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+
+        AppUser otherTeacher = new AppUser();
+        otherTeacher.setId(8L);
+        otherTeacher.setRole(UserRole.TEACHER);
+
+        assertThrows(AccessDeniedException.class, () -> studyPlanService.deleteStudyPlan(55L, otherTeacher));
+        verify(studyPlanRepository, never()).delete(any(StudyPlan.class));
+    }
+
+    @Test
+    void deleteStudyPlanShouldRejectPlanThatAlreadyStarted() {
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class, () -> studyPlanService.deleteStudyPlan(55L, teacher));
+        assertEquals("Only draft study plans that have not started can be deleted", error.getMessage());
+        assertEquals(StudyPlanStatus.PUBLISHED, studyPlan.getStatus());
+        verify(studyPlanRepository, never()).delete(any(StudyPlan.class));
+        verify(studyPlanClassroomRepository, never()).deleteByStudyPlanId(any());
+    }
+
+    @Test
+    void deleteStudyPlanShouldRejectDraftPlanWithStudyHistory() {
+        StudyPlan studyPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.DRAFT);
+        StudentStudyPlan studentStudyPlan = studentStudyPlan(200L, 55L, 20L, StudentStudyPlanStatus.ACTIVE);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(studyPlan));
+        when(studentStudyPlanRepository.findByStudyPlanIdOrderByStudentIdAsc(55L))
+                .thenReturn(List.of(studentStudyPlan));
+        when(studyDayTaskRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(0L);
+        when(studyRecordRepository.countByStudentStudyPlanIdIn(List.of(200L))).thenReturn(1L);
+
+        AppUser admin = new AppUser();
+        admin.setId(1L);
+        admin.setRole(UserRole.ADMIN);
+
+        BadRequestException error = assertThrows(
+                BadRequestException.class, () -> studyPlanService.deleteStudyPlan(55L, admin));
+        assertEquals("Study plan already has study history and cannot be deleted", error.getMessage());
+        verify(studentStudyPlanRepository, never()).deleteByStudyPlanId(any());
+        verify(studyPlanRepository, never()).delete(any(StudyPlan.class));
+    }
+
+    @Test
+    void archiveStudyPlanShouldArchivePublishedPlanForOwnerOnly() {
+        StudyPlan ownedPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        StudyPlan otherPlan = studyPlan(56L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(ownedPlan));
+        when(studyPlanRepository.findById(56L)).thenReturn(Optional.of(otherPlan));
+        when(studyPlanRepository.save(any(StudyPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dictionaryService.findById(10L)).thenReturn(Optional.of(dictionary(10L, "高考词汇")));
+
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        StudyPlanResponse response = studyPlanService.archiveStudyPlan(55L, teacher);
+
+        assertEquals(StudyPlanStatus.ARCHIVED, response.getStatus());
+        assertEquals(StudyPlanStatus.ARCHIVED, ownedPlan.getStatus());
+
+        AppUser otherTeacher = new AppUser();
+        otherTeacher.setId(8L);
+        otherTeacher.setRole(UserRole.TEACHER);
+        assertThrows(AccessDeniedException.class, () -> studyPlanService.archiveStudyPlan(56L, otherTeacher));
+        assertEquals(StudyPlanStatus.PUBLISHED, otherPlan.getStatus());
+    }
+
+    @Test
+    void archiveStudyPlansForClassroomShouldArchiveOnlyNotArchivedPlans() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        StudyPlan publishedPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.PUBLISHED);
+        StudyPlan draftPlan = studyPlan(56L, 7L, 11L, StudyPlanStatus.DRAFT);
+        StudyPlan archivedPlan = studyPlan(57L, 7L, 12L, StudyPlanStatus.ARCHIVED);
+
+        when(studyPlanClassroomRepository.findByClassroomId(100L)).thenReturn(List.of(
+                new StudyPlanClassroom(1L, 55L, 100L, null),
+                new StudyPlanClassroom(2L, 56L, 100L, null),
+                new StudyPlanClassroom(3L, 57L, 100L, null),
+                new StudyPlanClassroom(4L, 58L, 100L, null)
+        ));
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(publishedPlan));
+        when(studyPlanRepository.findById(56L)).thenReturn(Optional.of(draftPlan));
+        when(studyPlanRepository.findById(57L)).thenReturn(Optional.of(archivedPlan));
+        when(studyPlanRepository.findById(58L)).thenReturn(Optional.empty());
+
+        int archivedCount = studyPlanService.archiveStudyPlansForClassroom(100L, teacher);
+
+        assertEquals(2, archivedCount);
+        assertEquals(StudyPlanStatus.ARCHIVED, publishedPlan.getStatus());
+        assertEquals(StudyPlanStatus.ARCHIVED, draftPlan.getStatus());
+        assertEquals(StudyPlanStatus.ARCHIVED, archivedPlan.getStatus());
+        verify(studyPlanRepository, times(2)).save(any(StudyPlan.class));
     }
 
     @Test
@@ -577,6 +703,56 @@ class StudyPlanServiceTest {
         assertEquals(StudentStudyPlanStatus.DROPPED, studentStudyPlan.getStatus());
         verify(studentStudyPlanRepository).save(studentStudyPlan);
         verify(studentStudyPlanRepository, never()).findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(56L, 22L);
+    }
+
+    @Test
+    void enrollStudentInPublishedPlansForClassroomShouldSkipArchivedAndMissingPlans() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        StudyPlan archivedPlan = studyPlan(55L, 7L, 10L, StudyPlanStatus.ARCHIVED);
+        StudyPlan publishedPlan = studyPlan(56L, 7L, 11L, StudyPlanStatus.PUBLISHED);
+        StudentStudyPlan existingStudentStudyPlan = studentStudyPlan(222L, 56L, 22L, StudentStudyPlanStatus.ACTIVE);
+        Dictionary dictionary = dictionary(11L, "高考词汇");
+
+        when(studyPlanClassroomRepository.findByClassroomId(100L)).thenReturn(List.of(
+                new StudyPlanClassroom(1L, 55L, 100L, null),
+                new StudyPlanClassroom(2L, 56L, 100L, null),
+                new StudyPlanClassroom(3L, 57L, 100L, null)
+        ));
+        when(studyPlanRepository.findById(55L)).thenReturn(Optional.of(archivedPlan));
+        when(studyPlanRepository.findById(56L)).thenReturn(Optional.of(publishedPlan));
+        when(studyPlanRepository.findById(57L)).thenReturn(Optional.empty());
+        when(dictionaryService.findById(11L)).thenReturn(Optional.of(dictionary));
+        when(studentStudyPlanRepository.findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(56L, 22L))
+                .thenReturn(List.of(existingStudentStudyPlan));
+
+        studyPlanService.enrollStudentInPublishedPlansForClassroom(100L, 22L, teacher);
+
+        verify(dictionaryAssignmentService).assignDictionaryToStudents(dictionary, teacher, List.of(22L));
+        verify(studentStudyPlanRepository, never()).save(any(StudentStudyPlan.class));
+    }
+
+    @Test
+    void dropStudentFromClassroomStudyPlansShouldSkipArchivedAndMissingPlans() {
+        AppUser teacher = new AppUser();
+        teacher.setId(7L);
+        teacher.setRole(UserRole.TEACHER);
+
+        when(studyPlanClassroomRepository.findByClassroomId(100L)).thenReturn(List.of(
+                new StudyPlanClassroom(1L, 55L, 100L, null),
+                new StudyPlanClassroom(2L, 56L, 100L, null)
+        ));
+        when(studyPlanRepository.findById(55L))
+                .thenReturn(Optional.of(studyPlan(55L, 7L, 10L, StudyPlanStatus.ARCHIVED)));
+        when(studyPlanRepository.findById(56L)).thenReturn(Optional.empty());
+
+        studyPlanService.dropStudentFromClassroomStudyPlans(100L, 22L, teacher);
+
+        verify(studentStudyPlanRepository, never()).save(any(StudentStudyPlan.class));
+        verify(studentStudyPlanRepository, never())
+                .findByStudyPlanIdAndStudentIdOrderByCreatedAtAsc(any(), any());
     }
 
     @Test

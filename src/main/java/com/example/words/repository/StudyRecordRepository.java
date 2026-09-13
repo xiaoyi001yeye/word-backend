@@ -2,6 +2,7 @@ package com.example.words.repository;
 
 import com.example.words.model.StudyRecord;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface StudyRecordRepository extends JpaRepository<StudyRecord, Long> {
+
+    long countByStudentStudyPlanIdIn(Collection<Long> studentStudyPlanIds);
 
     List<StudyRecord> findByStudentStudyPlanIdAndTaskDate(Long studentStudyPlanId, LocalDate taskDate);
 

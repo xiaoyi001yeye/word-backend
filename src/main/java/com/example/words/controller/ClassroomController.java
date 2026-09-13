@@ -85,11 +85,23 @@ public class ClassroomController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<Map<String, Object>> deleteClassroom(@PathVariable Long id) {
-        boolean physicallyDeleted = classroomService.deleteClassroom(id, currentUserService.getCurrentUser());
+        int archivedStudyPlanCount = classroomService.deleteClassroom(id, currentUserService.getCurrentUser());
         return ResponseEntity.ok(Map.of(
-                "message", physicallyDeleted ? "Classroom deleted successfully" : "Classroom archived successfully",
+                "message", "Classroom deleted successfully",
                 "id", id,
-                "status", physicallyDeleted ? "DELETED" : "ARCHIVED"
+                "status", "DELETED",
+                "archivedStudyPlanCount", archivedStudyPlanCount
+        ));
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Map<String, Object>> archiveClassroom(@PathVariable Long id) {
+        classroomService.archiveClassroom(id, currentUserService.getCurrentUser());
+        return ResponseEntity.ok(Map.of(
+                "message", "Classroom archived successfully",
+                "id", id,
+                "status", "ARCHIVED"
         ));
     }
 

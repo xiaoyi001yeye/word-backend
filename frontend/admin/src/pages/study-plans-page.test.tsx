@@ -14,6 +14,7 @@ vi.mock("@/lib/api", () => ({
         getStudyPlanOverview: vi.fn(),
         getStudyPlanStudents: vi.fn(),
         publishStudyPlan: vi.fn(),
+        archiveStudyPlan: vi.fn(),
     },
 }));
 
@@ -117,7 +118,7 @@ describe("StudyPlansPage", () => {
         });
     });
 
-    it("archives a study plan after confirmation and refreshes the list", async () => {
+    it("deletes a draft study plan after confirmation and refreshes the list", async () => {
         vi.mocked(api.listStudyPlans)
             .mockResolvedValueOnce([createdPlan])
             .mockResolvedValueOnce([]);
@@ -131,6 +132,62 @@ describe("StudyPlansPage", () => {
         await waitFor(() => expect(api.deleteStudyPlan).toHaveBeenCalledWith(99));
         await waitFor(() => expect(screen.queryByText("四级计划")).not.toBeInTheDocument());
         expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("确认删除学习计划"));
+        confirmSpy.mockRestore();
+    });
+
+    it("hides the delete action for study plans that already started", async () => {
+        vi.mocked(api.listStudyPlans).mockResolvedValue([
+            { ...createdPlan, status: "PUBLISHED" },
+        ]);
+        vi.mocked(api.getStudyPlanOverview).mockResolvedValue({
+            studyPlanId: 99,
+            studyPlanName: "四级计划",
+            status: "PUBLISHED",
+            taskDate: "2026-06-21",
+            totalStudents: 0,
+            completedStudents: 0,
+            notStartedStudents: 0,
+            inProgressStudents: 0,
+            missedStudents: 0,
+            averageCompletionRate: 0,
+            averageAttentionScore: 0,
+        });
+
+        render(() => <StudyPlansPage />);
+
+        expect((await screen.findAllByText("四级计划")).length).toBeGreaterThan(0);
+        expect(screen.queryByRole("button", { name: "删除学习计划 四级计划" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
+    });
+
+    it("archives a published study plan after confirmation", async () => {
+        vi.mocked(api.listStudyPlans)
+            .mockResolvedValueOnce([{ ...createdPlan, status: "PUBLISHED" }])
+            .mockResolvedValueOnce([]);
+        vi.mocked(api.getStudyPlanOverview).mockResolvedValue({
+            studyPlanId: 99,
+            studyPlanName: "四级计划",
+            status: "PUBLISHED",
+            taskDate: "2026-06-21",
+            totalStudents: 0,
+            completedStudents: 0,
+            notStartedStudents: 0,
+            inProgressStudents: 0,
+            missedStudents: 0,
+            averageCompletionRate: 0,
+            averageAttentionScore: 0,
+        });
+        vi.mocked(api.archiveStudyPlan).mockResolvedValue({ ...createdPlan, status: "ARCHIVED" });
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+        render(() => <StudyPlansPage />);
+
+        fireEvent.click(await screen.findByRole("button", { name: "归档学习计划 四级计划" }));
+
+        await waitFor(() => expect(api.archiveStudyPlan).toHaveBeenCalledWith(99));
+        expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("确认归档学习计划"));
+        expect(await screen.findByText("学习计划已归档。")).toBeInTheDocument();
+        expect(api.deleteStudyPlan).not.toHaveBeenCalled();
         confirmSpy.mockRestore();
     });
 

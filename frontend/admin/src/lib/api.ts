@@ -256,7 +256,15 @@ export const api = {
     createClassroom: (payload: { name: string; description?: string; teacherId?: number | null }) =>
         request<ClassroomResponse>("/api/classrooms", { method: "POST", body: payload }),
     deleteClassroom: (classroomId: number) =>
-        request<{ message: string; id: number }>(`/api/classrooms/${classroomId}`, { method: "DELETE" }),
+        request<{ message: string; id: number; status: "DELETED" | "ARCHIVED"; archivedStudyPlanCount: number }>(
+            `/api/classrooms/${classroomId}`,
+            { method: "DELETE" },
+        ),
+    archiveClassroom: (classroomId: number) =>
+        request<{ message: string; id: number; status: "ARCHIVED" }>(
+            `/api/classrooms/${classroomId}/archive`,
+            { method: "POST" },
+        ),
     getClassroomStudents: (classroomId: number) => request<UserResponse[]>(`/api/classrooms/${classroomId}/students`),
     getClassroomDictionaries: (classroomId: number) =>
         request<Dictionary[]>(`/api/classrooms/${classroomId}/dictionaries`),
@@ -359,6 +367,8 @@ export const api = {
         request<void>(`/api/study-plans/${planId}`, { method: "DELETE" }),
     publishStudyPlan: (planId: number) =>
         request<StudyPlanResponse>(`/api/study-plans/${planId}/publish`, { method: "POST" }),
+    archiveStudyPlan: (planId: number) =>
+        request<StudyPlanResponse>(`/api/study-plans/${planId}/archive`, { method: "POST" }),
     getStudyPlanOverview: (planId: number) =>
         request<StudyPlanOverviewResponse>(`/api/study-plans/${planId}/overview`),
     getStudyPlanStudents: (planId: number) =>

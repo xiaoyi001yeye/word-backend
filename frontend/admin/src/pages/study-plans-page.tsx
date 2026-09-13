@@ -14,7 +14,7 @@ import { SearchableDictionarySelect } from "@/components/study-plans/searchable-
 import { useAuth } from "@/features/auth/auth-context";
 import { api } from "@/lib/api";
 import { formatDate, formatPercent } from "@/lib/format";
-import { Trash2 } from "lucide-solid";
+import { Archive, Trash2 } from "lucide-solid";
 import type {
     ClassroomResponse,
     Dictionary,
@@ -177,10 +177,33 @@ export function StudyPlansPage() {
         });
     };
 
+    const handleArchivePlan = async (plan: StudyPlanResponse) => {
+        const role = auth.user()?.role;
+        const canArchive = plan.status !== "DRAFT"
+            && (role === "ADMIN" || (role === "TEACHER" && auth.user()?.id === plan.teacherId));
+        if (!canArchive || !window.confirm(`确认归档学习计划“${plan.name}”？归档后计划不再出现在列表，但学生学习记录会保留。`)) {
+            return;
+        }
+        setFeedback("");
+        setCreateError("");
+        try {
+            await api.archiveStudyPlan(plan.id);
+            if (selectedPlanId() === plan.id) {
+                setSelectedPlanId(null);
+                setEditingPlanId(null);
+            }
+            setFeedback("学习计划已归档。");
+            await refetch();
+        } catch (error) {
+            setCreateError(error instanceof Error ? error.message : "归档学习计划失败，请稍后重试。");
+        }
+    };
+
     const handleDeletePlan = async (plan: StudyPlanResponse) => {
         const role = auth.user()?.role;
-        const canDelete = role === "ADMIN" || (role === "TEACHER" && auth.user()?.id === plan.teacherId);
-        if (!canDelete || !window.confirm(`确认删除学习计划“${plan.name}”？删除后将从计划列表隐藏，但学生学习记录会保留。`)) {
+        const canDelete = plan.status === "DRAFT"
+            && (role === "ADMIN" || (role === "TEACHER" && auth.user()?.id === plan.teacherId));
+        if (!canDelete || !window.confirm(`确认删除学习计划“${plan.name}”？该计划尚未开始，删除后不可恢复。`)) {
             return;
         }
         setFeedback("");
@@ -508,7 +531,18 @@ export function StudyPlansPage() {
                                                                 编辑
                                                             </Button>
                                                         </Show>
-                                                        <Show when={auth.user()?.role === "ADMIN" || (auth.user()?.role === "TEACHER" && auth.user()?.id === plan.teacherId)}>
+                                                        <Show when={plan.status !== "DRAFT" && (auth.user()?.role === "ADMIN" || (auth.user()?.role === "TEACHER" && auth.user()?.id === plan.teacherId))}>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                aria-label={`归档学习计划 ${plan.name}`}
+                                                                onClick={() => void handleArchivePlan(plan)}
+                                                            >
+                                                                <Archive class="mr-2 h-4 w-4" />
+                                                                归档
+                                                            </Button>
+                                                        </Show>
+                                                        <Show when={plan.status === "DRAFT" && (auth.user()?.role === "ADMIN" || (auth.user()?.role === "TEACHER" && auth.user()?.id === plan.teacherId))}>
                                                             <Button
                                                                 type="button"
                                                                 variant="outline"

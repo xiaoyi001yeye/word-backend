@@ -41,4 +41,8 @@ public interface ClassroomDictionaryAssignmentRepository extends JpaRepository<C
     int deleteByClassroomIdAndDictionaryId(
             @Param("classroomId") Long classroomId,
             @Param("dictionaryId") Long dictionaryId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ClassroomDictionaryAssignment cda WHERE cda.classroomId = :classroomId")
+    int deleteByClassroomId(@Param("classroomId") Long classroomId);
 }

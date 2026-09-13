@@ -22,4 +22,8 @@ public interface StudyPlanClassroomRepository extends JpaRepository<StudyPlanCla
     boolean existsByStudyPlanIdAndClassroomId(Long studyPlanId, Long classroomId);
 
     boolean existsByClassroomId(Long classroomId);
+
+    @Modifying
+    @Query("delete from StudyPlanClassroom classroom where classroom.classroomId = :classroomId")
+    void deleteByClassroomId(@Param("classroomId") Long classroomId);
 }

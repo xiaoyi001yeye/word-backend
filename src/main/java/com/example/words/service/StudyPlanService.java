@@ -191,14 +191,64 @@ public class StudyPlanService {
     }
 
     @Transactional
-    public void archiveStudyPlan(Long studyPlanId, AppUser actor) {
+    public StudyPlanResponse archiveStudyPlan(Long studyPlanId, AppUser actor) {
         StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
         ensureCanManageStudyPlan(actor, studyPlan);
-        if (studyPlan.getStatus() == StudyPlanStatus.ARCHIVED) {
-            throw new ResourceNotFoundException("Study plan not found: " + studyPlanId);
-        }
         studyPlan.setStatus(StudyPlanStatus.ARCHIVED);
-        studyPlanRepository.save(studyPlan);
+        return toStudyPlanResponse(studyPlanRepository.save(studyPlan));
+    }
+
+    /**
+     * Archives every study plan that is still attached to the classroom and returns how many plans were archived.
+     * Classroom deletion uses this so a published plan is never left without a classroom: such a plan could no
+     * longer be edited, published, extended with students or deleted, and would be stuck forever.
+     */
+    @Transactional
+    public int archiveStudyPlansForClassroom(Long classroomId, AppUser actor) {
+        List<Long> studyPlanIds = studyPlanClassroomRepository.findByClassroomId(classroomId).stream()
+                .map(StudyPlanClassroom::getStudyPlanId)
+                .distinct()
+                .toList();
+        int archivedCount = 0;
+        for (Long studyPlanId : studyPlanIds) {
+            StudyPlan studyPlan = findActiveStudyPlanOrNull(studyPlanId);
+            if (studyPlan == null) {
+                continue;
+            }
+            ensureCanManageStudyPlan(actor, studyPlan);
+            studyPlan.setStatus(StudyPlanStatus.ARCHIVED);
+            studyPlanRepository.save(studyPlan);
+            archivedCount++;
+        }
+        return archivedCount;
+    }
+
+    @Transactional
+    public void deleteStudyPlan(Long studyPlanId, AppUser actor) {
+        StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+        ensureCanManageStudyPlan(actor, studyPlan);
+        if (studyPlan.getStatus() != StudyPlanStatus.DRAFT) {
+            throw new BadRequestException("Only draft study plans that have not started can be deleted");
+        }
+
+        List<Long> studentStudyPlanIds = studentStudyPlanRepository
+                .findByStudyPlanIdOrderByStudentIdAsc(studyPlanId).stream()
+                .map(StudentStudyPlan::getId)
+                .toList();
+        // A plan that never started has no learning history. Refuse deletion as soon as any task,
+        // record, progress or attention statistic exists so physical deletion can never erase history.
+        if (!studentStudyPlanIds.isEmpty()) {
+            long studyArtifactCount = studyDayTaskRepository.countByStudentStudyPlanIdIn(studentStudyPlanIds)
+                    + studyRecordRepository.countByStudentStudyPlanIdIn(studentStudyPlanIds)
+                    + studyWordProgressRepository.countByStudentStudyPlanIdIn(studentStudyPlanIds)
+                    + studentAttentionDailyStatRepository.countByStudentStudyPlanIdIn(studentStudyPlanIds);
+            if (studyArtifactCount > 0) {
+                throw new BadRequestException("Study plan already has study history and cannot be deleted");
+            }
+            studentStudyPlanRepository.deleteByStudyPlanId(studyPlanId);
+        }
+        studyPlanClassroomRepository.deleteByStudyPlanId(studyPlanId);
+        studyPlanRepository.delete(studyPlan);
     }
 
     @Transactional(readOnly = true)
@@ -321,7 +371,10 @@ public class StudyPlanService {
         }
 
         for (Long studyPlanId : studyPlanIds) {
-            StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+            StudyPlan studyPlan = findActiveStudyPlanOrNull(studyPlanId);
+            if (studyPlan == null) {
+                continue;
+            }
             ensureCanManageStudyPlan(actor, studyPlan);
             if (studyPlan.getStatus() == StudyPlanStatus.DRAFT) {
                 getOrCreateStudentStudyPlan(studyPlan.getId(), studentId, resolveNow(studyPlan));
@@ -351,7 +404,10 @@ public class StudyPlanService {
         }
 
         for (Long studyPlanId : studyPlanIds) {
-            StudyPlan studyPlan = getStudyPlanEntity(studyPlanId);
+            StudyPlan studyPlan = findActiveStudyPlanOrNull(studyPlanId);
+            if (studyPlan == null) {
+                continue;
+            }
             ensureCanManageStudyPlan(actor, studyPlan);
             List<Long> remainingClassroomIds = studyPlanClassroomRepository.findByStudyPlanId(studyPlanId).stream()
                     .map(StudyPlanClassroom::getClassroomId)
@@ -732,6 +788,17 @@ public class StudyPlanService {
     public StudentStudyPlan getStudentStudyPlanEntity(Long studentStudyPlanId) {
         return studentStudyPlanRepository.findById(studentStudyPlanId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student study plan not found: " + studentStudyPlanId));
+    }
+
+    /**
+     * Resolves a plan referenced by a classroom link and returns null when the link is stale, meaning the plan was
+     * archived or no longer exists. Classroom membership changes must skip those links instead of failing, otherwise a
+     * historical archive leaves the whole classroom unable to add or remove students.
+     */
+    private StudyPlan findActiveStudyPlanOrNull(Long studyPlanId) {
+        return studyPlanRepository.findById(studyPlanId)
+                .filter(studyPlan -> studyPlan.getStatus() != StudyPlanStatus.ARCHIVED)
+                .orElse(null);
     }
 
     private void ensureCanCreateStudyPlan(AppUser actor) {
