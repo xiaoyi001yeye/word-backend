@@ -16,6 +16,7 @@ import type {
     CreateVideoStorageConfigPayload,
     Dictionary,
     DictionaryWordEntryResponse,
+    MetaWordDetail,
     GenerateDictionaryWordWithAiPayload,
     GenerateDictionaryWordWithAiResponse,
     GenerateWordDetailsPayload,
@@ -317,6 +318,7 @@ export const api = {
     ) => request<PaginatedResponse<DictionaryWordEntryResponse>>(
         `/api/dictionary-words/dictionary/${dictionaryId}/entries${buildQueryString(params)}`,
     ),
+    getMetaWord: (metaWordId: number) => request<MetaWordDetail>(`/api/meta-words/${metaWordId}`),
     listDictionaryMetaWordSuggestions: (
         dictionaryId: number,
         params: { keyword: string; limit?: number },

@@ -1,0 +1,1249 @@
+{
+  "schema_version": "1.0",
+  "description": "20 个随机高考英语词条的异构图样例数据",
+  "selection": {
+    "count": 20,
+    "seed": 20260912,
+    "source": "generated\\gaokao-3500-words-markdown"
+  },
+  "nodes": [
+    {
+      "id": "437ea783-8ec4-5399-8b75-03fe9adfa0e5",
+      "node_type": "LEXEME",
+      "canonical_form": "astronomy",
+      "display_form": "astronomy",
+      "normalized_key": "astronomy",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "d116a17e-5049-5ddf-a0b4-bed52617d01b",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "437ea783-8ec4-5399-8b75-03fe9adfa0e5",
+      "part_of_speech": "NOUN",
+      "definition_zh": "天文学",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "a9277fc7-a316-516a-884b-f15dbec37778",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第05讲(单词速记与拓展）.docx",
+      "lecture_no": 5
+    },
+    {
+      "id": "8af67a20-b938-5673-9685-8a3bcbb885fa",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "a9277fc7-a316-516a-884b-f15dbec37778",
+      "lexeme_id": "437ea783-8ec4-5399-8b75-03fe9adfa0e5",
+      "markdown_file": "astronomy.md",
+      "entry_order": 6,
+      "raw_content": "6.\tastronomy n.  天文学【词根 astro, 星。词根 nomy, 学说，学科。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "70620917-7f85-5cc7-83bf-f4f1af2aca3b",
+      "node_type": "LEXEME",
+      "canonical_form": "such",
+      "display_form": "such",
+      "normalized_key": "such",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "61e2d129-b6a5-5c93-ac14-598a493af6b6",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "70620917-7f85-5cc7-83bf-f4f1af2aca3b",
+      "part_of_speech": "ADVERB",
+      "definition_zh": "那么 pron. 这样的人(们)或物 adj.这样的, 那样的",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "be07c51b-2a34-52a8-b8aa-bf3751bf531d",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第47讲（单词速记与拓展）.docx",
+      "lecture_no": 47
+    },
+    {
+      "id": "2448d3e6-e1e6-5bc5-966f-3d5ba0f5fec3",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "be07c51b-2a34-52a8-b8aa-bf3751bf531d",
+      "lexeme_id": "70620917-7f85-5cc7-83bf-f4f1af2aca3b",
+      "markdown_file": "such.md",
+      "entry_order": 27,
+      "raw_content": "27.  such adv. 那么 pron. 这样的人(们)或物 adj.这样的, 那样的【来自古英语 swilc,类似的】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "539567d3-b3ae-5217-b54f-abfa508fcf03",
+      "node_type": "LEXEME",
+      "canonical_form": "medicine",
+      "display_form": "medicine",
+      "normalized_key": "medicine",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "fce2d42b-a277-51ab-a82d-455c249708be",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "539567d3-b3ae-5217-b54f-abfa508fcf03",
+      "part_of_speech": "NOUN",
+      "definition_zh": "药",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "5483a905-3c70-509e-a47d-64b3ea4e3f06",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第30讲（单词速记与拓展）.docx",
+      "lecture_no": 30
+    },
+    {
+      "id": "badde326-639c-5dbd-b094-088d43725baa",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "5483a905-3c70-509e-a47d-64b3ea4e3f06",
+      "lexeme_id": "539567d3-b3ae-5217-b54f-abfa508fcf03",
+      "markdown_file": "medicine.md",
+      "entry_order": 22,
+      "raw_content": "22.  medicine n. 药【词根词缀： -med- 医药 + -ic 名词词尾 + -ine 名词词尾】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "0dd0a2ef-a7d6-5397-a8b8-1432a5625889",
+      "node_type": "LEXEME",
+      "canonical_form": "dentist",
+      "display_form": "dentist",
+      "normalized_key": "dentist",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "f0298b7a-3c17-547e-b79e-d144d8a7be72",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "0dd0a2ef-a7d6-5397-a8b8-1432a5625889",
+      "part_of_speech": "NOUN",
+      "definition_zh": "牙科医生",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "f347f937-dd8b-56bd-921c-ab6b2454c145",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第15讲(单词速记与拓展）.docx",
+      "lecture_no": 15
+    },
+    {
+      "id": "0bc63f36-c969-548a-9d2e-ac2cb5ab1deb",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "f347f937-dd8b-56bd-921c-ab6b2454c145",
+      "lexeme_id": "0dd0a2ef-a7d6-5397-a8b8-1432a5625889",
+      "markdown_file": "dentist.md",
+      "entry_order": 27,
+      "raw_content": "27.  dentist n. 牙科医生【词根词缀： -dent- 牙齿 + -ist 名词词尾】\n28.  department(Dept.) n. 部门;  司, 处;  系【词根词缀： de- 离开 , 分离 + -part- 分 , 局部 + -ment 名词词尾】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "e17e6e78-47ce-58da-82bf-f3ffb4a6e707",
+      "node_type": "LEXEME",
+      "canonical_form": "bus",
+      "display_form": "bus",
+      "normalized_key": "bus",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "4c2e07d0-4558-5fb2-97d8-be086594e31e",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "e17e6e78-47ce-58da-82bf-f3ffb4a6e707",
+      "part_of_speech": "NOUN",
+      "definition_zh": "公共汽车",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "d2f81d86-840b-5c74-9997-e76434380a02",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第08讲(单词速记与拓展）.docx",
+      "lecture_no": 8
+    },
+    {
+      "id": "be894d71-0b40-57ee-9d96-50e6601674c7",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "d2f81d86-840b-5c74-9997-e76434380a02",
+      "lexeme_id": "e17e6e78-47ce-58da-82bf-f3ffb4a6e707",
+      "markdown_file": "bus.md",
+      "entry_order": 58,
+      "raw_content": "58.  bus   n. 公共汽车【音译“巴士”。大巴、中巴、小巴。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "2be11955-c431-56e9-9740-1f33fde26fe0",
+      "node_type": "LEXEME",
+      "canonical_form": "allergic",
+      "display_form": "allergic",
+      "normalized_key": "allergic",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "028f236a-fe3c-5eed-993b-5237d67af898",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "2be11955-c431-56e9-9740-1f33fde26fe0",
+      "part_of_speech": "NOUN",
+      "definition_zh": "患过敏症的",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "de315f55-e89f-546f-b228-357026f4edad",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第03讲(单词速记与拓展).docx",
+      "lecture_no": 3
+    },
+    {
+      "id": "429da277-4335-5398-b887-54a7eaecf42b",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "de315f55-e89f-546f-b228-357026f4edad",
+      "lexeme_id": "2be11955-c431-56e9-9740-1f33fde26fe0",
+      "markdown_file": "allergic.md",
+      "entry_order": 6,
+      "raw_content": "6.\tallergic n. 患过敏症的 【allerg （ y ）（过敏症）+ ic （形容词后缀）→过敏的】\nallergy\tn. 过敏症；反感；厌恶【all （ e ）（另一个）+ ergy （反应）→另一种反应→不正常反应→过敏症】\n词根：erg--工作；行动\nenergy\tn. [物]  能量；精力；活力；精神【词根词缀： en- 加强意义 + -erg- 工作 , 行动 + -y 名词词尾】\nenergetic\tadj.  精力充沛的；积极的；有力的【词根词缀： en- 加强意义 + -erg- 工作 , 行动 + -etic 形容词词尾】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "a3835c76-d264-5d63-b670-40a3be53f771",
+      "node_type": "LEXEME",
+      "canonical_form": "shake",
+      "display_form": "shake",
+      "normalized_key": "shake",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "712591f4-dafc-57f3-bfe3-266f5ef7dce7",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "a3835c76-d264-5d63-b670-40a3be53f771",
+      "part_of_speech": "VERB",
+      "definition_zh": "（使）动摇,  震动;  握手",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "be4a9c46-e14f-5676-a172-e8241815e88f",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第43讲（单词速记与拓展）.docx",
+      "lecture_no": 43
+    },
+    {
+      "id": "8b551a08-407d-5a33-bcfd-639c163eec1a",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "be4a9c46-e14f-5676-a172-e8241815e88f",
+      "lexeme_id": "a3835c76-d264-5d63-b670-40a3be53f771",
+      "markdown_file": "shake.md",
+      "entry_order": 24,
+      "raw_content": "24.  shake (shook, shaken) v.（使）动摇,  震动;  握手【元音字母 a 在重读开音节中读/eɪ/，符合这项读\n音规则的拼\n读模式有-ake\n如：-ake/eɪk/\nbake\tv.烤；烘\ncake\tn.  蛋糕\nshake\tv. 摇动；抖动\nwake\tv. 醒来】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "42f65b43-4afb-5bb9-b5f6-c2ee0abd915f",
+      "node_type": "LEXEME",
+      "canonical_form": "tasteless",
+      "display_form": "tasteless",
+      "normalized_key": "tasteless",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "343b82aa-37df-5777-97c8-baa5c57ba31e",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "42f65b43-4afb-5bb9-b5f6-c2ee0abd915f",
+      "part_of_speech": "ADJECTIVE",
+      "definition_zh": "无滋味的；无鉴赏力的",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第48讲（单词速记与拓展）.docx",
+      "lecture_no": 48
+    },
+    {
+      "id": "5e206c81-1b1b-577a-81c0-ad9ee3e28768",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "lexeme_id": "42f65b43-4afb-5bb9-b5f6-c2ee0abd915f",
+      "markdown_file": "tasteless.md",
+      "entry_order": 41,
+      "raw_content": "41.  tasteless adj.  无滋味的；无鉴赏力的【来自 taste,味道，滋味，-less,无，没有。引申词义低俗的。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "8e6cee98-51b5-533e-9f1f-aacf94281116",
+      "node_type": "LEXEME",
+      "canonical_form": "refuse",
+      "display_form": "refuse",
+      "normalized_key": "refuse",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "297860ab-fcd7-54b0-a1ba-ca60cb0c6c11",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "8e6cee98-51b5-533e-9f1f-aacf94281116",
+      "part_of_speech": "VERB",
+      "definition_zh": "拒绝, 不愿",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "11c6151f-fc65-5ccd-b206-9940ed59d80f",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第40讲（单词速记与拓展）.docx",
+      "lecture_no": 40
+    },
+    {
+      "id": "a6ca472c-465a-5464-8fda-588dac2b0569",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "11c6151f-fc65-5ccd-b206-9940ed59d80f",
+      "lexeme_id": "8e6cee98-51b5-533e-9f1f-aacf94281116",
+      "markdown_file": "refuse.md",
+      "entry_order": 14,
+      "raw_content": "14.  refuse v.  拒绝, 不愿【re-,向后，往回，-fus,流入】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "3d7f4f4b-05c4-5f6c-8730-245a14d08f6e",
+      "node_type": "LEXEME",
+      "canonical_form": "stress",
+      "display_form": "stress",
+      "normalized_key": "stress",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "91d9dcdb-f7cc-58a0-9859-bbbb03bdcde1",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "3d7f4f4b-05c4-5f6c-8730-245a14d08f6e",
+      "part_of_speech": "NOUN",
+      "definition_zh": "压力,  重点, 重音 v. 着重,  强调, 重读",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "7e513f82-a46d-50e2-be52-779b39de1318",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "be07c51b-2a34-52a8-b8aa-bf3751bf531d",
+      "lexeme_id": "3d7f4f4b-05c4-5f6c-8730-245a14d08f6e",
+      "markdown_file": "stress.md",
+      "entry_order": 8,
+      "raw_content": "8.\tstress n. 压力,  重点, 重音 v. 着重,  强调, 重读【guess\tv. 猜测】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "6fdd715a-ddaa-54a2-bd6e-4ba78f013f6e",
+      "node_type": "LEXEME",
+      "canonical_form": "sad",
+      "display_form": "sad",
+      "normalized_key": "sad",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "6cabdd95-0091-502b-ab54-2cb3eca3bf7e",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "6fdd715a-ddaa-54a2-bd6e-4ba78f013f6e",
+      "part_of_speech": "ADJECTIVE",
+      "definition_zh": "（使人）悲伤的 元音字母 a 在重读闭音节中读/æ/，符合这项读音规则的拼读模式有-ad",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "b46b0749-e5f2-526b-927d-f18dc3e21a19",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第41讲（单词速记与拓展）.docx",
+      "lecture_no": 41
+    },
+    {
+      "id": "07c78bae-6e6a-55f9-b17d-6bdf06b79081",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "b46b0749-e5f2-526b-927d-f18dc3e21a19",
+      "lexeme_id": "6fdd715a-ddaa-54a2-bd6e-4ba78f013f6e",
+      "markdown_file": "sad.md",
+      "entry_order": 59,
+      "raw_content": "59.  sad adj.（使人）悲伤的 元音字母 a 在重读闭音节中读/æ/，符合这项读音规则的拼读模式有-ad\n如：-ad/æ/\nsad\tadj.  伤心的\nglad\tadj.  高兴的\nbad\tadj. 坏的",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "e31226e0-e066-5030-a024-09ad13255400",
+      "node_type": "LEXEME",
+      "canonical_form": "offence",
+      "display_form": "offence",
+      "normalized_key": "offence",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "0d5cfc77-4b32-54b4-9aab-8f7315cdf5cf",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "e31226e0-e066-5030-a024-09ad13255400",
+      "part_of_speech": "NOUN",
+      "definition_zh": "犯罪,  冒犯",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "d6a87af3-da95-549c-b523-6861cbf924cd",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第33讲（单词速记与拓展）.docx",
+      "lecture_no": 33
+    },
+    {
+      "id": "4c34fbd7-e648-5831-92ca-2c8bcbb61f6e",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "d6a87af3-da95-549c-b523-6861cbf924cd",
+      "lexeme_id": "e31226e0-e066-5030-a024-09ad13255400",
+      "markdown_file": "offence.md",
+      "entry_order": 14,
+      "raw_content": "14.  offence n. 犯罪,  冒犯【词根词缀： of- 对面 + -fenc- 打击 + -e】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "882bf5f3-6831-5c36-949b-03abe0a8d720",
+      "node_type": "LEXEME",
+      "canonical_form": "battery",
+      "display_form": "battery",
+      "normalized_key": "battery",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "3c44de9f-8428-5824-af6b-2584a9974fcc",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "882bf5f3-6831-5c36-949b-03abe0a8d720",
+      "part_of_speech": "NOUN",
+      "definition_zh": "电池",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "5527dd0c-22f3-51d5-8171-9db820c71cd8",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第06讲(单词速记与拓展）.docx",
+      "lecture_no": 6
+    },
+    {
+      "id": "e2437466-02e7-57fc-a88f-582c0b501767",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "5527dd0c-22f3-51d5-8171-9db820c71cd8",
+      "lexeme_id": "882bf5f3-6831-5c36-949b-03abe0a8d720",
+      "markdown_file": "battery.md",
+      "entry_order": 26,
+      "raw_content": "26.  battery n. 电池【词源同 beat, 击，打。 -er, 表反复。形容电池放电过程中的电流的持续运动。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "8eb91bbd-12c4-59cc-833c-6bcd9d73e771",
+      "node_type": "LEXEME",
+      "canonical_form": "cup",
+      "display_form": "cup",
+      "normalized_key": "cup",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "ec59a434-2447-574e-9bf8-3259fc5bac38",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "8eb91bbd-12c4-59cc-833c-6bcd9d73e771",
+      "part_of_speech": "NOUN",
+      "definition_zh": "茶杯",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "772c0016-34fe-560f-9408-69eac72725f1",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第14讲(单词速记与拓展）.docx",
+      "lecture_no": 14
+    },
+    {
+      "id": "31ce299f-bc69-5e54-8294-6d012ee46bc8",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "772c0016-34fe-560f-9408-69eac72725f1",
+      "lexeme_id": "8eb91bbd-12c4-59cc-833c-6bcd9d73e771",
+      "markdown_file": "cup.md",
+      "entry_order": 26,
+      "raw_content": "26.  cup n.  茶杯",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "d0e4c6f4-0f1c-5c4b-ad28-6cedffc662a9",
+      "node_type": "LEXEME",
+      "canonical_form": "switch",
+      "display_form": "switch",
+      "normalized_key": "switch",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "42ed51e9-2a48-59d8-803f-9d85caae7e71",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "d0e4c6f4-0f1c-5c4b-ad28-6cedffc662a9",
+      "part_of_speech": "VERB",
+      "definition_zh": "转换, 转变 n.开关, 电闸,  转换",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "610189d7-9eb2-524c-b357-bc6bb8c50baf",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "lexeme_id": "d0e4c6f4-0f1c-5c4b-ad28-6cedffc662a9",
+      "markdown_file": "switch.md",
+      "entry_order": 17,
+      "raw_content": "17.  switch v. 转换, 转变 n.开关, 电闸,  转换【联想方式：s（蛇）；witch（巫婆） 记忆方法：蛇爬\n到巫婆的头上弄电源开关。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "6f092705-ef41-52e7-a25a-84bd7665fc96",
+      "node_type": "LEXEME",
+      "canonical_form": "baseball",
+      "display_form": "baseball",
+      "normalized_key": "baseball",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "bc9e1283-4b89-5eed-9ae3-f3d577ba88d7",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "6f092705-ef41-52e7-a25a-84bd7665fc96",
+      "part_of_speech": "NOUN",
+      "definition_zh": "棒球",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "dcd85c57-687f-5479-953c-4c0e826e1bee",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "5527dd0c-22f3-51d5-8171-9db820c71cd8",
+      "lexeme_id": "6f092705-ef41-52e7-a25a-84bd7665fc96",
+      "markdown_file": "baseball.md",
+      "entry_order": 13,
+      "raw_content": "13.  baseball n.  棒球【base + ball】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "9eaf67be-6501-5213-ba78-1915836aef67",
+      "node_type": "LEXEME",
+      "canonical_form": "output",
+      "display_form": "output",
+      "normalized_key": "output",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "67a04e84-e2e7-58f3-bf75-6acdc2c9632b",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "9eaf67be-6501-5213-ba78-1915836aef67",
+      "part_of_speech": "NOUN",
+      "definition_zh": "产量,  输出,  输出量",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "1f910b3c-d445-59b6-a184-51ffe41ae98e",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第34讲（单词速记与拓展）.docx",
+      "lecture_no": 34
+    },
+    {
+      "id": "a9903bd7-de7f-5335-9bc2-92618a3fa2a6",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "1f910b3c-d445-59b6-a184-51ffe41ae98e",
+      "lexeme_id": "9eaf67be-6501-5213-ba78-1915836aef67",
+      "markdown_file": "output.md",
+      "entry_order": 6,
+      "raw_content": "6.\toutput  n. 产量,  输出,  输出量【out-,向外，put,放置。引申词义输出，产量。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "16cb5435-5d3f-58fe-bd70-0508e27e2b41",
+      "node_type": "LEXEME",
+      "canonical_form": "morning",
+      "display_form": "morning",
+      "normalized_key": "morning",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "ac685816-0eee-5cf2-8001-2536ddffe212",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "16cb5435-5d3f-58fe-bd70-0508e27e2b41",
+      "part_of_speech": "NOUN",
+      "definition_zh": "早晨,  上午",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "dea074a6-fabe-5010-9d32-007ef34bd64b",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第31讲（单词速记与拓展）.docx",
+      "lecture_no": 31
+    },
+    {
+      "id": "fa12cc1f-5d51-56c2-89ed-914d156adc2e",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "dea074a6-fabe-5010-9d32-007ef34bd64b",
+      "lexeme_id": "16cb5435-5d3f-58fe-bd70-0508e27e2b41",
+      "markdown_file": "morning.md",
+      "entry_order": 31,
+      "raw_content": "31.  morning n. 早晨,  上午【来自morn,早晨，-ing,动名词后缀。】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "8bd028e7-99db-51ca-9f7d-31627aa2e031",
+      "node_type": "LEXEME",
+      "canonical_form": "radio",
+      "display_form": "radio",
+      "normalized_key": "radio",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "c6a53176-f3da-51a8-812f-6d7a0b01ca22",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "8bd028e7-99db-51ca-9f7d-31627aa2e031",
+      "part_of_speech": "NOUN",
+      "definition_zh": "无线电,  收音机",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "181dbef9-63bc-509b-9e7c-d8dee9a9ac8f",
+      "node_type": "SOURCE_DOCUMENT",
+      "file_name": "高考英语3500单词第39讲（单词速记与拓展）.docx",
+      "lecture_no": 39
+    },
+    {
+      "id": "a4d282ee-c245-52ed-8d94-ca0b8183043d",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "181dbef9-63bc-509b-9e7c-d8dee9a9ac8f",
+      "lexeme_id": "8bd028e7-99db-51ca-9f7d-31627aa2e031",
+      "markdown_file": "radio.md",
+      "entry_order": 16,
+      "raw_content": "16．radio n.  无线电,  收音机【- radio- 射线 , 放射 → radio】",
+      "parse_status": "PARSED"
+    },
+    {
+      "id": "7b227d38-7093-5c8f-87a7-c1be01108187",
+      "node_type": "LEXEME",
+      "canonical_form": "suspension",
+      "display_form": "suspension",
+      "normalized_key": "suspension",
+      "form_type": "WORD",
+      "language": "en",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "373767ad-b656-566a-820b-7dff29bce80a",
+      "node_type": "WORD_SENSE",
+      "lexeme_id": "7b227d38-7093-5c8f-87a7-c1be01108187",
+      "part_of_speech": "NOUN",
+      "definition_zh": "暂停,  中止",
+      "sense_order": 1,
+      "extraction_status": "EXTRACTED"
+    },
+    {
+      "id": "c68573c7-3759-5d09-9332-19e192c51554",
+      "node_type": "SOURCE_EXCERPT",
+      "source_document_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "lexeme_id": "7b227d38-7093-5c8f-87a7-c1be01108187",
+      "markdown_file": "suspension.md",
+      "entry_order": 4,
+      "raw_content": "4.\tsuspension n. 暂停,  中止【词根词缀： sus- 下 , 低 + -pens- 悬挂 + -ion 名词词尾】",
+      "parse_status": "PARSED"
+    }
+  ],
+  "edges": [
+    {
+      "id": "7b6920d8-c501-5018-9363-ebe591055207",
+      "from_node_id": "437ea783-8ec4-5399-8b75-03fe9adfa0e5",
+      "to_node_id": "d116a17e-5049-5ddf-a0b4-bed52617d01b",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "8e91f3db-47eb-5fa7-bd60-8ae79225ba1c",
+      "from_node_id": "a9277fc7-a316-516a-884b-f15dbec37778",
+      "to_node_id": "8af67a20-b938-5673-9685-8a3bcbb885fa",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "272fc13f-7fa3-526a-b117-f680766ec877",
+      "from_node_id": "437ea783-8ec4-5399-8b75-03fe9adfa0e5",
+      "to_node_id": "8af67a20-b938-5673-9685-8a3bcbb885fa",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "8af67a20-b938-5673-9685-8a3bcbb885fa",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "fa39852c-ca72-5b22-b06c-7a13ee6d3f3f",
+      "from_node_id": "70620917-7f85-5cc7-83bf-f4f1af2aca3b",
+      "to_node_id": "61e2d129-b6a5-5c93-ac14-598a493af6b6",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "12530289-bc2b-51f5-835a-1a4342605b0e",
+      "from_node_id": "be07c51b-2a34-52a8-b8aa-bf3751bf531d",
+      "to_node_id": "2448d3e6-e1e6-5bc5-966f-3d5ba0f5fec3",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "8fa41a27-6bb3-5372-854f-a84fbaa9d1e7",
+      "from_node_id": "70620917-7f85-5cc7-83bf-f4f1af2aca3b",
+      "to_node_id": "2448d3e6-e1e6-5bc5-966f-3d5ba0f5fec3",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "2448d3e6-e1e6-5bc5-966f-3d5ba0f5fec3",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "b0009ae8-3f43-52a8-ae68-c648a8060d76",
+      "from_node_id": "539567d3-b3ae-5217-b54f-abfa508fcf03",
+      "to_node_id": "fce2d42b-a277-51ab-a82d-455c249708be",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "027322a1-e330-5968-8faa-b7f9c62b985b",
+      "from_node_id": "5483a905-3c70-509e-a47d-64b3ea4e3f06",
+      "to_node_id": "badde326-639c-5dbd-b094-088d43725baa",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "bd01c3d4-f692-592e-97ce-dd4d9c79e1bb",
+      "from_node_id": "539567d3-b3ae-5217-b54f-abfa508fcf03",
+      "to_node_id": "badde326-639c-5dbd-b094-088d43725baa",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "badde326-639c-5dbd-b094-088d43725baa",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "4d73c4b4-f331-5d0b-a88f-b21a127be522",
+      "from_node_id": "0dd0a2ef-a7d6-5397-a8b8-1432a5625889",
+      "to_node_id": "f0298b7a-3c17-547e-b79e-d144d8a7be72",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "d8511f1c-4c3e-51c4-9eeb-854696a73f6d",
+      "from_node_id": "f347f937-dd8b-56bd-921c-ab6b2454c145",
+      "to_node_id": "0bc63f36-c969-548a-9d2e-ac2cb5ab1deb",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "5c2215ab-6578-59ca-811c-8ac519c1144d",
+      "from_node_id": "0dd0a2ef-a7d6-5397-a8b8-1432a5625889",
+      "to_node_id": "0bc63f36-c969-548a-9d2e-ac2cb5ab1deb",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "0bc63f36-c969-548a-9d2e-ac2cb5ab1deb",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "3f73b128-6acb-589d-ac92-a77b5163ae33",
+      "from_node_id": "e17e6e78-47ce-58da-82bf-f3ffb4a6e707",
+      "to_node_id": "4c2e07d0-4558-5fb2-97d8-be086594e31e",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "d869cba9-b5a2-5461-87c8-45d5bc746c0d",
+      "from_node_id": "d2f81d86-840b-5c74-9997-e76434380a02",
+      "to_node_id": "be894d71-0b40-57ee-9d96-50e6601674c7",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "803deaec-67aa-5f1f-9ae4-d0cc73f64a88",
+      "from_node_id": "e17e6e78-47ce-58da-82bf-f3ffb4a6e707",
+      "to_node_id": "be894d71-0b40-57ee-9d96-50e6601674c7",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "be894d71-0b40-57ee-9d96-50e6601674c7",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "6958423c-a928-5753-8259-7a6dd4b85826",
+      "from_node_id": "2be11955-c431-56e9-9740-1f33fde26fe0",
+      "to_node_id": "028f236a-fe3c-5eed-993b-5237d67af898",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "d98035ac-a2b4-5ef3-847d-0c78bff779e8",
+      "from_node_id": "de315f55-e89f-546f-b228-357026f4edad",
+      "to_node_id": "429da277-4335-5398-b887-54a7eaecf42b",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "2b600f2f-be08-51bc-801c-013e0c077487",
+      "from_node_id": "2be11955-c431-56e9-9740-1f33fde26fe0",
+      "to_node_id": "429da277-4335-5398-b887-54a7eaecf42b",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "429da277-4335-5398-b887-54a7eaecf42b",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "d589e23d-e40a-5393-83dd-620ebf42519e",
+      "from_node_id": "a3835c76-d264-5d63-b670-40a3be53f771",
+      "to_node_id": "712591f4-dafc-57f3-bfe3-266f5ef7dce7",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "cfcc91a0-ed80-5d3e-a1f1-f02b1c892e81",
+      "from_node_id": "be4a9c46-e14f-5676-a172-e8241815e88f",
+      "to_node_id": "8b551a08-407d-5a33-bcfd-639c163eec1a",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "615fb2c7-8e97-528d-a502-02862d736752",
+      "from_node_id": "a3835c76-d264-5d63-b670-40a3be53f771",
+      "to_node_id": "8b551a08-407d-5a33-bcfd-639c163eec1a",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "8b551a08-407d-5a33-bcfd-639c163eec1a",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "c2eee40f-9dcf-54a3-9d61-ff12e081b077",
+      "from_node_id": "42f65b43-4afb-5bb9-b5f6-c2ee0abd915f",
+      "to_node_id": "343b82aa-37df-5777-97c8-baa5c57ba31e",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "8bd36788-bfab-5516-a1a1-ff5084b23196",
+      "from_node_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "to_node_id": "5e206c81-1b1b-577a-81c0-ad9ee3e28768",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "9f6ef546-e64f-5b66-ae11-5ad9b9258b7b",
+      "from_node_id": "42f65b43-4afb-5bb9-b5f6-c2ee0abd915f",
+      "to_node_id": "5e206c81-1b1b-577a-81c0-ad9ee3e28768",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "5e206c81-1b1b-577a-81c0-ad9ee3e28768",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "4a6df09e-b9b9-51b0-b862-8c2abae46793",
+      "from_node_id": "8e6cee98-51b5-533e-9f1f-aacf94281116",
+      "to_node_id": "297860ab-fcd7-54b0-a1ba-ca60cb0c6c11",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "e89a6048-f462-52c7-b00b-013da3f14c12",
+      "from_node_id": "11c6151f-fc65-5ccd-b206-9940ed59d80f",
+      "to_node_id": "a6ca472c-465a-5464-8fda-588dac2b0569",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "a68d6a95-0d49-55fe-b24d-e1302279beee",
+      "from_node_id": "8e6cee98-51b5-533e-9f1f-aacf94281116",
+      "to_node_id": "a6ca472c-465a-5464-8fda-588dac2b0569",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "a6ca472c-465a-5464-8fda-588dac2b0569",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "db7c3d16-1df3-58b1-a27f-3e99fc7bcb29",
+      "from_node_id": "3d7f4f4b-05c4-5f6c-8730-245a14d08f6e",
+      "to_node_id": "91d9dcdb-f7cc-58a0-9859-bbbb03bdcde1",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "54b8fba1-ed7d-5b50-8b7a-7f046106d3c9",
+      "from_node_id": "be07c51b-2a34-52a8-b8aa-bf3751bf531d",
+      "to_node_id": "7e513f82-a46d-50e2-be52-779b39de1318",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "8bf98143-c17e-55cc-ab37-da8ff35bbcfd",
+      "from_node_id": "3d7f4f4b-05c4-5f6c-8730-245a14d08f6e",
+      "to_node_id": "7e513f82-a46d-50e2-be52-779b39de1318",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "7e513f82-a46d-50e2-be52-779b39de1318",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "f46ea917-34f8-5b07-a2f3-27d843d5cf86",
+      "from_node_id": "6fdd715a-ddaa-54a2-bd6e-4ba78f013f6e",
+      "to_node_id": "6cabdd95-0091-502b-ab54-2cb3eca3bf7e",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "c2054950-eadc-5807-af3f-90d9388489e1",
+      "from_node_id": "b46b0749-e5f2-526b-927d-f18dc3e21a19",
+      "to_node_id": "07c78bae-6e6a-55f9-b17d-6bdf06b79081",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "0e84eb46-0797-577d-8b8b-0db450c9d288",
+      "from_node_id": "6fdd715a-ddaa-54a2-bd6e-4ba78f013f6e",
+      "to_node_id": "07c78bae-6e6a-55f9-b17d-6bdf06b79081",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "07c78bae-6e6a-55f9-b17d-6bdf06b79081",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "063f0657-3873-5edb-be32-9da22d7c24a8",
+      "from_node_id": "e31226e0-e066-5030-a024-09ad13255400",
+      "to_node_id": "0d5cfc77-4b32-54b4-9aab-8f7315cdf5cf",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "728c836b-5aea-50f8-8a65-c42c90d8d1b8",
+      "from_node_id": "d6a87af3-da95-549c-b523-6861cbf924cd",
+      "to_node_id": "4c34fbd7-e648-5831-92ca-2c8bcbb61f6e",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "72ced74b-6380-5940-8c3b-c2d1ca1a611f",
+      "from_node_id": "e31226e0-e066-5030-a024-09ad13255400",
+      "to_node_id": "4c34fbd7-e648-5831-92ca-2c8bcbb61f6e",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "4c34fbd7-e648-5831-92ca-2c8bcbb61f6e",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "504a7c48-bc4c-5b3a-901b-552c313a38a6",
+      "from_node_id": "882bf5f3-6831-5c36-949b-03abe0a8d720",
+      "to_node_id": "3c44de9f-8428-5824-af6b-2584a9974fcc",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "95c8daa6-b26a-56a1-b3bd-200a038b95ef",
+      "from_node_id": "5527dd0c-22f3-51d5-8171-9db820c71cd8",
+      "to_node_id": "e2437466-02e7-57fc-a88f-582c0b501767",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "6e7f3676-d6f0-5bd6-bcd7-1c62f8c69495",
+      "from_node_id": "882bf5f3-6831-5c36-949b-03abe0a8d720",
+      "to_node_id": "e2437466-02e7-57fc-a88f-582c0b501767",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "e2437466-02e7-57fc-a88f-582c0b501767",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "7a144955-3954-564d-96c2-486815956901",
+      "from_node_id": "8eb91bbd-12c4-59cc-833c-6bcd9d73e771",
+      "to_node_id": "ec59a434-2447-574e-9bf8-3259fc5bac38",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "c75a8d94-b0f8-5a65-89d6-7ad622755ae9",
+      "from_node_id": "772c0016-34fe-560f-9408-69eac72725f1",
+      "to_node_id": "31ce299f-bc69-5e54-8294-6d012ee46bc8",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "21a74a17-800a-572c-b039-59e669f82b38",
+      "from_node_id": "8eb91bbd-12c4-59cc-833c-6bcd9d73e771",
+      "to_node_id": "31ce299f-bc69-5e54-8294-6d012ee46bc8",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "31ce299f-bc69-5e54-8294-6d012ee46bc8",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "9f2c55ed-d600-5c8e-a254-4e1a8d8f8815",
+      "from_node_id": "d0e4c6f4-0f1c-5c4b-ad28-6cedffc662a9",
+      "to_node_id": "42ed51e9-2a48-59d8-803f-9d85caae7e71",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "d60a5179-0bab-56fd-a7dd-d7f92149c40c",
+      "from_node_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "to_node_id": "610189d7-9eb2-524c-b357-bc6bb8c50baf",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "f5dbbb18-f569-55d3-b843-3966adab4fef",
+      "from_node_id": "d0e4c6f4-0f1c-5c4b-ad28-6cedffc662a9",
+      "to_node_id": "610189d7-9eb2-524c-b357-bc6bb8c50baf",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "610189d7-9eb2-524c-b357-bc6bb8c50baf",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "78bb55bc-408e-56ae-9e99-388fa93df123",
+      "from_node_id": "6f092705-ef41-52e7-a25a-84bd7665fc96",
+      "to_node_id": "bc9e1283-4b89-5eed-9ae3-f3d577ba88d7",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "ebb2181e-54a2-5a91-aeab-ee9eaf40626b",
+      "from_node_id": "5527dd0c-22f3-51d5-8171-9db820c71cd8",
+      "to_node_id": "dcd85c57-687f-5479-953c-4c0e826e1bee",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "98fadf3d-ee5c-55a0-ae17-c773bb1fc0e5",
+      "from_node_id": "6f092705-ef41-52e7-a25a-84bd7665fc96",
+      "to_node_id": "dcd85c57-687f-5479-953c-4c0e826e1bee",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "dcd85c57-687f-5479-953c-4c0e826e1bee",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "e94ea0e4-3c51-59ff-a309-f209c51c0241",
+      "from_node_id": "9eaf67be-6501-5213-ba78-1915836aef67",
+      "to_node_id": "67a04e84-e2e7-58f3-bf75-6acdc2c9632b",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "22183670-13ca-58cc-beaa-bb4f06f32763",
+      "from_node_id": "1f910b3c-d445-59b6-a184-51ffe41ae98e",
+      "to_node_id": "a9903bd7-de7f-5335-9bc2-92618a3fa2a6",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "3c662e85-a8ef-5443-8981-cf52710091b4",
+      "from_node_id": "9eaf67be-6501-5213-ba78-1915836aef67",
+      "to_node_id": "a9903bd7-de7f-5335-9bc2-92618a3fa2a6",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "a9903bd7-de7f-5335-9bc2-92618a3fa2a6",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "87f00b2c-4fec-57a7-9eee-96d9b5105516",
+      "from_node_id": "16cb5435-5d3f-58fe-bd70-0508e27e2b41",
+      "to_node_id": "ac685816-0eee-5cf2-8001-2536ddffe212",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "8586496c-8703-5d55-a9b4-080994348ff0",
+      "from_node_id": "dea074a6-fabe-5010-9d32-007ef34bd64b",
+      "to_node_id": "fa12cc1f-5d51-56c2-89ed-914d156adc2e",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "41b88cf6-8f71-57bb-bf84-6915ec789c86",
+      "from_node_id": "16cb5435-5d3f-58fe-bd70-0508e27e2b41",
+      "to_node_id": "fa12cc1f-5d51-56c2-89ed-914d156adc2e",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "fa12cc1f-5d51-56c2-89ed-914d156adc2e",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "127af740-67dd-5920-bd20-8479a770a544",
+      "from_node_id": "8bd028e7-99db-51ca-9f7d-31627aa2e031",
+      "to_node_id": "c6a53176-f3da-51a8-812f-6d7a0b01ca22",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "c75e25bd-99d3-5529-8462-89c0dc64ac78",
+      "from_node_id": "181dbef9-63bc-509b-9e7c-d8dee9a9ac8f",
+      "to_node_id": "a4d282ee-c245-52ed-8d94-ca0b8183043d",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "1617ad76-ca09-5405-88e9-b6891164dd4c",
+      "from_node_id": "8bd028e7-99db-51ca-9f7d-31627aa2e031",
+      "to_node_id": "a4d282ee-c245-52ed-8d94-ca0b8183043d",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "a4d282ee-c245-52ed-8d94-ca0b8183043d",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "00e78cab-5146-5bbc-9461-a9513e2641dc",
+      "from_node_id": "7b227d38-7093-5c8f-87a7-c1be01108187",
+      "to_node_id": "373767ad-b656-566a-820b-7dff29bce80a",
+      "relation_type": "HAS_SENSE",
+      "display_name_zh": "释义",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "c4c4dbd3-40fe-5933-b22e-78148022bfc3",
+      "from_node_id": "bc40f8d3-ba4c-52f1-a993-d1a30e813ab4",
+      "to_node_id": "c68573c7-3759-5d09-9332-19e192c51554",
+      "relation_type": "HAS_EXCERPT",
+      "display_name_zh": "收录",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    },
+    {
+      "id": "dde21c35-49f3-565e-8d46-82b45b989a0f",
+      "from_node_id": "7b227d38-7093-5c8f-87a7-c1be01108187",
+      "to_node_id": "c68573c7-3759-5d09-9332-19e192c51554",
+      "relation_type": "DESCRIBED_BY",
+      "display_name_zh": "讲解",
+      "evidence_excerpt_id": "c68573c7-3759-5d09-9332-19e192c51554",
+      "confidence": 1.0,
+      "assertion_status": "EXTRACTED"
+    }
+  ]
+}

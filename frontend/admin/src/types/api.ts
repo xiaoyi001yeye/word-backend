@@ -241,6 +241,69 @@ export interface DictionaryWordEntryResponse {
     entryOrder?: number | null;
 }
 
+export interface MetaWordDetail {
+    id: number;
+    word: string;
+    normalizedWord?: string | null;
+    phonetic?: string | null;
+    phoneticDetail?: MetaWordPhoneticDetail | null;
+    syllableDetail?: MetaWordSyllableDetail | null;
+    definition?: string | null;
+    partOfSpeech?: string | null;
+    partOfSpeechDetail?: MetaWordPartOfSpeechDetail[] | null;
+    exampleSentence?: string | null;
+    translation?: string | null;
+    difficulty?: number | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+}
+
+export interface MetaWordPhoneticDetail {
+    uk?: string | null;
+    us?: string | null;
+}
+
+export interface MetaWordSyllableSegment {
+    text?: string | null;
+    ukPhonetic?: string | null;
+    usPhonetic?: string | null;
+    ukAudioUrl?: string | null;
+    usAudioUrl?: string | null;
+}
+
+export interface MetaWordSyllableDetail {
+    segments?: MetaWordSyllableSegment[] | null;
+}
+
+export interface MetaWordExampleSentence {
+    sentence?: string | null;
+    translation?: string | null;
+}
+
+export interface MetaWordDefinitionDetail {
+    definition?: string | null;
+    translation?: string | null;
+    exampleSentences?: MetaWordExampleSentence[] | null;
+}
+
+export interface MetaWordInflectionDetail {
+    plural?: string | null;
+    past?: string | null;
+    pastParticiple?: string | null;
+    presentParticiple?: string | null;
+    thirdPersonSingular?: string | null;
+    comparative?: string | null;
+    superlative?: string | null;
+}
+
+export interface MetaWordPartOfSpeechDetail {
+    pos?: string | null;
+    definitions?: MetaWordDefinitionDetail[] | null;
+    inflection?: MetaWordInflectionDetail | null;
+    synonyms?: string[] | null;
+    antonyms?: string[] | null;
+}
+
 export interface MetaWordSuggestionResponse {
     id: number;
     word: string;
