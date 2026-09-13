@@ -123,8 +123,9 @@ public class AiPromptService {
                     "confusableWords": [{"word": "易混词", "distinction": "关键区别"}]
                   }
                 }
-                教材学习材料（可能为空，必须原样写入 learningDetail.learningMaterial）：
-                "%s"
+                教材学习材料开始（可能为空，必须原样写入 learningDetail.learningMaterial）：
+                %s
+                教材学习材料结束
                 要求：
                 1. word 使用规范拼写。
                 2. 至少返回一个词性对象和一个 definitions 对象。
@@ -135,7 +136,7 @@ public class AiPromptService {
                 7. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
                 8. 教材材料中明确列出的同构词必须完整返回；可在其后追加最多4个高置信度同构词。没有可靠同构词时返回空数组。
                 9. learningDetail.learningMaterial 必须与给定教材学习材料逐字一致；其余 learningDetail 字段用于学习补充，不确定时返回空字符串或空数组。
-                """.formatted(word, word, learningMaterial.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n"));
+        """.formatted(word, word, learningMaterial);
 
         return List.of(
                 new AiChatMessageRequest("system", systemPrompt),
