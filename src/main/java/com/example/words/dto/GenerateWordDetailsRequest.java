@@ -16,4 +16,7 @@ public class GenerateWordDetailsRequest {
     @NotBlank(message = "word is required")
     @Size(max = 100, message = "word must not exceed 100 characters")
     private String word;
+
+    @Size(max = 6000, message = "learning material must not exceed 6000 characters")
+    private String learningMaterial;
 }

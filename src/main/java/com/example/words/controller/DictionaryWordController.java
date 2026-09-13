@@ -174,7 +174,7 @@ public class DictionaryWordController {
             @Valid @RequestBody GenerateDictionaryWordWithAiRequest request) {
         ensureCanManageDictionary(dictionaryId);
         AiGenerationService.GeneratedWordEntryV2 generated = aiGenerationService.generateWordEntryV2(
-                new com.example.words.dto.GenerateWordDetailsRequest(request.getConfigId(), request.getWord())
+                new com.example.words.dto.GenerateWordDetailsRequest(request.getConfigId(), request.getWord(), null)
         );
         GenerateDictionaryWordWithAiResponse response = dictionaryWordService.saveGeneratedWordV2(
                 dictionaryId,

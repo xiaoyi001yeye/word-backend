@@ -68,6 +68,7 @@ public class AiPromptService {
 
     public List<AiChatMessageRequest> buildWordDetailsV2Messages(GenerateWordDetailsRequest request) {
         String word = request.getWord().trim();
+        String learningMaterial = request.getLearningMaterial() == null ? "" : request.getLearningMaterial().trim();
         String systemPrompt = """
                 你是一名严谨的英语词汇结构化数据助手。
                 你要为英语学习系统生成符合指定 JSON Schema 的词条数据。
@@ -112,8 +113,18 @@ public class AiPromptService {
                       "antonyms": []
                     }
                   ],
-                  "difficulty": 2
+                  "difficulty": 2,
+                  "learningDetail": {
+                    "learningMaterial": "必须原样保留给定教材学习材料",
+                    "memoryHint": "不超过80字的记忆提示",
+                    "samePatternWords": [{"word": "同构词", "translation": "中文释义", "rootBreakdown": "字根拆解"}],
+                    "examPhrases": [],
+                    "wordFamily": [{"word": "派生词", "pos": "adj.", "translation": "中文释义"}],
+                    "confusableWords": [{"word": "易混词", "distinction": "关键区别"}]
+                  }
                 }
+                教材学习材料（可能为空，必须原样写入 learningDetail.learningMaterial）：
+                "%s"
                 要求：
                 1. word 使用规范拼写。
                 2. 至少返回一个词性对象和一个 definitions 对象。
@@ -122,7 +133,9 @@ public class AiPromptService {
                 5. exampleSentences 尽量给一个常见、自然的例句。
                 6. difficulty 取 1-5 的整数，默认按常见学习难度估计。
                 7. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
-                """.formatted(word, word);
+                8. 教材材料中明确列出的同构词必须完整返回；可在其后追加最多4个高置信度同构词。没有可靠同构词时返回空数组。
+                9. learningDetail.learningMaterial 必须与给定教材学习材料逐字一致；其余 learningDetail 字段用于学习补充，不确定时返回空字符串或空数组。
+                """.formatted(word, word, learningMaterial.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n"));
 
         return List.of(
                 new AiChatMessageRequest("system", systemPrompt),
