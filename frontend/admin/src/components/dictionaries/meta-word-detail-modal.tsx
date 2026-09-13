@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,25 @@ const hasInflection = (inflection?: MetaWordInflectionDetail | null) => Boolean(
 );
 
 export function MetaWordDetailModal(props: MetaWordDetailModalProps) {
+    const [learningMaterialExpanded, setLearningMaterialExpanded] = createSignal(false);
+
+    createEffect(() => {
+        props.word?.id;
+        props.isOpen;
+        setLearningMaterialExpanded(false);
+    });
+
+    const learningMaterial = () => props.word?.learningDetail?.learningMaterial ?? "";
+    const learningMaterialLineCount = () => learningMaterial().split(/\r?\n/).length;
+    const learningMaterialIsCollapsible = () => learningMaterialLineCount() > 4 || learningMaterial().length > 320;
+    const learningMaterialRows = () => {
+        if (!learningMaterialExpanded()) {
+            return 4;
+        }
+        const wrappedLineEstimate = Math.ceil(learningMaterial().length / 90);
+        return Math.min(Math.max(learningMaterialLineCount(), wrappedLineEstimate, 6), 20);
+    };
+
     return (
         <Show when={props.isOpen}>
             <div
@@ -250,6 +269,131 @@ export function MetaWordDetailModal(props: MetaWordDetailModalProps) {
                                                 </For>
                                             </div>
                                         </Show>
+                                    </section>
+
+                                    <section class="rounded-2xl border border-border/70 bg-background/70 p-5">
+                                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <h3 class="text-base font-semibold text-foreground">教材来源与学习拓展</h3>
+                                                <p class="mt-1 text-sm text-muted-foreground">
+                                                    完整保留教材材料，并展示 AI 生成的记忆、构词和辨析补充。
+                                                </p>
+                                            </div>
+                                            <Badge variant="outline">学习详情</Badge>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                                <Label for="meta-word-learning-material">完整学习材料</Label>
+                                                <Show when={learningMaterialIsCollapsible()}>
+                                                    <Button
+                                                        aria-label={learningMaterialExpanded() ? "收起学习材料" : "展开全部学习材料"}
+                                                        size="sm"
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() => setLearningMaterialExpanded((expanded) => !expanded)}
+                                                    >
+                                                        {learningMaterialExpanded() ? "收起" : "展开全部"}
+                                                    </Button>
+                                                </Show>
+                                            </div>
+                                            <Textarea
+                                                id="meta-word-learning-material"
+                                                class="resize-none bg-muted/25 font-mono text-sm leading-6 text-foreground"
+                                                readOnly
+                                                rows={learningMaterialRows()}
+                                                value={displayValue(word().learningDetail?.learningMaterial)}
+                                            />
+                                            <p class="text-xs text-muted-foreground">教材原文只读展示，保留原有换行，AI 补全不得覆盖。</p>
+                                        </div>
+
+                                        <div class="mt-5">
+                                            <ReadonlyTextArea
+                                                id="meta-word-memory-hint"
+                                                label="记忆提示（AI 学习补充）"
+                                                rows={2}
+                                                value={word().learningDetail?.memoryHint}
+                                            />
+                                        </div>
+
+                                        <div class="mt-6 space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <h4 class="text-sm font-semibold text-foreground">同构词</h4>
+                                                <Badge variant="secondary">{word().learningDetail?.samePatternWords?.length ?? 0} 个</Badge>
+                                            </div>
+                                            <Show
+                                                when={(word().learningDetail?.samePatternWords?.length ?? 0) > 0}
+                                                fallback={<p class="rounded-xl bg-muted/25 px-4 py-3 text-sm text-muted-foreground">暂无同构词</p>}
+                                            >
+                                                <For each={word().learningDetail?.samePatternWords ?? []}>
+                                                    {(item, itemIndex) => (
+                                                        <div class="grid gap-3 rounded-xl border border-border/60 bg-muted/15 p-4 md:grid-cols-2 lg:grid-cols-[1fr_1fr_2fr]">
+                                                            <ReadonlyField id={`same-pattern-${itemIndex()}-word`} label={`同构词 ${itemIndex() + 1}`} value={item.word} />
+                                                            <ReadonlyField id={`same-pattern-${itemIndex()}-translation`} label={`同构词 ${itemIndex() + 1} 中文释义`} value={item.translation} />
+                                                            <ReadonlyTextArea id={`same-pattern-${itemIndex()}-root`} label={`字根拆解 ${itemIndex() + 1}`} rows={2} value={item.rootBreakdown} />
+                                                        </div>
+                                                    )}
+                                                </For>
+                                            </Show>
+                                        </div>
+
+                                        <div class="mt-6 space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <h4 class="text-sm font-semibold text-foreground">常用搭配</h4>
+                                                <Badge variant="secondary">{word().learningDetail?.examPhrases?.length ?? 0} 条</Badge>
+                                            </div>
+                                            <Show
+                                                when={(word().learningDetail?.examPhrases?.length ?? 0) > 0}
+                                                fallback={<p class="rounded-xl bg-muted/25 px-4 py-3 text-sm text-muted-foreground">暂无推荐搭配</p>}
+                                            >
+                                                <div class="flex flex-wrap gap-2">
+                                                    <For each={word().learningDetail?.examPhrases ?? []}>
+                                                        {(phrase) => <Badge variant="outline">{phrase}</Badge>}
+                                                    </For>
+                                                </div>
+                                            </Show>
+                                        </div>
+
+                                        <div class="mt-6 space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <h4 class="text-sm font-semibold text-foreground">派生词族</h4>
+                                                <Badge variant="secondary">{word().learningDetail?.wordFamily?.length ?? 0} 个</Badge>
+                                            </div>
+                                            <Show
+                                                when={(word().learningDetail?.wordFamily?.length ?? 0) > 0}
+                                                fallback={<p class="rounded-xl bg-muted/25 px-4 py-3 text-sm text-muted-foreground">暂无常用派生词</p>}
+                                            >
+                                                <For each={word().learningDetail?.wordFamily ?? []}>
+                                                    {(item, itemIndex) => (
+                                                        <div class="grid gap-3 rounded-xl border border-border/60 bg-muted/15 p-4 md:grid-cols-3">
+                                                            <ReadonlyField id={`word-family-${itemIndex()}-word`} label={`派生词 ${itemIndex() + 1}`} value={item.word} />
+                                                            <ReadonlyField id={`word-family-${itemIndex()}-pos`} label={`派生词 ${itemIndex() + 1} 词性`} value={item.pos} />
+                                                            <ReadonlyField id={`word-family-${itemIndex()}-translation`} label={`派生词 ${itemIndex() + 1} 中文释义`} value={item.translation} />
+                                                        </div>
+                                                    )}
+                                                </For>
+                                            </Show>
+                                        </div>
+
+                                        <div class="mt-6 space-y-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <h4 class="text-sm font-semibold text-foreground">易混词辨析</h4>
+                                                <Badge variant="secondary">{word().learningDetail?.confusableWords?.length ?? 0} 个</Badge>
+                                            </div>
+                                            <Show
+                                                when={(word().learningDetail?.confusableWords?.length ?? 0) > 0}
+                                                fallback={<p class="rounded-xl bg-muted/25 px-4 py-3 text-sm text-muted-foreground">暂无易混词提示</p>}
+                                            >
+                                                <For each={word().learningDetail?.confusableWords ?? []}>
+                                                    {(item, itemIndex) => (
+                                                        <div class="grid gap-3 rounded-xl border border-border/60 bg-muted/15 p-4 md:grid-cols-[1fr_2fr]">
+                                                            <ReadonlyField id={`confusable-${itemIndex()}-word`} label={`易混词 ${itemIndex() + 1}`} value={item.word} />
+                                                            <ReadonlyTextArea id={`confusable-${itemIndex()}-distinction`} label={`易混词 ${itemIndex() + 1} 关键区别`} rows={2} value={item.distinction} />
+                                                        </div>
+                                                    )}
+                                                </For>
+                                            </Show>
+                                        </div>
                                     </section>
 
                                     <details class="rounded-2xl border border-border/70 bg-muted/10 p-5">
