@@ -15,6 +15,7 @@ interface MetaWordDetailModalProps {
     error: string;
     canGenerateWithAi: boolean;
     generating: boolean;
+    learningMaterialStatusMessage?: string;
     onClose: () => void;
     onGenerateWithAi: () => void;
 }
@@ -281,6 +282,12 @@ export function MetaWordDetailModal(props: MetaWordDetailModalProps) {
                                             </div>
                                             <Badge variant="outline">学习详情</Badge>
                                         </div>
+
+                                        <Show when={props.learningMaterialStatusMessage}>
+                                            <Alert class="mb-4 border-border/80 bg-muted/40 text-muted-foreground">
+                                                {props.learningMaterialStatusMessage}
+                                            </Alert>
+                                        </Show>
 
                                         <div class="space-y-2">
                                             <div class="flex flex-wrap items-center justify-between gap-2">

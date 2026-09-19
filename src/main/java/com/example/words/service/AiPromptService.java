@@ -122,7 +122,7 @@ public class AiPromptService {
                     "confusableWords": [{"word": "易混词", "distinction": "关键区别"}]
                   }
                 }
-                教材学习材料开始（可能为空，必须原样写入 learningDetail.learningMaterial）：
+                教材 Markdown 原文开始（可能为空，仅供理解上下文，绝不能写入响应）：
                 %s
                 教材学习材料结束
                 要求：

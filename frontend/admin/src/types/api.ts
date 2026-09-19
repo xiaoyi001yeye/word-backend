@@ -706,6 +706,15 @@ export interface GenerateDictionaryWordWithAiPayload {
     word: string;
 }
 
+export type LearningMaterialStatus = "FOUND" | "NOT_FOUND" | "PARSE_WARNING" | "READ_ERROR" | "SOURCE_CHANGED";
+
+export interface LearningMaterialWarning {
+    code: string;
+    message: string;
+    startLine?: number | null;
+    endLine?: number | null;
+}
+
 export interface GenerateDictionaryWordWithAiResponse {
     dictionaryId: number;
     metaWordId: number;
@@ -723,6 +732,11 @@ export interface GenerateDictionaryWordWithAiResponse {
     created: number;
     added: number;
     failed: number;
+    learningMaterialStatus?: LearningMaterialStatus | null;
+    learningMaterialWarnings?: LearningMaterialWarning[];
+    learningMaterialSourcePath?: string | null;
+    learningMaterialStartLine?: number | null;
+    learningMaterialEndLine?: number | null;
 }
 
 export type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "FILL_IN_BLANK";

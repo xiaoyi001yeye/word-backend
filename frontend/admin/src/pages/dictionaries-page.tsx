@@ -53,6 +53,27 @@ const createDefaultForm = () => ({
 
 const getDictionaryCategoryLabel = (dictionary: Dictionary) => dictionary.category?.trim() || "未分类";
 
+const formatLearningMaterialStatus = (response: {
+    learningMaterialStatus?: string | null;
+    learningMaterialWarnings?: { message: string }[];
+    learningMaterialSourcePath?: string | null;
+}) => {
+    const statusLabels: Record<string, string> = {
+        FOUND: "已从可信教材中提取学习材料",
+        NOT_FOUND: "未找到对应教材材料，AI 补全已继续",
+        PARSE_WARNING: "教材结构存在告警，未写入学习材料",
+        READ_ERROR: "教材文件无法读取，未写入学习材料",
+        SOURCE_CHANGED: "教材来源与已保存材料不一致，已保留数据库材料",
+    };
+    if (!response.learningMaterialStatus) {
+        return "";
+    }
+    const warning = response.learningMaterialWarnings?.map((item) => item.message).join("；");
+    const source = response.learningMaterialSourcePath ? `（来源：${response.learningMaterialSourcePath}）` : "";
+    return `教材状态：${statusLabels[response.learningMaterialStatus] ?? response.learningMaterialStatus}${source}`
+        + (warning ? `。${warning}` : "");
+};
+
 const compareLabels = (left: string, right: string) => {
     if (left === "未分类") {
         return 1;
@@ -73,6 +94,7 @@ export function DictionariesPage() {
     const [isMetaWordDetailOpen, setIsMetaWordDetailOpen] = createSignal(false);
     const [metaWordDetailLoading, setMetaWordDetailLoading] = createSignal(false);
     const [metaWordDetailError, setMetaWordDetailError] = createSignal("");
+    const [learningMaterialStatusMessage, setLearningMaterialStatusMessage] = createSignal("");
     const [isCreateDialogOpen, setIsCreateDialogOpen] = createSignal(false);
     const [selectedDictionaryId, setSelectedDictionaryId] = createSignal<number | null>(null);
     const [entryKeyword, setEntryKeyword] = createSignal("");
@@ -378,6 +400,7 @@ export function DictionariesPage() {
         setSelectedMetaWordEntry(entry);
         setSelectedMetaWord(null);
         setMetaWordDetailError("");
+        setLearningMaterialStatusMessage("");
         setMetaWordDetailLoading(true);
         setIsMetaWordDetailOpen(true);
 
@@ -410,6 +433,7 @@ export function DictionariesPage() {
                 word: entry.word,
             });
             await Promise.all([refetch(), refetchEntries()]);
+            setLearningMaterialStatusMessage(formatLearningMaterialStatus(response));
 
             if (refreshDetail && selectedMetaWordEntry()?.entryId === entry.entryId) {
                 setMetaWordDetailError("");
@@ -969,11 +993,13 @@ export function DictionariesPage() {
                 error={metaWordDetailError()}
                 generating={Boolean(selectedMetaWordEntry() && entryAiLoading()[selectedMetaWordEntry()!.entryId])}
                 isOpen={isMetaWordDetailOpen()}
+                learningMaterialStatusMessage={learningMaterialStatusMessage()}
                 loading={metaWordDetailLoading()}
                 word={selectedMetaWord()}
                 onClose={() => {
                     setIsMetaWordDetailOpen(false);
                     setSelectedMetaWordEntry(null);
+                    setLearningMaterialStatusMessage("");
                 }}
                 onGenerateWithAi={() => void handleDetailAiGenerate()}
             />

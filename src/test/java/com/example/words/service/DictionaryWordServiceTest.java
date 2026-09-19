@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.words.dto.MetaWordSuggestionDto;
+import com.example.words.dto.GenerateDictionaryWordWithAiResponse;
 import com.example.words.dto.MetaWordEntryDto;
 import com.example.words.dto.MetaWordEntryDtoV2;
 import com.example.words.dto.LearningDetailDto;
@@ -180,7 +181,7 @@ class DictionaryWordServiceTest {
     }
 
     @Test
-    void saveGeneratedWordV2ShouldPersistSourceMarkdownAndAiLearningExtensions() {
+    void saveGeneratedWordV2ShouldPersistExtractedMaterialAndAiLearningExtensions() {
         MetaWord existingMetaWord = new MetaWord();
         existingMetaWord.setId(103L);
         existingMetaWord.setWord("ability");
@@ -204,7 +205,7 @@ class DictionaryWordServiceTest {
                 word: ability
                 ---
                 # ability
-                教材原文""";
+                【教材原文】""";
 
         dictionaryWordService.saveGeneratedWordV2(
                 10L,
@@ -213,10 +214,10 @@ class DictionaryWordServiceTest {
                 "OpenAI",
                 "test-model",
                 entry,
-                sourceMarkdown
+                foundMaterial(sourceMarkdown, "教材原文")
         );
 
-        assertEquals(sourceMarkdown, existingMetaWord.getLearningDetail().getLearningMaterial());
+        assertEquals("教材原文", existingMetaWord.getLearningDetail().getLearningMaterial());
         assertEquals("able + ity，能力由可做到积累而来", existingMetaWord.getLearningDetail().getMemoryHint());
         assertEquals("adaptability", existingMetaWord.getLearningDetail().getSamePatternWords().get(0).getWord());
         assertEquals("adapt + ability", existingMetaWord.getLearningDetail().getSamePatternWords().get(0).getRootBreakdown());
@@ -260,14 +261,14 @@ class DictionaryWordServiceTest {
         when(metaWordRepository.save(any(MetaWord.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(10L, 104L)).thenReturn(true);
 
-        dictionaryWordService.saveGeneratedWordV2(
+        GenerateDictionaryWordWithAiResponse response = dictionaryWordService.saveGeneratedWordV2(
                 10L,
                 104L,
                 1L,
                 "OpenAI",
                 "test-model",
                 generatedEntry,
-                "新的来源教材"
+                foundMaterial("新的来源 Markdown", "新的来源教材")
         );
 
         assertEquals("Ability", existingMetaWord.getWord());
@@ -278,6 +279,8 @@ class DictionaryWordServiceTest {
         assertEquals("Authoritative example.", existingMetaWord.getExampleSentence());
         assertEquals(5, existingMetaWord.getDifficulty());
         assertEquals("权威教材材料", existingMetaWord.getLearningDetail().getLearningMaterial());
+        assertEquals(LearningMaterialStatus.SOURCE_CHANGED, response.getLearningMaterialStatus());
+        assertEquals("SOURCE_CHANGED", response.getLearningMaterialWarnings().get(0).getCode());
         assertEquals("新提示", existingMetaWord.getLearningDetail().getMemoryHint());
         assertEquals("new-pattern", existingMetaWord.getLearningDetail().getSamePatternWords().get(0).getWord());
         assertEquals("new phrase", existingMetaWord.getLearningDetail().getExamPhrases().get(0));
@@ -302,7 +305,7 @@ class DictionaryWordServiceTest {
                         "OpenAI",
                         "test-model",
                         generatedEntry("ability"),
-                        "教材材料"
+                        foundMaterial("教材 Markdown", "教材材料")
                 )
         );
 
@@ -330,7 +333,7 @@ class DictionaryWordServiceTest {
                 "OpenAI",
                 "test-model",
                 generatedEntry("ability"),
-                "教材材料"
+                foundMaterial("教材 Markdown", "教材材料")
         );
 
         assertEquals("authoritative flat phonetic", existingMetaWord.getPhonetic());
@@ -441,6 +444,11 @@ class DictionaryWordServiceTest {
         );
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
         assertEquals(1, pageableCaptor.getValue().getPageSize());
+    }
+
+    private LearningMaterialParseResult foundMaterial(String sourceMarkdown, String learningMaterial) {
+        return new LearningMaterialParseResult(
+                LearningMaterialStatus.FOUND, sourceMarkdown, learningMaterial, "ability.md", 1, 1, List.of());
     }
 
     private static final class RecordingDictionaryService extends DictionaryService {

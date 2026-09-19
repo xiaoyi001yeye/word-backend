@@ -321,7 +321,7 @@ public class DictionaryWordService {
             String providerName,
             String modelName,
             MetaWordEntryDtoV2 entry,
-            String sourceLearningMaterial) {
+            LearningMaterialParseResult materialResult) {
         if (entry == null || entry.getWord() == null || entry.getWord().trim().isEmpty()) {
             throw new IllegalArgumentException("Generated word entry must not be empty");
         }
@@ -343,8 +343,17 @@ public class DictionaryWordService {
             existed++;
         }
 
+        LearningMaterialParseResult resolvedMaterialResult = resolveMaterialResult(metaWord, materialResult);
         fillMissingAuthoritativeFields(metaWord, entry);
-        updateLearningDetail(metaWord, entry.getLearningDetail(), sourceLearningMaterial);
+        updateLearningDetail(
+                metaWord,
+                entry.getLearningDetail(),
+                resolvedMaterialResult.getStatus() == LearningMaterialStatus.FOUND
+                        && resolvedMaterialResult.getWarnings().isEmpty()
+                        && isBlank(currentLearningMaterial(metaWord))
+                        ? resolvedMaterialResult.getLearningMaterial()
+                        : null
+        );
         MetaWord savedMetaWord = metaWordRepository.save(metaWord);
 
         if (!dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, savedMetaWord.getId())) {
@@ -368,7 +377,12 @@ public class DictionaryWordService {
                 existed,
                 created,
                 added,
-                0
+                0,
+                resolvedMaterialResult.getStatus(),
+                resolvedMaterialResult.getWarnings(),
+                resolvedMaterialResult.getSourcePath(),
+                resolvedMaterialResult.getStartLine(),
+                resolvedMaterialResult.getEndLine()
         );
     }
 
@@ -565,6 +579,38 @@ public class DictionaryWordService {
         detail.setWordFamily(convertWordFamilyItems(generatedDetail.getWordFamily()));
         detail.setConfusableWords(convertConfusableWords(generatedDetail.getConfusableWords()));
         metaWord.setLearningDetail(detail);
+    }
+
+    private LearningMaterialParseResult resolveMaterialResult(
+            MetaWord metaWord,
+            LearningMaterialParseResult materialResult) {
+        String existingMaterial = currentLearningMaterial(metaWord);
+        if (isBlank(existingMaterial) || materialResult.getStatus() != LearningMaterialStatus.FOUND
+                || existingMaterial.equals(materialResult.getLearningMaterial())) {
+            return materialResult;
+        }
+
+        List<LearningMaterialWarning> warnings = new ArrayList<>(materialResult.getWarnings());
+        warnings.add(new LearningMaterialWarning(
+                "SOURCE_CHANGED",
+                "Stored learning material differs from the current source",
+                materialResult.getStartLine(),
+                materialResult.getEndLine()
+        ));
+        return new LearningMaterialParseResult(
+                LearningMaterialStatus.SOURCE_CHANGED,
+                materialResult.getSourceMarkdown(),
+                materialResult.getLearningMaterial(),
+                materialResult.getSourcePath(),
+                materialResult.getStartLine(),
+                materialResult.getEndLine(),
+                List.copyOf(warnings)
+        );
+    }
+
+    private String currentLearningMaterial(MetaWord metaWord) {
+        LearningDetail detail = metaWord.getLearningDetail();
+        return detail == null ? null : detail.getLearningMaterial();
     }
 
     private String learningMaterialFromImport(LearningDetailDto detail) {

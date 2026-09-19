@@ -1,7 +1,6 @@
 package com.example.words.service;
 
 import java.util.List;
-import java.util.Optional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,7 +64,8 @@ class DictionaryWordAiAutofillServiceTest {
         List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "generate ability"));
         GenerateDictionaryWordWithAiResponse saved = savedResponse("ability");
 
-        when(wordMarkdownMaterialService.findMaterial("ability")).thenReturn(Optional.of("教材材料"));
+        LearningMaterialParseResult materialResult = foundMaterial("教材 Markdown 原文", "教材材料");
+        when(wordMarkdownMaterialService.loadMaterial("ability")).thenReturn(materialResult);
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
         when(aiPromptService.buildWordDetailsV2Messages(any(GenerateWordDetailsRequest.class))).thenReturn(messages);
         when(aiGatewayService.generateText(config, messages)).thenReturn(validEntryJson("ability"));
@@ -80,7 +80,7 @@ class DictionaryWordAiAutofillServiceTest {
                 ArgumentCaptor.forClass(GenerateWordDetailsRequest.class);
         verify(aiPromptService).buildWordDetailsV2Messages(generationRequest.capture());
         assertEquals("ability", generationRequest.getValue().getWord());
-        assertEquals("教材材料", generationRequest.getValue().getLearningMaterial());
+        assertEquals("教材 Markdown 原文", generationRequest.getValue().getLearningMaterial());
 
         ArgumentCaptor<MetaWordEntryDtoV2> generatedEntry = ArgumentCaptor.forClass(MetaWordEntryDtoV2.class);
         verify(dictionaryWordService).saveGeneratedWordV2(
@@ -90,7 +90,7 @@ class DictionaryWordAiAutofillServiceTest {
                 org.mockito.ArgumentMatchers.eq("OpenAI"),
                 org.mockito.ArgumentMatchers.eq("gpt-test"),
                 generatedEntry.capture(),
-                org.mockito.ArgumentMatchers.eq("教材材料")
+                org.mockito.ArgumentMatchers.eq(materialResult)
         );
         assertEquals("ability", generatedEntry.getValue().getWord());
     }
@@ -102,7 +102,7 @@ class DictionaryWordAiAutofillServiceTest {
         List<AiChatMessageRequest> initialMessages = List.of(new AiChatMessageRequest("user", "generate ability"));
         List<AiChatMessageRequest> repairMessages = List.of(new AiChatMessageRequest("user", "repair ability"));
 
-        when(wordMarkdownMaterialService.findMaterial("ability")).thenReturn(Optional.empty());
+        when(wordMarkdownMaterialService.loadMaterial("ability")).thenReturn(notFoundMaterial());
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
         when(aiPromptService.buildWordDetailsV2Messages(any(GenerateWordDetailsRequest.class)))
                 .thenReturn(initialMessages);
@@ -141,7 +141,7 @@ class DictionaryWordAiAutofillServiceTest {
                         + "\", \"translation\": \"测试\", \"rootBreakdown\": \"test root\"}]"
         );
 
-        when(wordMarkdownMaterialService.findMaterial("ability")).thenReturn(Optional.empty());
+        when(wordMarkdownMaterialService.loadMaterial("ability")).thenReturn(notFoundMaterial());
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
         when(aiPromptService.buildWordDetailsV2Messages(any(GenerateWordDetailsRequest.class)))
                 .thenReturn(initialMessages);
@@ -173,7 +173,7 @@ class DictionaryWordAiAutofillServiceTest {
         List<AiChatMessageRequest> initialMessages = List.of(new AiChatMessageRequest("user", "generate ability"));
         List<AiChatMessageRequest> repairMessages = List.of(new AiChatMessageRequest("user", "repair ability"));
 
-        when(wordMarkdownMaterialService.findMaterial("ability")).thenReturn(Optional.empty());
+        when(wordMarkdownMaterialService.loadMaterial("ability")).thenReturn(notFoundMaterial());
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
         when(aiPromptService.buildWordDetailsV2Messages(any(GenerateWordDetailsRequest.class)))
                 .thenReturn(initialMessages);
@@ -205,11 +205,24 @@ class DictionaryWordAiAutofillServiceTest {
     }
 
     private GenerateDictionaryWordWithAiResponse savedResponse(String word) {
-        return new GenerateDictionaryWordWithAiResponse(
-                7L, 9L, 21L, "OpenAI", "gpt-test", word, "能力", "n.",
-                "/əˈbɪləti/", "the power to do something", "She has the ability to lead.",
-                1, 1, 0, 0, 0
-        );
+        GenerateDictionaryWordWithAiResponse response = new GenerateDictionaryWordWithAiResponse();
+        response.setDictionaryId(7L);
+        response.setMetaWordId(9L);
+        response.setConfigId(21L);
+        response.setProviderName("OpenAI");
+        response.setModelName("gpt-test");
+        response.setWord(word);
+        return response;
+    }
+
+    private LearningMaterialParseResult foundMaterial(String sourceMarkdown, String learningMaterial) {
+        return new LearningMaterialParseResult(
+                LearningMaterialStatus.FOUND, sourceMarkdown, learningMaterial, "ability.md", 1, 1, List.of());
+    }
+
+    private LearningMaterialParseResult notFoundMaterial() {
+        return new LearningMaterialParseResult(
+                LearningMaterialStatus.NOT_FOUND, null, null, null, null, null, List.of());
     }
 
     private String validEntryJson(String word) {

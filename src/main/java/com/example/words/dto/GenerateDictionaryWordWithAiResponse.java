@@ -1,5 +1,8 @@
 package com.example.words.dto;
 
+import java.util.List;
+import com.example.words.service.LearningMaterialStatus;
+import com.example.words.service.LearningMaterialWarning;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -25,4 +28,9 @@ public class GenerateDictionaryWordWithAiResponse {
     private int created;
     private int added;
     private int failed;
+    private LearningMaterialStatus learningMaterialStatus;
+    private List<LearningMaterialWarning> learningMaterialWarnings;
+    private String learningMaterialSourcePath;
+    private Integer learningMaterialStartLine;
+    private Integer learningMaterialEndLine;
 }
