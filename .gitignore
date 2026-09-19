@@ -10,3 +10,5 @@ logs/
 /.worktrees/
 /.superpowers/
 .serena
+__pycache__/
+*.py[cod]
