@@ -1,10 +1,12 @@
 ---
-word: weak adj
+word: weak
 sources:
   - "高考英语3500单词第53讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - adj
 ---
 
-# weak adj
+# weak
 
 ## 来源
 

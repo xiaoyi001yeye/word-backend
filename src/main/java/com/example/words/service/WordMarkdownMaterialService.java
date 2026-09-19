@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class WordMarkdownMaterialService {
 
-    private static final Pattern UNSAFE_FILE_NAME = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private final Path materialDirectory;
     private volatile Map<String, Path> indexedFiles;
@@ -32,18 +32,13 @@ public class WordMarkdownMaterialService {
 
     /**
      * Returns the complete source Markdown so the AI receives all teaching material as context.
-     * The filename lookup mirrors tools/docx_words_to_markdown.py and the front-matter index
-     * also covers duplicate entries whose generated filenames have a numeric suffix.
+     * The normalized {@code word} front matter is the lookup contract; generated filenames are
+     * deliberately not part of the interface between the converter and this module.
      */
     public Optional<String> findMaterial(String word) {
-        String normalizedWord = WordNormalizationUtils.normalize(word);
+        String normalizedWord = normalizeMaterialWord(word);
         if (normalizedWord == null || normalizedWord.isBlank() || !Files.isDirectory(materialDirectory)) {
             return Optional.empty();
-        }
-
-        Path directFile = materialDirectory.resolve(toMarkdownFileName(normalizedWord));
-        if (Files.isRegularFile(directFile)) {
-            return readMaterial(directFile, word);
         }
 
         Path indexedFile = materialIndex().get(normalizedWord);
@@ -94,7 +89,7 @@ public class WordMarkdownMaterialService {
                     .map(line -> line.substring("word:".length()).trim())
                     .findFirst()
                     .orElse(null);
-            String normalizedWord = WordNormalizationUtils.normalize(frontMatterWord);
+            String normalizedWord = normalizeMaterialWord(frontMatterWord);
             if (normalizedWord != null && !normalizedWord.isBlank()) {
                 index.putIfAbsent(normalizedWord, path);
             }
@@ -103,9 +98,8 @@ public class WordMarkdownMaterialService {
         }
     }
 
-    private String toMarkdownFileName(String normalizedWord) {
-        String safeName = UNSAFE_FILE_NAME.matcher(normalizedWord).replaceAll("-")
-                .replaceAll("^-+|-+$", "");
-        return (safeName.isBlank() ? "unnamed-word" : safeName) + ".md";
+    private String normalizeMaterialWord(String word) {
+        String normalizedWord = WordNormalizationUtils.normalize(word);
+        return normalizedWord == null ? null : WHITESPACE.matcher(normalizedWord).replaceAll(" ");
     }
 }

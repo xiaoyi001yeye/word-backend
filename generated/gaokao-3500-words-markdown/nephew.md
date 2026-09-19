@@ -1,10 +1,12 @@
 ---
-word: nephew n
+word: nephew
 sources:
   - "高考英语3500单词第32讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - n
 ---
 
-# nephew n
+# nephew
 
 ## 来源
 

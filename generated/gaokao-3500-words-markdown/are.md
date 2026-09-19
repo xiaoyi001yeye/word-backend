@@ -1,10 +1,12 @@
 ---
-word: are v
+word: are
 sources:
   - "高考英语3500单词第04讲(单词速记与拓展).docx"
+parts_of_speech:
+  - v
 ---
 
-# are v
+# are
 
 ## 来源
 

@@ -1,10 +1,12 @@
 ---
-word: would modal
+word: would
 sources:
   - "高考英语3500单词第55讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - modal
 ---
 
-# would modal
+# would
 
 ## 来源
 
