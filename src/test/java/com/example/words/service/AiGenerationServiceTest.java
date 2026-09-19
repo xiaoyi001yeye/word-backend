@@ -42,7 +42,7 @@ class AiGenerationServiceTest {
     @Test
     void generateWordDetailsShouldUseResolvedConfigAndParseJson() {
         AiConfig config = config();
-        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "apple");
+        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "apple", null);
         List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "fill apple"));
 
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
@@ -75,7 +75,7 @@ class AiGenerationServiceTest {
     @Test
     void generateWordDetailsShouldRejectInvalidJson() {
         AiConfig config = config();
-        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "apple");
+        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "apple", null);
         List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "fill apple"));
 
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
@@ -93,7 +93,7 @@ class AiGenerationServiceTest {
     @Test
     void generateWordEntryV2ShouldUseDictionaryAbbreviationForAbandon() {
         AiConfig config = config();
-        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "abandon");
+        GenerateWordDetailsRequest request = new GenerateWordDetailsRequest(null, "abandon", null);
         List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "fill abandon"));
 
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
@@ -122,12 +122,24 @@ class AiGenerationServiceTest {
         AiPromptService promptService = new AiPromptService();
 
         List<AiChatMessageRequest> messages = promptService.buildWordDetailsV2Messages(
-                new GenerateWordDetailsRequest(null, "abandon")
+                new GenerateWordDetailsRequest(null, "abandon", null)
         );
 
         String prompt = messages.get(1).getContent();
         assertTrue(prompt.contains("abandon 的词性必须返回 vt."));
         assertTrue(prompt.contains("不得返回 noun、verb、adjective 等完整单词"));
+    }
+
+    @Test
+    void wordDetailsV2PromptShouldKeepMarkdownMaterialUnchanged() {
+        AiPromptService promptService = new AiPromptService();
+        String markdown = "---\\nword: ability\\n---\\n# ability\\n\\n## 内容\\n\\n能力";
+
+        List<AiChatMessageRequest> messages = promptService.buildWordDetailsV2Messages(
+                new GenerateWordDetailsRequest(null, "ability", markdown)
+        );
+
+        assertTrue(messages.get(1).getContent().contains(markdown));
     }
 
     private AiConfig config() {

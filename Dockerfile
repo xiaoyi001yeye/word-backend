@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY --from=builder /workspace/target/words-1.0.0.jar app.jar
 COPY books ./books
+COPY generated/gaokao-3500-words-markdown ./generated/gaokao-3500-words-markdown
 
 RUN mkdir -p /app/logs
 

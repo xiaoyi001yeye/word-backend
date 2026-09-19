@@ -91,6 +91,24 @@ describe("DictionariesPage", () => {
                     antonyms: [],
                 },
             ],
+            learningDetail: {
+                learningMaterial: "able + -ity\nknowability 可知性\nchangeability 可变性\nreadability 可读性\nusability 可用性",
+                memoryHint: "ability = able + -ity：能够做事的能力。",
+                samePatternWords: [
+                    {
+                        word: "knowability",
+                        translation: "可知性",
+                        rootBreakdown: "know（知道）+ able（能够）+ -ity（名词后缀）",
+                    },
+                ],
+                examPhrases: ["have the ability to do sth"],
+                wordFamily: [
+                    { word: "able", pos: "adj.", translation: "能够的" },
+                ],
+                confusableWords: [
+                    { word: "capacity", distinction: "ability 强调能力；capacity 更强调容量或潜能。" },
+                ],
+            },
             difficulty: 2,
         });
         vi.mocked(api.generateDictionaryWordWithAi).mockResolvedValue({
@@ -193,6 +211,16 @@ describe("DictionariesPage", () => {
         expect(screen.getByLabelText("中文释义")).toHaveValue("苹果");
         expect(screen.getByLabelText("英文例句 1")).toHaveValue("I ate an apple.");
         expect(screen.getByLabelText("第 1 段拼写")).toHaveValue("ap");
+        expect((screen.getByLabelText("完整学习材料") as HTMLTextAreaElement).value).toContain("usability 可用性");
+        expect(screen.getByLabelText("记忆提示（AI 学习补充）")).toHaveValue("ability = able + -ity：能够做事的能力。");
+        expect(screen.getByLabelText("同构词 1")).toHaveValue("knowability");
+        expect((screen.getByLabelText("字根拆解 1") as HTMLTextAreaElement).value).toContain("名词后缀");
+        expect(screen.getByText("have the ability to do sth")).toBeInTheDocument();
+        expect(screen.getByLabelText("派生词 1")).toHaveValue("able");
+        expect(screen.getByLabelText("易混词 1")).toHaveValue("capacity");
+
+        fireEvent.click(screen.getByRole("button", { name: "展开全部学习材料" }));
+        expect(screen.getByRole("button", { name: "收起学习材料" })).toBeInTheDocument();
     });
 
     it("generates and refreshes the structured detail from its AI button", async () => {
@@ -229,6 +257,34 @@ describe("DictionariesPage", () => {
         });
         expect(await screen.findByText("单词AI已更新元单词数据：apple")).toBeInTheDocument();
         expect(api.getMetaWord).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows explicit empty states when learning detail arrays are unavailable", async () => {
+        vi.mocked(api.listDictionaryEntriesPage).mockResolvedValue({
+            content: [
+                { entryId: 11, dictionaryId: 7, metaWordId: 21, word: "apple", entryOrder: 1 },
+            ],
+            totalElements: 1,
+            totalPages: 1,
+            size: 20,
+            number: 0,
+            numberOfElements: 1,
+            first: true,
+            last: true,
+            empty: false,
+        });
+        vi.mocked(api.getMetaWord).mockResolvedValue({ id: 21, word: "apple" });
+
+        render(() => <DictionariesPage />);
+        fireEvent.click(await screen.findByRole("button", { name: "查看详细数据" }));
+
+        expect(await screen.findByText("教材来源与学习拓展")).toBeInTheDocument();
+        expect(screen.getByLabelText("完整学习材料")).toHaveValue("未填写");
+        expect(screen.getByLabelText("记忆提示（AI 学习补充）")).toHaveValue("未填写");
+        expect(screen.getByText("暂无同构词")).toBeInTheDocument();
+        expect(screen.getByText("暂无推荐搭配")).toBeInTheDocument();
+        expect(screen.getByText("暂无常用派生词")).toBeInTheDocument();
+        expect(screen.getByText("暂无易混词提示")).toBeInTheDocument();
     });
 
     it("renames a dictionary without changing its identity", async () => {

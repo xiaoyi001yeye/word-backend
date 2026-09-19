@@ -46,4 +46,5 @@ public class AiController {
             @Valid @RequestBody GenerateWordDetailsRequest request) {
         return ResponseEntity.ok(aiGenerationService.generateWordDetails(request));
     }
+
 }

@@ -68,6 +68,7 @@ public class AiPromptService {
 
     public List<AiChatMessageRequest> buildWordDetailsV2Messages(GenerateWordDetailsRequest request) {
         String word = request.getWord().trim();
+        String learningMaterial = request.getLearningMaterial() == null ? "" : request.getLearningMaterial();
         String systemPrompt = """
                 你是一名严谨的英语词汇结构化数据助手。
                 你要为英语学习系统生成符合指定 JSON Schema 的词条数据。
@@ -112,8 +113,18 @@ public class AiPromptService {
                       "antonyms": []
                     }
                   ],
-                  "difficulty": 2
+                  "difficulty": 2,
+                  "learningDetail": {
+                    "memoryHint": "不超过80字的记忆提示",
+                    "samePatternWords": [{"word": "同构词", "translation": "中文释义", "rootBreakdown": "字根拆解"}],
+                    "examPhrases": [],
+                    "wordFamily": [{"word": "派生词", "pos": "adj.", "translation": "中文释义"}],
+                    "confusableWords": [{"word": "易混词", "distinction": "关键区别"}]
+                  }
                 }
+                教材学习材料开始（可能为空，必须原样写入 learningDetail.learningMaterial）：
+                %s
+                教材学习材料结束
                 要求：
                 1. word 使用规范拼写。
                 2. 至少返回一个词性对象和一个 definitions 对象。
@@ -122,11 +133,29 @@ public class AiPromptService {
                 5. exampleSentences 尽量给一个常见、自然的例句。
                 6. difficulty 取 1-5 的整数，默认按常见学习难度估计。
                 7. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
-                """.formatted(word, word);
+                8. 教材材料中明确列出的同构词必须完整返回；可在其后追加最多4个高置信度同构词。没有可靠同构词时返回空数组。
+                9. learningMaterial 由后端保护和保存，响应中不要返回该字段；其余五个 learningDetail 字段必须完整返回，不确定时使用空字符串或空数组。
+        """.formatted(word, word, learningMaterial);
 
         return List.of(
                 new AiChatMessageRequest("system", systemPrompt),
                 new AiChatMessageRequest("user", userPrompt)
         );
+    }
+
+    public List<AiChatMessageRequest> buildWordDetailsV2RepairMessages(
+            GenerateWordDetailsRequest request,
+            String invalidResponse,
+            String validationErrors) {
+        List<AiChatMessageRequest> messages = new java.util.ArrayList<>(buildWordDetailsV2Messages(request));
+        messages.add(new AiChatMessageRequest("assistant", invalidResponse == null ? "" : invalidResponse));
+        messages.add(new AiChatMessageRequest(
+                "user",
+                """
+                        上一次响应未通过校验：%s
+                        请修复全部错误，并重新返回完整 JSON 对象。只返回 JSON，不要解释。
+                        """.formatted(validationErrors)
+        ));
+        return List.copyOf(messages);
     }
 }

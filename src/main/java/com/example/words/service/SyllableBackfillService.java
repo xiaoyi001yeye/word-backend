@@ -39,7 +39,7 @@ public class SyllableBackfillService {
         for (MetaWord candidate : candidates) {
             try {
                 AiGenerationService.GeneratedWordEntryV2 generated = aiGenerationService.generateWordEntryV2(
-                        new GenerateWordDetailsRequest(null, candidate.getWord())
+                        new GenerateWordDetailsRequest(null, candidate.getWord(), null)
                 );
                 MetaWordEntryDtoV2 entry = generated.entry();
                 SyllableDetail detail = validateAndMap(candidate.getWord(), entry.getSyllableDetail());

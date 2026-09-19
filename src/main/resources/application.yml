@@ -71,6 +71,10 @@ ai:
     connect-timeout-ms: 3000
     read-timeout-ms: 30000
 
+word:
+  learning-material:
+    markdown-directory: ${WORD_LEARNING_MATERIAL_MARKDOWN_DIRECTORY:generated/gaokao-3500-words-markdown}
+
 video:
   storage:
     config:

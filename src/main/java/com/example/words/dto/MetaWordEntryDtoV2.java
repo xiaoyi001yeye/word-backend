@@ -25,6 +25,8 @@ public class MetaWordEntryDtoV2 {
     private SyllableDetailDto syllableDetail;
     
     private List<PartOfSpeechDto> partOfSpeech;
+
+    private LearningDetailDto learningDetail;
     
     @Min(value = 1, message = "难度最小值为1")
     @Max(value = 5, message = "难度最大值为5")

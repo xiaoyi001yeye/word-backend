@@ -251,11 +251,38 @@ export interface MetaWordDetail {
     definition?: string | null;
     partOfSpeech?: string | null;
     partOfSpeechDetail?: MetaWordPartOfSpeechDetail[] | null;
+    learningDetail?: MetaWordLearningDetail | null;
     exampleSentence?: string | null;
     translation?: string | null;
     difficulty?: number | null;
     createdAt?: string | null;
     updatedAt?: string | null;
+}
+
+export interface MetaWordSamePatternWord {
+    word?: string | null;
+    translation?: string | null;
+    rootBreakdown?: string | null;
+}
+
+export interface MetaWordFamilyItem {
+    word?: string | null;
+    pos?: string | null;
+    translation?: string | null;
+}
+
+export interface MetaWordConfusableWord {
+    word?: string | null;
+    distinction?: string | null;
+}
+
+export interface MetaWordLearningDetail {
+    learningMaterial?: string | null;
+    memoryHint?: string | null;
+    samePatternWords?: MetaWordSamePatternWord[] | null;
+    examPhrases?: string[] | null;
+    wordFamily?: MetaWordFamilyItem[] | null;
+    confusableWords?: MetaWordConfusableWord[] | null;
 }
 
 export interface MetaWordPhoneticDetail {
