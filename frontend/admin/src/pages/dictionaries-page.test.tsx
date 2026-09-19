@@ -123,6 +123,12 @@ describe("DictionariesPage", () => {
             created: 0,
             added: 0,
             failed: 0,
+            learningMaterialStatus: "SOURCE_CHANGED",
+            learningMaterialSourcePath: "apple.md",
+            learningMaterialWarnings: [{
+                code: "SOURCE_CHANGED",
+                message: "Stored learning material differs from the current source",
+            }],
         });
         vi.mocked(api.addDictionaryWordList).mockResolvedValue({
             total: 0,
@@ -256,6 +262,7 @@ describe("DictionariesPage", () => {
             word: "apple",
         });
         expect(await screen.findByText("单词AI已更新元单词数据：apple")).toBeInTheDocument();
+        expect(await screen.findByText(/教材状态：教材来源与已保存材料不一致/)).toBeInTheDocument();
         expect(api.getMetaWord).toHaveBeenCalledTimes(2);
     });
 

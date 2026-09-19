@@ -89,7 +89,7 @@ class DictionaryWordServiceTransactionIntegrationTest {
                 "test-provider",
                 "test-model",
                 generatedEntry(),
-                "new material"
+                foundMaterial("new source Markdown", "new material")
         ));
 
         MetaWord reloaded = metaWordRepository.findById(metaWordId).orElseThrow();
@@ -110,5 +110,10 @@ class DictionaryWordServiceTransactionIntegrationTest {
                 List.of()
         ));
         return entry;
+    }
+
+    private LearningMaterialParseResult foundMaterial(String sourceMarkdown, String learningMaterial) {
+        return new LearningMaterialParseResult(
+                LearningMaterialStatus.FOUND, sourceMarkdown, learningMaterial, "ability.md", 1, 1, List.of());
     }
 }

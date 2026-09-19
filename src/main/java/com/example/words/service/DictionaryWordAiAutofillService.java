@@ -70,11 +70,11 @@ public class DictionaryWordAiAutofillService {
             Long dictionaryId,
             GenerateDictionaryWordWithAiRequest request) {
         String requestedWord = request.getWord().trim();
-        String learningMaterial = wordMarkdownMaterialService.findMaterial(requestedWord).orElse(null);
+        LearningMaterialParseResult materialResult = wordMarkdownMaterialService.loadMaterial(requestedWord);
         GenerateWordDetailsRequest generationRequest = new GenerateWordDetailsRequest(
                 request.getConfigId(),
                 requestedWord,
-                learningMaterial
+                materialResult.getSourceMarkdown()
         );
         AiConfig config = aiConfigService.resolveActiveConfig(request.getConfigId());
 
@@ -121,7 +121,7 @@ public class DictionaryWordAiAutofillService {
                 config.getProviderName(),
                 config.getModelName(),
                 entry,
-                learningMaterial
+                materialResult
         );
     }
 
