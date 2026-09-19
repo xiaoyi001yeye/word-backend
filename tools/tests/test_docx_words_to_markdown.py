@@ -100,6 +100,7 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
                     "1. 高考英语核心词汇",
                     "2. ability 能力",
                     "3. weak xyz 可疑词性",
+                    "4. iden tity n .身份",
                 ]
             }
         )
@@ -119,6 +120,12 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
                     "source": "lesson-ambiguous.docx",
                     "position": 3,
                     "text": "3. weak xyz 可疑词性",
+                },
+                {
+                    "code": "ambiguous_heading",
+                    "source": "lesson-ambiguous.docx",
+                    "position": 4,
+                    "text": "4. iden tity n .身份",
                 },
             ],
             report["warnings"],
@@ -195,6 +202,8 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
         self.assertEqual(len(canonical_words), len(set(canonical_words)))
         self.assertFalse(report["sourceDocumentsAvailableInRepository"])
         self.assertEqual(15, len(report["repairs"]))
+        self.assertEqual(33, len(report["warnings"]))
+        self.assertIn("iden tity", {warning["canonicalWord"] for warning in report["warnings"]})
         for repair in report["repairs"]:
             self.assertFalse((material_directory / repair["from"]).exists())
             repaired_file = material_directory / repair["to"]
@@ -203,6 +212,14 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
                 f"word: {repair['canonicalWord']}\n",
                 repaired_file.read_text(encoding="utf-8"),
             )
+        for warning in report["warnings"]:
+            self.assertEqual("ambiguous_heading", warning["code"])
+            self.assertTrue(warning["source"])
+            evidence_lines = (material_directory / warning["materialFile"]).read_text(
+                encoding="utf-8"
+            ).splitlines()
+            evidence = evidence_lines[warning["materialLine"] - 1]
+            self.assertTrue(evidence.lstrip().startswith(f"{warning['position']}."))
 
 
 if __name__ == "__main__":

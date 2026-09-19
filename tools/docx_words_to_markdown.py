@@ -111,7 +111,12 @@ def parse_heading(text: str) -> Heading | None:
         return None
     tokens = word.split()
     if len(tokens) > 1 and tokens[-1].lower() in KNOWN_PARTS_OF_SPEECH:
-        return Heading(word=" ".join(tokens[:-1]), part_of_speech=tokens[-1].lower())
+        canonical_tokens = tokens[:-1]
+        return Heading(
+            word=" ".join(canonical_tokens),
+            part_of_speech=tokens[-1].lower(),
+            ambiguous=len(canonical_tokens) > 1,
+        )
     return Heading(word=word, ambiguous=len(tokens) > 1)
 
 

@@ -21,6 +21,274 @@
     {"from": "world-n.md", "to": "world.md", "canonicalWord": "world", "partsOfSpeech": ["n"]},
     {"from": "would-modal.md", "to": "would.md", "canonicalWord": "would", "partsOfSpeech": ["modal"]}
   ],
+  "warningPositionType": "source-entry-number",
+  "warningEvidence": "Original heading text is preserved at materialFile:materialLine.",
+  "warnings": [
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第01讲(单词速记与拓展).docx",
+      "position": 4,
+      "canonicalWord": "be able to",
+      "materialFile": "be-able-to.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第25讲（单词速记与拓展）.docx",
+      "position": 37,
+      "canonicalWord": "human being",
+      "materialFile": "human-being.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第25讲（单词速记与拓展）.docx",
+      "position": 53,
+      "canonicalWord": "iden tity",
+      "materialFile": "iden-tity.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第26讲（单词速记与拓展）.docx",
+      "position": 60,
+      "canonicalWord": "in vention",
+      "materialFile": "in-vention.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第28讲（单词速记与拓展）.docx",
+      "position": 38,
+      "canonicalWord": "lette r",
+      "materialFile": "lette-r.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第29讲（单词速记与拓展）.docx",
+      "position": 5,
+      "canonicalWord": "li ttle",
+      "materialFile": "li-ttle.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第30讲（单词速记与拓展）.docx",
+      "position": 58,
+      "canonicalWord": "minib us",
+      "materialFile": "minib-us.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第31讲（单词速记与拓展）.docx",
+      "position": 3,
+      "canonicalWord": "mirr or",
+      "materialFile": "mirr-or.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第31讲（单词速记与拓展）.docx",
+      "position": 39,
+      "canonicalWord": "mo tto",
+      "materialFile": "mo-tto.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第31讲（单词速记与拓展）.docx",
+      "position": 35,
+      "canonicalWord": "mothe rland",
+      "materialFile": "mothe-rland.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第33讲（单词速记与拓展）.docx",
+      "position": 37,
+      "canonicalWord": "oper ate",
+      "materialFile": "oper-ate.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第34讲（单词速记与拓展）.docx",
+      "position": 8,
+      "canonicalWord": "out spoken",
+      "materialFile": "out-spoken.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第34讲（单词速记与拓展）.docx",
+      "position": 7,
+      "canonicalWord": "outsid e",
+      "materialFile": "outsid-e.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第37讲（单词速记与拓展）.docx",
+      "position": 45,
+      "canonicalWord": "prep aration",
+      "materialFile": "prep-aration.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第37讲（单词速记与拓展）.docx",
+      "position": 54,
+      "canonicalWord": "pres sure",
+      "materialFile": "pres-sure.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第38讲（单词速记与拓展）.docx",
+      "position": 27,
+      "canonicalWord": "pronunci ation",
+      "materialFile": "pronunci-ation.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第40讲（单词速记与拓展）.docx",
+      "position": 32,
+      "canonicalWord": "religiou s",
+      "materialFile": "religiou-s.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第44讲（单词速记与拓展）.docx",
+      "position": 17,
+      "canonicalWord": "signif icance",
+      "materialFile": "signif-icance.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第44讲（单词速记与拓展）.docx",
+      "position": 47,
+      "canonicalWord": "slaver y",
+      "materialFile": "slaver-y.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第45讲（单词速记与拓展）.docx",
+      "position": 53,
+      "canonicalWord": "spel l",
+      "materialFile": "spel-l.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第46讲（单词速记与拓展）.docx",
+      "position": 28,
+      "canonicalWord": "stateme nt",
+      "materialFile": "stateme-nt.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第47讲（单词速记与拓展）.docx",
+      "position": 33,
+      "canonicalWord": "su ggest",
+      "materialFile": "su-ggest.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第47讲（单词速记与拓展）.docx",
+      "position": 30,
+      "canonicalWord": "suf fer",
+      "materialFile": "suf-fer.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第48讲（单词速记与拓展）.docx",
+      "position": 26,
+      "canonicalWord": "table tennis",
+      "materialFile": "table-tennis.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第48讲（单词速记与拓展）.docx",
+      "position": 48,
+      "canonicalWord": "te acher",
+      "materialFile": "te-acher.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第49讲（单词速记与拓展）.docx",
+      "position": 52,
+      "canonicalWord": "thr iller",
+      "materialFile": "thr-iller.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第50讲（单词速记与拓展）.docx",
+      "position": 18,
+      "canonicalWord": "tob acco",
+      "materialFile": "tob-acco.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第51讲（单词速记与拓展）.docx",
+      "position": 48,
+      "canonicalWord": "uncerta in",
+      "materialFile": "uncerta-in.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第52讲（单词速记与拓展）.docx",
+      "position": 41,
+      "canonicalWord": "variet y",
+      "materialFile": "variet-y.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第52讲（单词速记与拓展）.docx",
+      "position": 60,
+      "canonicalWord": "vinega r",
+      "materialFile": "vinega-r.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第53讲（单词速记与拓展）.docx",
+      "position": 56,
+      "canonicalWord": "weddin g",
+      "materialFile": "weddin-g.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第53讲（单词速记与拓展）.docx",
+      "position": 61,
+      "canonicalWord": "week ly",
+      "materialFile": "week-ly.md",
+      "materialLine": 17
+    },
+    {
+      "code": "ambiguous_heading",
+      "source": "高考英语3500单词第55讲（单词速记与拓展）.docx",
+      "position": 33,
+      "canonicalWord": "yogu rt",
+      "materialFile": "yogu-rt.md",
+      "materialLine": 17
+    }
+  ],
   "verification": {
     "legacyPartOfSpeechFileCount": 0,
     "duplicateCanonicalWordCount": 0,
