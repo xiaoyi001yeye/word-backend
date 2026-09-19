@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -64,6 +65,14 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST_BODY"));
     }
 
+    @Test
+    void optimisticLockingFailureShouldReturnConflict() throws Exception {
+        mockMvc.perform(get("/test/optimistic-lock"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"));
+    }
+
     @RestController
     static class ThrowingController {
 
@@ -87,6 +96,11 @@ class GlobalExceptionHandlerTest {
 
         @PostMapping("/test/body")
         void body(@RequestBody StatusBody body) {
+        }
+
+        @GetMapping("/test/optimistic-lock")
+        void optimisticLock() {
+            throw new ObjectOptimisticLockingFailureException(StatusBody.class, 7L);
         }
     }
 

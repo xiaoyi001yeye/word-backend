@@ -70,6 +70,11 @@ public class DictionaryWordAiAutofillService {
             Long dictionaryId,
             GenerateDictionaryWordWithAiRequest request) {
         String requestedWord = request.getWord().trim();
+        Long observedMetaWordVersion = dictionaryWordService.observeMetaWordVersion(
+                request.getMetaWordId(),
+                requestedWord,
+                request.getExpectedMetaWordVersion()
+        );
         String learningMaterial = wordMarkdownMaterialService.findMaterial(requestedWord).orElse(null);
         GenerateWordDetailsRequest generationRequest = new GenerateWordDetailsRequest(
                 request.getConfigId(),
@@ -121,7 +126,8 @@ public class DictionaryWordAiAutofillService {
                 config.getProviderName(),
                 config.getModelName(),
                 entry,
-                learningMaterial
+                learningMaterial,
+                observedMetaWordVersion
         );
     }
 

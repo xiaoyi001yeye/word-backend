@@ -15,6 +15,11 @@ public class GenerateDictionaryWordWithAiRequest {
 
     private Long metaWordId;
 
+    /**
+     * Version observed by the caller before starting the remote AI generation.
+     */
+    private Long expectedMetaWordVersion;
+
     @NotBlank(message = "word is required")
     @Size(max = 100, message = "word must not exceed 100 characters")
     private String word;

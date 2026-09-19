@@ -626,6 +626,7 @@ public class MetaWordService {
 
         return new MetaWordDetailResponse(
                 metaWord.getId(),
+                metaWord.getVersion(),
                 metaWord.getWord(),
                 metaWord.getPhonetic(),
                 metaWord.getDefinition(),

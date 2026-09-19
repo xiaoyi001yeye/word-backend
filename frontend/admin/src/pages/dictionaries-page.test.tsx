@@ -253,6 +253,7 @@ describe("DictionariesPage", () => {
 
         expect(api.generateDictionaryWordWithAi).toHaveBeenCalledWith(7, {
             metaWordId: 21,
+            expectedMetaWordVersion: undefined,
             word: "apple",
         });
         expect(await screen.findByText("单词AI已更新元单词数据：apple")).toBeInTheDocument();

@@ -243,6 +243,7 @@ export interface DictionaryWordEntryResponse {
 
 export interface MetaWordDetail {
     id: number;
+    version?: number | null;
     word: string;
     normalizedWord?: string | null;
     phonetic?: string | null;
@@ -703,6 +704,7 @@ export interface GenerateWordDetailsResponse {
 export interface GenerateDictionaryWordWithAiPayload {
     configId?: number;
     metaWordId?: number;
+    expectedMetaWordVersion?: number;
     word: string;
 }
 

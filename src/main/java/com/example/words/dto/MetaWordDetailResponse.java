@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class MetaWordDetailResponse {
 
     private Long id;
+    private Long version;
     private String word;
     private String phonetic;
     private String definition;

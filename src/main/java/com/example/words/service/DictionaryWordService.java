@@ -17,6 +17,7 @@ import com.example.words.dto.MetaWordSuggestionDto;
 import com.example.words.dto.PartOfSpeechDto;
 import com.example.words.dto.PhoneticDto;
 import com.example.words.exception.BadRequestException;
+import com.example.words.exception.ConflictException;
 import com.example.words.model.Definition;
 import com.example.words.model.DictionaryWord;
 import com.example.words.model.ExampleSentence;
@@ -322,6 +323,47 @@ public class DictionaryWordService {
             String modelName,
             MetaWordEntryDtoV2 entry,
             String sourceLearningMaterial) {
+        return saveGeneratedWordV2(
+                dictionaryId,
+                preferredMetaWordId,
+                configId,
+                providerName,
+                modelName,
+                entry,
+                sourceLearningMaterial,
+                null
+        );
+    }
+
+    /**
+     * Captures the version that guards an AI generation before the remote request begins.
+     */
+    @Transactional(readOnly = true)
+    public Long observeMetaWordVersion(Long preferredMetaWordId, String word, Long expectedMetaWordVersion) {
+        if (preferredMetaWordId == null) {
+            return null;
+        }
+
+        MetaWord metaWord = resolveMetaWordForV2Entry(preferredMetaWordId, word).orElse(null);
+        if (metaWord == null) {
+            return null;
+        }
+        if (expectedMetaWordVersion != null && !Objects.equals(expectedMetaWordVersion, metaWord.getVersion())) {
+            throw new ConflictException("The word entry changed before AI generation began; refresh and try again");
+        }
+        return metaWord.getVersion();
+    }
+
+    @Transactional
+    public GenerateDictionaryWordWithAiResponse saveGeneratedWordV2(
+            Long dictionaryId,
+            Long preferredMetaWordId,
+            Long configId,
+            String providerName,
+            String modelName,
+            MetaWordEntryDtoV2 entry,
+            String sourceLearningMaterial,
+            Long expectedMetaWordVersion) {
         if (entry == null || entry.getWord() == null || entry.getWord().trim().isEmpty()) {
             throw new IllegalArgumentException("Generated word entry must not be empty");
         }
@@ -341,11 +383,18 @@ public class DictionaryWordService {
             created++;
         } else {
             existed++;
+            if (expectedMetaWordVersion != null
+                    && !Objects.equals(expectedMetaWordVersion, metaWord.getVersion())) {
+                throw new ConflictException(
+                        "The word entry changed while AI generation was running; refresh and try again"
+                );
+            }
         }
 
         fillMissingAuthoritativeFields(metaWord, entry);
         updateLearningDetail(metaWord, entry.getLearningDetail(), sourceLearningMaterial);
         MetaWord savedMetaWord = metaWordRepository.save(metaWord);
+        metaWordRepository.flush();
 
         if (!dictionaryWordRepository.existsByDictionaryIdAndMetaWordId(dictionaryId, savedMetaWord.getId())) {
             saveIfNotExists(dictionaryId, savedMetaWord.getId());

@@ -61,16 +61,17 @@ class DictionaryWordAiAutofillServiceTest {
     @Test
     void autofillShouldGenerateValidateAndSaveThroughOneCommand() {
         AiConfig config = config();
-        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, "ability");
+        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, 4L, "ability");
         List<AiChatMessageRequest> messages = List.of(new AiChatMessageRequest("user", "generate ability"));
         GenerateDictionaryWordWithAiResponse saved = savedResponse("ability");
 
         when(wordMarkdownMaterialService.findMaterial("ability")).thenReturn(Optional.of("教材材料"));
+        when(dictionaryWordService.observeMetaWordVersion(9L, "ability", 4L)).thenReturn(4L);
         when(aiConfigService.resolveActiveConfig(null)).thenReturn(config);
         when(aiPromptService.buildWordDetailsV2Messages(any(GenerateWordDetailsRequest.class))).thenReturn(messages);
         when(aiGatewayService.generateText(config, messages)).thenReturn(validEntryJson("ability"));
         when(dictionaryWordService.saveGeneratedWordV2(
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(saved);
 
         GenerateDictionaryWordWithAiResponse response = service.autofill(7L, request);
@@ -90,7 +91,8 @@ class DictionaryWordAiAutofillServiceTest {
                 org.mockito.ArgumentMatchers.eq("OpenAI"),
                 org.mockito.ArgumentMatchers.eq("gpt-test"),
                 generatedEntry.capture(),
-                org.mockito.ArgumentMatchers.eq("教材材料")
+                org.mockito.ArgumentMatchers.eq("教材材料"),
+                org.mockito.ArgumentMatchers.eq(4L)
         );
         assertEquals("ability", generatedEntry.getValue().getWord());
     }
@@ -98,7 +100,7 @@ class DictionaryWordAiAutofillServiceTest {
     @Test
     void autofillShouldRetryOnceWithValidationErrorsThenSave() {
         AiConfig config = config();
-        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, "ability");
+        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, 4L, "ability");
         List<AiChatMessageRequest> initialMessages = List.of(new AiChatMessageRequest("user", "generate ability"));
         List<AiChatMessageRequest> repairMessages = List.of(new AiChatMessageRequest("user", "repair ability"));
 
@@ -112,7 +114,7 @@ class DictionaryWordAiAutofillServiceTest {
         when(aiGatewayService.generateText(config, initialMessages)).thenReturn("{\"word\":\"wrong\"}");
         when(aiGatewayService.generateText(config, repairMessages)).thenReturn(validEntryJson("ability"));
         when(dictionaryWordService.saveGeneratedWordV2(
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(savedResponse("ability"));
 
         service.autofill(7L, request);
@@ -125,14 +127,14 @@ class DictionaryWordAiAutofillServiceTest {
         );
         assertTrue(validationErrors.getValue().contains("word"));
         verify(dictionaryWordService).saveGeneratedWordV2(
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any()
         );
     }
 
     @Test
     void autofillShouldRejectSamePatternWordLongerThanEightyCharacters() {
         AiConfig config = config();
-        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, "ability");
+        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, 4L, "ability");
         List<AiChatMessageRequest> initialMessages = List.of(new AiChatMessageRequest("user", "generate ability"));
         List<AiChatMessageRequest> repairMessages = List.of(new AiChatMessageRequest("user", "repair ability"));
         String invalidEntry = validEntryJson("ability").replace(
@@ -151,7 +153,7 @@ class DictionaryWordAiAutofillServiceTest {
         when(aiGatewayService.generateText(config, initialMessages)).thenReturn(invalidEntry);
         when(aiGatewayService.generateText(config, repairMessages)).thenReturn(validEntryJson("ability"));
         when(dictionaryWordService.saveGeneratedWordV2(
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(savedResponse("ability"));
 
         service.autofill(7L, request);
@@ -169,7 +171,7 @@ class DictionaryWordAiAutofillServiceTest {
     @Test
     void autofillShouldRejectSecondInvalidResultWithoutSaving() {
         AiConfig config = config();
-        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, "ability");
+        GenerateDictionaryWordWithAiRequest request = new GenerateDictionaryWordWithAiRequest(null, 9L, 4L, "ability");
         List<AiChatMessageRequest> initialMessages = List.of(new AiChatMessageRequest("user", "generate ability"));
         List<AiChatMessageRequest> repairMessages = List.of(new AiChatMessageRequest("user", "repair ability"));
 
@@ -190,7 +192,7 @@ class DictionaryWordAiAutofillServiceTest {
 
         assertTrue(exception.getMessage().contains("after one repair attempt"));
         verify(dictionaryWordService, never()).saveGeneratedWordV2(
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any()
         );
     }
 

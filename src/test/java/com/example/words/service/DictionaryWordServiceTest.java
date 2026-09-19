@@ -19,6 +19,7 @@ import com.example.words.dto.ConfusableWordDto;
 import com.example.words.dto.SyllableDetailDto;
 import com.example.words.dto.SyllableSegmentDto;
 import com.example.words.exception.BadRequestException;
+import com.example.words.exception.ConflictException;
 import com.example.words.model.MetaWord;
 import com.example.words.model.LearningDetail;
 import com.example.words.model.SamePatternWord;
@@ -307,6 +308,35 @@ class DictionaryWordServiceTest {
         );
 
         assertEquals("metaWordId does not match the requested word", exception.getMessage());
+        org.mockito.Mockito.verify(metaWordRepository, org.mockito.Mockito.never()).save(any(MetaWord.class));
+        verifyNoInteractions(dictionaryWordRepository);
+    }
+
+    @Test
+    void saveGeneratedWordV2ShouldRejectAStaleGenerationWithoutWriting() {
+        MetaWord existingMetaWord = new MetaWord();
+        existingMetaWord.setId(106L);
+        existingMetaWord.setVersion(3L);
+        existingMetaWord.setWord("ability");
+
+        when(metaWordRepository.findById(106L)).thenReturn(Optional.of(existingMetaWord));
+
+        ConflictException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                ConflictException.class,
+                () -> dictionaryWordService.saveGeneratedWordV2(
+                        10L,
+                        106L,
+                        1L,
+                        "OpenAI",
+                        "test-model",
+                        generatedEntry("ability"),
+                        "教材材料",
+                        2L
+                )
+        );
+
+        assertEquals("The word entry changed while AI generation was running; refresh and try again",
+                exception.getMessage());
         org.mockito.Mockito.verify(metaWordRepository, org.mockito.Mockito.never()).save(any(MetaWord.class));
         verifyNoInteractions(dictionaryWordRepository);
     }

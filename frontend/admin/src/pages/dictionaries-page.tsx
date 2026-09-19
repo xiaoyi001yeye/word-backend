@@ -21,7 +21,7 @@ import { MetaWordDetailModal } from "@/components/dictionaries/meta-word-detail-
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/features/auth/auth-context";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { compactFileSize, formatDateTime } from "@/lib/format";
 import type {
     Dictionary,
@@ -405,8 +405,12 @@ export function DictionariesPage() {
         setFeedbackIsError(false);
 
         try {
+            const observedMetaWord = selectedMetaWordEntry()?.entryId === entry.entryId
+                ? selectedMetaWord()
+                : await api.getMetaWord(entry.metaWordId);
             const response = await api.generateDictionaryWordWithAi(selectedDictionaryId()!, {
                 metaWordId: entry.metaWordId,
+                expectedMetaWordVersion: observedMetaWord?.version ?? undefined,
                 word: entry.word,
             });
             await Promise.all([refetch(), refetchEntries()]);
@@ -431,6 +435,19 @@ export function DictionariesPage() {
                     : `单词AI已更新元单词数据：${response.word}`,
             );
         } catch (error) {
+            if (error instanceof ApiError && error.status === 409 && refreshDetail) {
+                setMetaWordDetailLoading(true);
+                try {
+                    setSelectedMetaWord(await api.getMetaWord(entry.metaWordId));
+                    setMetaWordDetailError("生成期间词条已经变化，已刷新为当前数据；请确认后重新操作。");
+                } catch (detailError) {
+                    setMetaWordDetailError(
+                        detailError instanceof Error ? detailError.message : "冲突后详情刷新失败",
+                    );
+                } finally {
+                    setMetaWordDetailLoading(false);
+                }
+            }
             setFeedbackIsError(true);
             setFeedback(error instanceof Error ? error.message : "单词AI处理失败");
         } finally {
