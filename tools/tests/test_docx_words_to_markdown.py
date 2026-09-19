@@ -99,7 +99,7 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
                 "lesson-ambiguous.docx": [
                     "1. 高考英语核心词汇",
                     "2. ability 能力",
-                    "3. weak xyz .可疑词性",
+                    "3. weak xyz 可疑词性",
                 ]
             }
         )
@@ -118,7 +118,7 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
                     "code": "ambiguous_heading",
                     "source": "lesson-ambiguous.docx",
                     "position": 3,
-                    "text": "3. weak xyz .可疑词性",
+                    "text": "3. weak xyz 可疑词性",
                 },
             ],
             report["warnings"],
@@ -178,6 +178,31 @@ class DocxWordsToMarkdownTest(unittest.TestCase):
             1,
             (output / "weak.md").read_text(encoding="utf-8").count("original explanation"),
         )
+
+    def test_committed_repair_report_matches_generated_corpus(self) -> None:
+        material_directory = REPOSITORY_ROOT / "generated" / "gaokao-3500-words-markdown"
+        report = json.loads((material_directory / "repair-report.json").read_text(encoding="utf-8"))
+
+        word_files = [path for path in material_directory.glob("*.md") if path.name != "README.md"]
+        canonical_words = []
+        for path in word_files:
+            word_line = next(
+                line for line in path.read_text(encoding="utf-8").splitlines()[:20] if line.startswith("word:")
+            )
+            canonical_words.append(word_line.removeprefix("word:").strip().lower())
+
+        self.assertEqual(3296, len(word_files))
+        self.assertEqual(len(canonical_words), len(set(canonical_words)))
+        self.assertFalse(report["sourceDocumentsAvailableInRepository"])
+        self.assertEqual(15, len(report["repairs"]))
+        for repair in report["repairs"]:
+            self.assertFalse((material_directory / repair["from"]).exists())
+            repaired_file = material_directory / repair["to"]
+            self.assertTrue(repaired_file.is_file())
+            self.assertIn(
+                f"word: {repair['canonicalWord']}\n",
+                repaired_file.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

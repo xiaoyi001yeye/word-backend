@@ -1,0 +1,33 @@
+{
+  "reportType": "legacy-markdown-repair",
+  "baseCommit": "453445d940a33f39a937c7194d529564bb7ce024",
+  "sourceDocumentsExpected": 55,
+  "sourceDocumentsAvailableInRepository": false,
+  "generatedEntries": 3296,
+  "repairs": [
+    {"from": "are-v.md", "to": "are.md", "canonicalWord": "are", "partsOfSpeech": ["v"]},
+    {"from": "cage-n.md", "to": "cage.md", "canonicalWord": "cage", "partsOfSpeech": ["n"]},
+    {"from": "clone-vi.md", "to": "clone.md", "canonicalWord": "clone", "partsOfSpeech": ["vi"]},
+    {"from": "else-adv.md", "to": "else.md", "canonicalWord": "else", "partsOfSpeech": ["adv"]},
+    {"from": "insure-v.md", "to": "insure.md", "canonicalWord": "insure", "partsOfSpeech": ["v"]},
+    {"from": "must-modal.md", "to": "must.md", "canonicalWord": "must", "partsOfSpeech": ["modal"]},
+    {"from": "nephew-n.md", "to": "nephew.md", "canonicalWord": "nephew", "partsOfSpeech": ["n"]},
+    {"from": "ought-modal.md", "to": "ought.md", "canonicalWord": "ought", "partsOfSpeech": ["modal"]},
+    {"from": "spit-v.md", "to": "spit.md", "canonicalWord": "spit", "partsOfSpeech": ["v"]},
+    {"from": "volunteer-n.md", "to": "volunteer.md", "canonicalWord": "volunteer", "partsOfSpeech": ["n"]},
+    {"from": "waist-n.md", "to": "waist.md", "canonicalWord": "waist", "partsOfSpeech": ["n"]},
+    {"from": "weak-adj.md", "to": "weak.md", "canonicalWord": "weak", "partsOfSpeech": ["adj"]},
+    {"from": "within-pre.md", "to": "within.md", "canonicalWord": "within", "partsOfSpeech": ["pre"]},
+    {"from": "world-n.md", "to": "world.md", "canonicalWord": "world", "partsOfSpeech": ["n"]},
+    {"from": "would-modal.md", "to": "would.md", "canonicalWord": "would", "partsOfSpeech": ["modal"]}
+  ],
+  "verification": {
+    "legacyPartOfSpeechFileCount": 0,
+    "duplicateCanonicalWordCount": 0,
+    "sourceBodyMismatchCount": 0
+  },
+  "limitations": [
+    "Source DOCX files are absent; this report audits committed Markdown repairs, not a full DOCX reconversion.",
+    "Future DOCX conversions create conversion-report.json with source positions and warnings."
+  ]
+}

@@ -15,7 +15,7 @@ import shutil
 import sys
 import zipfile
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 from xml.etree import ElementTree as ET
@@ -44,6 +44,14 @@ class Heading:
     word: str
     part_of_speech: str | None = None
     ambiguous: bool = False
+
+
+@dataclass(frozen=True)
+class ConversionWarning:
+    code: str
+    source: str
+    position: int
+    text: str
 
 
 def normalize_word(word: str) -> str:
@@ -93,7 +101,7 @@ def read_docx_paragraphs(path: Path) -> list[str]:
     return list(iter_block_text(body))
 
 
-def heading_word(text: str) -> Heading | None:
+def parse_heading(text: str) -> Heading | None:
     match = WORD_HEADING.match(text)
     if not match:
         return None
@@ -104,11 +112,10 @@ def heading_word(text: str) -> Heading | None:
     tokens = word.split()
     if len(tokens) > 1 and tokens[-1].lower() in KNOWN_PARTS_OF_SPEECH:
         return Heading(word=" ".join(tokens[:-1]), part_of_speech=tokens[-1].lower())
-    ambiguous = len(tokens) > 1 and text[match.end(1) :].lstrip().startswith(".")
-    return Heading(word=word, ambiguous=ambiguous)
+    return Heading(word=word, ambiguous=len(tokens) > 1)
 
 
-def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list[dict[str, object]]) -> int:
+def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list[ConversionWarning]) -> int:
     current_word: str | None = None
     current_part_of_speech: str | None = None
     current_position: int | None = None
@@ -119,15 +126,16 @@ def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list
         nonlocal count
         if current_word is None:
             return
+        assert current_position is not None
         key = normalize_word(current_word)
         if key in entries:
             warnings.append(
-                {
-                    "code": "duplicate_heading",
-                    "source": path.name,
-                    "position": current_position,
-                    "text": current_lines[0],
-                }
+                ConversionWarning(
+                    code="duplicate_heading",
+                    source=path.name,
+                    position=current_position,
+                    text=current_lines[0],
+                )
             )
         entry = entries.setdefault(key, Entry(word=current_word))
         if current_part_of_speech is not None and current_part_of_speech not in entry.parts_of_speech:
@@ -136,16 +144,16 @@ def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list
         count += 1
 
     for position, text in enumerate(read_docx_paragraphs(path), start=1):
-        heading = heading_word(text)
+        heading = parse_heading(text)
         if heading is not None:
             if heading.ambiguous:
                 warnings.append(
-                    {
-                        "code": "ambiguous_heading",
-                        "source": path.name,
-                        "position": position,
-                        "text": text,
-                    }
+                    ConversionWarning(
+                        code="ambiguous_heading",
+                        source=path.name,
+                        position=position,
+                        text=text,
+                    )
                 )
             save_current()
             current_word = heading.word
@@ -154,12 +162,12 @@ def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list
             current_lines = [text]
         elif NUMBERED_TITLE.match(text):
             warnings.append(
-                {
-                    "code": "malformed_heading",
-                    "source": path.name,
-                    "position": position,
-                    "text": text,
-                }
+                ConversionWarning(
+                    code="malformed_heading",
+                    source=path.name,
+                    position=position,
+                    text=text,
+                )
             )
             if current_word is not None:
                 current_lines.append(text)
@@ -167,12 +175,12 @@ def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list
             current_lines.append(text)
         else:
             warnings.append(
-                {
-                    "code": "unassigned_content",
-                    "source": path.name,
-                    "position": position,
-                    "text": text,
-                }
+                ConversionWarning(
+                    code="unassigned_content",
+                    source=path.name,
+                    position=position,
+                    text=text,
+                )
             )
     save_current()
     return count
@@ -209,7 +217,7 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
 
     entries: OrderedDict[str, Entry] = OrderedDict()
-    warnings: list[dict[str, object]] = []
+    warnings: list[ConversionWarning] = []
     skipped: list[tuple[str, str]] = []
     files = sorted(path for path in args.source.glob("*.docx") if not path.name.startswith("~$"))
     for path in files:
@@ -237,7 +245,7 @@ def main() -> int:
     machine_report = {
         "sourceDocuments": len(files),
         "generatedEntries": len(entries),
-        "warnings": warnings,
+        "warnings": [asdict(warning) for warning in warnings],
         "skippedFiles": [{"source": name, "reason": reason} for name, reason in skipped],
     }
     (args.output / "conversion-report.json").write_text(
