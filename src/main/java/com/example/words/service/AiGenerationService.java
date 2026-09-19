@@ -136,7 +136,7 @@ public class AiGenerationService {
     }
 
     private ParsedWordDetails parseWordDetails(String rawContent, String requestedWord) {
-        String normalized = stripMarkdownCodeFence(rawContent);
+        String normalized = AiJsonResponseNormalizer.stripMarkdownCodeFence(rawContent);
         if (normalized.isBlank()) {
             throw new BadGatewayException("AI returned empty word details");
         }
@@ -161,7 +161,7 @@ public class AiGenerationService {
     }
 
     private MetaWordEntryDtoV2 parseWordEntryV2(String rawContent, String requestedWord) {
-        String normalized = stripMarkdownCodeFence(rawContent);
+        String normalized = AiJsonResponseNormalizer.stripMarkdownCodeFence(rawContent);
         if (normalized.isBlank()) {
             throw new BadGatewayException("AI returned empty word details");
         }
@@ -217,25 +217,6 @@ public class AiGenerationService {
             }
             partOfSpeech.setPos(normalized);
         }
-    }
-
-    private String stripMarkdownCodeFence(String rawContent) {
-        String normalized = rawContent == null ? "" : rawContent.trim();
-        if (!normalized.startsWith("```")) {
-            return normalized;
-        }
-
-        int firstNewLine = normalized.indexOf('\n');
-        if (firstNewLine < 0) {
-            return normalized;
-        }
-
-        String body = normalized.substring(firstNewLine + 1);
-        int fenceIndex = body.lastIndexOf("```");
-        if (fenceIndex >= 0) {
-            body = body.substring(0, fenceIndex);
-        }
-        return body.trim();
     }
 
     private String readText(JsonNode root, String... fieldNames) {

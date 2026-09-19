@@ -68,7 +68,7 @@ public class AiPromptService {
 
     public List<AiChatMessageRequest> buildWordDetailsV2Messages(GenerateWordDetailsRequest request) {
         String word = request.getWord().trim();
-        String learningMaterial = request.getLearningMaterial() == null ? "" : request.getLearningMaterial().trim();
+        String learningMaterial = request.getLearningMaterial() == null ? "" : request.getLearningMaterial();
         String systemPrompt = """
                 你是一名严谨的英语词汇结构化数据助手。
                 你要为英语学习系统生成符合指定 JSON Schema 的词条数据。
@@ -115,7 +115,6 @@ public class AiPromptService {
                   ],
                   "difficulty": 2,
                   "learningDetail": {
-                    "learningMaterial": "必须原样保留给定教材学习材料",
                     "memoryHint": "不超过80字的记忆提示",
                     "samePatternWords": [{"word": "同构词", "translation": "中文释义", "rootBreakdown": "字根拆解"}],
                     "examPhrases": [],
@@ -135,12 +134,28 @@ public class AiPromptService {
                 6. difficulty 取 1-5 的整数，默认按常见学习难度估计。
                 7. syllableDetail.segments 必须按顺序拼接后严格还原 word；无法确认时返回空数组。
                 8. 教材材料中明确列出的同构词必须完整返回；可在其后追加最多4个高置信度同构词。没有可靠同构词时返回空数组。
-                9. learningDetail.learningMaterial 必须与给定教材学习材料逐字一致；其余 learningDetail 字段用于学习补充，不确定时返回空字符串或空数组。
+                9. learningMaterial 由后端保护和保存，响应中不要返回该字段；其余五个 learningDetail 字段必须完整返回，不确定时使用空字符串或空数组。
         """.formatted(word, word, learningMaterial);
 
         return List.of(
                 new AiChatMessageRequest("system", systemPrompt),
                 new AiChatMessageRequest("user", userPrompt)
         );
+    }
+
+    public List<AiChatMessageRequest> buildWordDetailsV2RepairMessages(
+            GenerateWordDetailsRequest request,
+            String invalidResponse,
+            String validationErrors) {
+        List<AiChatMessageRequest> messages = new java.util.ArrayList<>(buildWordDetailsV2Messages(request));
+        messages.add(new AiChatMessageRequest("assistant", invalidResponse == null ? "" : invalidResponse));
+        messages.add(new AiChatMessageRequest(
+                "user",
+                """
+                        上一次响应未通过校验：%s
+                        请修复全部错误，并重新返回完整 JSON 对象。只返回 JSON，不要解释。
+                        """.formatted(validationErrors)
+        ));
+        return List.copyOf(messages);
     }
 }

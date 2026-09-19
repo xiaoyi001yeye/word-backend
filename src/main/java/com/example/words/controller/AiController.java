@@ -47,9 +47,4 @@ public class AiController {
         return ResponseEntity.ok(aiGenerationService.generateWordDetails(request));
     }
 
-    @PostMapping("/generate-word-details-v2")
-    public ResponseEntity<AiGenerationService.GeneratedWordEntryV2> generateWordDetailsV2(
-            @Valid @RequestBody GenerateWordDetailsRequest request) {
-        return ResponseEntity.ok(aiGenerationService.generateWordEntryV2(request));
-    }
 }

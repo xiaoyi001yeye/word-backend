@@ -55,6 +55,10 @@ public class MetaWord {
     @Column(name = "syllable_detail", columnDefinition = "jsonb")
     private SyllableDetail syllableDetail;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "learning_detail", columnDefinition = "jsonb")
+    private LearningDetail learningDetail;
+
     @Column(name = "definition", columnDefinition = "TEXT")
     private String definition;
 
