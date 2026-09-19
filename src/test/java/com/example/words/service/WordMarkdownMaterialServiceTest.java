@@ -50,10 +50,37 @@ class WordMarkdownMaterialServiceTest {
     }
 
     @Test
+    void findMaterialShouldUseNormalizedFrontMatterAsTheLookupContract() throws IOException {
+        String sourceMarkdown = """
+                ---
+                word: be able to
+                ---
+                # be able to
+
+                ## 内容
+
+                能够""";
+        Files.writeString(materialDirectory.resolve("source-entry-17.md"), sourceMarkdown);
+        WordMarkdownMaterialService service = new WordMarkdownMaterialService(materialDirectory.toString());
+
+        assertEquals(sourceMarkdown, service.findMaterial("  BE   ABLE TO  ").orElseThrow());
+    }
+
+    @Test
     void findMaterialShouldReturnEmptyWhenNoMatchingMarkdownExists() {
         WordMarkdownMaterialService service = new WordMarkdownMaterialService(materialDirectory.toString());
 
         assertFalse(service.findMaterial("not-in-material").isPresent());
         assertTrue(Files.isDirectory(materialDirectory));
+    }
+
+    @Test
+    void findMaterialShouldFindRepresentativeRegeneratedCorpusEntries() {
+        Path generatedMaterials = Path.of("generated", "gaokao-3500-words-markdown");
+        WordMarkdownMaterialService service = new WordMarkdownMaterialService(generatedMaterials.toString());
+
+        assertTrue(service.findMaterial("weak").orElseThrow().contains("50.  weak adj"));
+        assertTrue(service.findMaterial("world").orElseThrow().contains("9.\tworld n"));
+        assertTrue(service.findMaterial("are").orElseThrow().contains("40.  are v"));
     }
 }

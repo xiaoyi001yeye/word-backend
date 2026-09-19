@@ -1,10 +1,12 @@
 ---
-word: clone vi
+word: clone
 sources:
   - "高考英语3500单词第11讲(单词速记与拓展）.docx"
+parts_of_speech:
+  - vi
 ---
 
-# clone vi
+# clone
 
 ## 来源
 

@@ -1,10 +1,12 @@
 ---
-word: must modal
+word: must
 sources:
   - "高考英语3500单词第31讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - modal
 ---
 
-# must modal
+# must
 
 ## 来源
 

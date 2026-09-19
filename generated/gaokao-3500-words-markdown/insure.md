@@ -1,10 +1,12 @@
 ---
-word: insure v
+word: insure
 sources:
   - "高考英语3500单词第26讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - v
 ---
 
-# insure v
+# insure
 
 ## 来源
 

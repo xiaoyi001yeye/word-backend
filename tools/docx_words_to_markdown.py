@@ -9,6 +9,7 @@ next heading.  Repeated entries are merged and every source file is recorded.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import sys
@@ -23,6 +24,8 @@ from xml.etree import ElementTree as ET
 WORD_HEADING = re.compile(
     r"^\s*\d+\s*[.、．]\s*([A-Za-z][A-Za-z'’\- ]*[A-Za-z)|])(?=\s|$)"
 )
+NUMBERED_TITLE = re.compile(r"^\s*\d+\s*[.、．]")
+KNOWN_PARTS_OF_SPEECH = frozenset({"adj", "adv", "modal", "n", "pre", "v", "vi"})
 SPACE = re.compile(r"\s+")
 SAFE_FILE_NAME = re.compile(r"[^a-z0-9]+")
 WORD_DOCUMENT_XML = "word/document.xml"
@@ -32,7 +35,15 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 @dataclass
 class Entry:
     word: str
+    parts_of_speech: list[str] = field(default_factory=list)
     sections: list[tuple[str, list[str]]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Heading:
+    word: str
+    part_of_speech: str | None = None
+    ambiguous: bool = False
 
 
 def normalize_word(word: str) -> str:
@@ -82,17 +93,25 @@ def read_docx_paragraphs(path: Path) -> list[str]:
     return list(iter_block_text(body))
 
 
-def heading_word(text: str) -> str | None:
+def heading_word(text: str) -> Heading | None:
     match = WORD_HEADING.match(text)
     if not match:
         return None
     word = SPACE.sub(" ", match.group(1).strip(" -\t"))
     # A numbered title such as "1. 高考英语..." must not become a word.
-    return word if re.fullmatch(r"[A-Za-z][A-Za-z'’\- ]*[A-Za-z)]", word) else None
+    if not re.fullmatch(r"[A-Za-z][A-Za-z'’\- ]*[A-Za-z)]", word):
+        return None
+    tokens = word.split()
+    if len(tokens) > 1 and tokens[-1].lower() in KNOWN_PARTS_OF_SPEECH:
+        return Heading(word=" ".join(tokens[:-1]), part_of_speech=tokens[-1].lower())
+    ambiguous = len(tokens) > 1 and text[match.end(1) :].lstrip().startswith(".")
+    return Heading(word=word, ambiguous=ambiguous)
 
 
-def collect_entries(path: Path, entries: OrderedDict[str, Entry]) -> int:
+def collect_entries(path: Path, entries: OrderedDict[str, Entry], warnings: list[dict[str, object]]) -> int:
     current_word: str | None = None
+    current_part_of_speech: str | None = None
+    current_position: int | None = None
     current_lines: list[str] = []
     count = 0
 
@@ -101,18 +120,60 @@ def collect_entries(path: Path, entries: OrderedDict[str, Entry]) -> int:
         if current_word is None:
             return
         key = normalize_word(current_word)
+        if key in entries:
+            warnings.append(
+                {
+                    "code": "duplicate_heading",
+                    "source": path.name,
+                    "position": current_position,
+                    "text": current_lines[0],
+                }
+            )
         entry = entries.setdefault(key, Entry(word=current_word))
+        if current_part_of_speech is not None and current_part_of_speech not in entry.parts_of_speech:
+            entry.parts_of_speech.append(current_part_of_speech)
         entry.sections.append((path.name, current_lines.copy()))
         count += 1
 
-    for text in read_docx_paragraphs(path):
-        word = heading_word(text)
-        if word is not None:
+    for position, text in enumerate(read_docx_paragraphs(path), start=1):
+        heading = heading_word(text)
+        if heading is not None:
+            if heading.ambiguous:
+                warnings.append(
+                    {
+                        "code": "ambiguous_heading",
+                        "source": path.name,
+                        "position": position,
+                        "text": text,
+                    }
+                )
             save_current()
-            current_word = word
+            current_word = heading.word
+            current_part_of_speech = heading.part_of_speech
+            current_position = position
             current_lines = [text]
+        elif NUMBERED_TITLE.match(text):
+            warnings.append(
+                {
+                    "code": "malformed_heading",
+                    "source": path.name,
+                    "position": position,
+                    "text": text,
+                }
+            )
+            if current_word is not None:
+                current_lines.append(text)
         elif current_word is not None:
             current_lines.append(text)
+        else:
+            warnings.append(
+                {
+                    "code": "unassigned_content",
+                    "source": path.name,
+                    "position": position,
+                    "text": text,
+                }
+            )
     save_current()
     return count
 
@@ -121,6 +182,9 @@ def markdown(entry: Entry) -> str:
     sources = list(OrderedDict((source, None) for source, _ in entry.sections))
     lines = ["---", f"word: {entry.word}", "sources:"]
     lines.extend(f'  - "{source}"' for source in sources)
+    if entry.parts_of_speech:
+        lines.append("parts_of_speech:")
+        lines.extend(f"  - {part_of_speech}" for part_of_speech in entry.parts_of_speech)
     lines.extend(["---", "", f"# {entry.word}", "", "## 来源", ""])
     lines.extend(f"- `{source}`" for source in sources)
     for source, content in entry.sections:
@@ -145,11 +209,12 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
 
     entries: OrderedDict[str, Entry] = OrderedDict()
+    warnings: list[dict[str, object]] = []
     skipped: list[tuple[str, str]] = []
     files = sorted(path for path in args.source.glob("*.docx") if not path.name.startswith("~$"))
     for path in files:
         try:
-            collect_entries(path, entries)
+            collect_entries(path, entries, warnings)
         except (ET.ParseError, OSError, KeyError, zipfile.BadZipFile) as error:
             skipped.append((path.name, str(error)))
 
@@ -169,6 +234,16 @@ def main() -> int:
     else:
         report.extend(["", "- 未解析文件：0"])
     (args.output / "README.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+    machine_report = {
+        "sourceDocuments": len(files),
+        "generatedEntries": len(entries),
+        "warnings": warnings,
+        "skippedFiles": [{"source": name, "reason": reason} for name, reason in skipped],
+    }
+    (args.output / "conversion-report.json").write_text(
+        json.dumps(machine_report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     print(f"Read {len(files)} DOCX files; generated {len(entries)} word files in {args.output}")
     if skipped:

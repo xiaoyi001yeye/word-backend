@@ -1,10 +1,12 @@
 ---
-word: ought modal
+word: ought
 sources:
   - "高考英语3500单词第33讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - modal
 ---
 
-# ought modal
+# ought
 
 ## 来源
 

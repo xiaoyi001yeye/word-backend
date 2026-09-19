@@ -1,10 +1,12 @@
 ---
-word: world n
+word: world
 sources:
   - "高考英语3500单词第55讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - n
 ---
 
-# world n
+# world
 
 ## 来源
 

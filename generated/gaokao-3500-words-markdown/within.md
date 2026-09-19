@@ -1,10 +1,12 @@
 ---
-word: within pre
+word: within
 sources:
   - "高考英语3500单词第54讲（单词速记与拓展）.docx"
+parts_of_speech:
+  - pre
 ---
 
-# within pre
+# within
 
 ## 来源
 
