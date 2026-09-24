@@ -108,6 +108,11 @@ export function LoginScreen({ loading, error, quote, onSubmit }: LoginScreenProp
             {loading ? '正在登录...' : '登录并进入对应主页'}
           </button>
         </form>
+
+        <div className="auth-form__links">
+          <button type="button" onClick={() => window.location.assign('/register/student')}>学生注册</button>
+          <button type="button" onClick={() => window.location.assign('/register/teacher')}>老师注册</button>
+        </div>
       </section>
     </div>
   );

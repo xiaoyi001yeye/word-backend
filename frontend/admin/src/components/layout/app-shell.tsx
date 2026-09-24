@@ -1,5 +1,5 @@
 import { For, type JSX } from "solid-js";
-import { A, useLocation, useNavigate } from "@solidjs/router";
+import { A, useLocation } from "@solidjs/router";
 import {
     Bot,
     BookCopy,
@@ -44,13 +44,11 @@ interface AppShellProps {
 export function AppShell(props: AppShellProps) {
     const auth = useAuth();
     const location = useLocation();
-    const navigate = useNavigate();
-
     const navigation = () => getNavigationForRole(auth.user()?.role);
 
     const handleLogout = async () => {
         await auth.logout();
-        void navigate("/login", { replace: true });
+        window.location.replace("/admin/login");
     };
 
     return (

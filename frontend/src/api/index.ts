@@ -27,6 +27,7 @@ import type {
   MetaWord,
   MetaWordEntry,
   Page,
+  QrPageSetting,
   RecordStudyPayload,
   GenerateReadingPayload,
   GenerateReadingResponse,
@@ -122,19 +123,20 @@ export function clearStoredLoginQuote() {
 
 interface FetchJsonOptions extends RequestInit {
   skipUnauthorizedHandler?: boolean;
+  skipAuth?: boolean;
 }
 
 async function fetchJson<T>(url: string, options?: FetchJsonOptions): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const headers = new Headers(options?.headers ?? {});
   const token = getStoredToken();
-  const { skipUnauthorizedHandler = false, ...requestOptions } = options ?? {};
+  const { skipUnauthorizedHandler = false, skipAuth = false, ...requestOptions } = options ?? {};
 
   if (!isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (token && !headers.has('Authorization')) {
+  if (token && !skipAuth && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
@@ -398,8 +400,16 @@ export const userApi = {
     email?: string;
     phone?: string;
     role: User['role'];
+    avatarKey?: string;
+    gender?: string;
+    schoolName?: string;
+    grade?: string;
+    interestTags?: string[];
+    teachingStage?: string;
+    expertiseTags?: string[];
   }) => fetchJson<User>(`${API_BASE}/users`, {
     method: 'POST',
+    skipAuth: true,
     body: JSON.stringify(payload),
   }),
   updateRole: (id: number, role: User['role']) => fetchJson<User>(`${API_BASE}/users/${id}/role`, {
@@ -413,11 +423,37 @@ export const userApi = {
 };
 
 export const classroomApi = {
+  uploadCompanionImage: (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return fetchJson<{ url: string; fileName: string }>(`${API_BASE}/classrooms/companion-images`, {
+      method: 'POST',
+      body,
+    });
+  },
   getAll: () => fetchJson<Classroom[]>(`${API_BASE}/classrooms`),
+  getById: (id: number) => fetchJson<Classroom>(`${API_BASE}/classrooms/${id}`),
+  getPage: (page = 1, size = 20, keyword?: string) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (keyword) params.set('keyword', keyword);
+    return fetchJson<Page<Classroom>>(`${API_BASE}/classrooms/page?${params.toString()}`);
+  },
+  getCommunityPage: (page = 1, size = 2, keyword?: string) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (keyword) params.set('keyword', keyword);
+    return fetchJson<Page<Classroom>>(`${API_BASE}/classrooms/community/page?${params.toString()}`);
+  },
+  getCommunityById: (id: number) => fetchJson<Classroom>(`${API_BASE}/classrooms/community/${id}`),
+  likeCommunity: (id: number) => fetchJson<Classroom>(`${API_BASE}/classrooms/${id}/community-like`, {
+    method: 'POST',
+  }),
   create: (payload: {
     name: string;
     description?: string;
     teacherId?: number;
+    companionVideoId?: number | null;
+    companionImageUrls?: string[];
+    companionTags?: string[];
   }) => fetchJson<Classroom>(`${API_BASE}/classrooms`, {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -426,6 +462,9 @@ export const classroomApi = {
     name: string;
     description?: string;
     teacherId?: number;
+    companionVideoId?: number | null;
+    companionImageUrls?: string[];
+    companionTags?: string[];
   }) => fetchJson<Classroom>(`${API_BASE}/classrooms/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
@@ -440,6 +479,33 @@ export const classroomApi = {
   removeStudent: (id: number, studentId: number) => fetchJson<void>(`${API_BASE}/classrooms/${id}/students/${studentId}`, {
     method: 'DELETE',
   }),
+};
+
+export const qrApi = {
+  get: () => fetchJson<QrPageSetting>(`${API_BASE}/qr`, { skipAuth: true }),
+  update: (request: { title: string; backgroundImageUrl?: string | null }) =>
+    fetchJson<QrPageSetting>(`${API_BASE}/qr`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    }),
+};
+
+export const studyCompanionApi = {
+  listMessages: (classroomId: number, page = 1, size = 50, messageType?: ClassroomGroupFeedMessageType) =>
+    fetchJson<Page<ClassroomGroupFeedMessage>>(
+      `${API_BASE}/classrooms/${classroomId}/group-feed/community-messages?page=${page}&size=${size}${messageType ? `&messageType=${messageType}` : ''}`,
+    ),
+  createComment: (classroomId: number, content: string) =>
+    fetchJson<ClassroomGroupFeedMessage>(`${API_BASE}/classrooms/${classroomId}/group-feed/community-comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  deleteComment: (classroomId: number, messageId: number) =>
+    fetchJson<void>(`${API_BASE}/classrooms/${classroomId}/group-feed/messages/${messageId}`, {
+      method: 'DELETE',
+    }),
+  playVideo: (classroomId: number, videoId: number) =>
+    fetchJson<VideoAccessResponse>(`${API_BASE}/classrooms/${classroomId}/group-feed/videos/${videoId}/play`),
 };
 
 export const teacherApi = {

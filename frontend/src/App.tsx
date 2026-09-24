@@ -42,6 +42,8 @@ import { DictionaryCard } from './components/DictionaryCard';
 import { ExamHistoryModal } from './components/ExamHistoryModal';
 import { ExamSessionModal } from './components/ExamSessionModal';
 import { LoginScreen } from './components/LoginScreen';
+import { RegistrationScreen } from './components/RegistrationScreen';
+import { StudyCompanionMobile } from './components/StudyCompanionMobile';
 import { SearchBox } from './components/SearchBox';
 import { StudentStudyPlanModal } from './components/StudentStudyPlanModal';
 import { StudyPlanManagementModal } from './components/StudyPlanManagementModal';
@@ -96,6 +98,33 @@ function timeoutAfter<T>(promise: Promise<T>, milliseconds: number, message: str
 }
 
 function App() {
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const publicRegistrationRole = typeof window !== 'undefined'
+    ? pathname === '/register/student'
+      ? 'STUDENT'
+      : pathname === '/register/teacher'
+        ? 'TEACHER'
+        : null
+    : null;
+  const mobilePage = pathname === '/'
+    ? 'home'
+    : pathname === '/login'
+      ? 'login'
+      : pathname === '/qr'
+        ? 'qr'
+        : pathname === '/community'
+          ? 'community'
+          : pathname === '/community/manage'
+            ? 'manage'
+            : pathname.match(/^\/community\/(\d+)\/edit$/)
+              ? 'edit'
+              : pathname.match(/^\/community\/(\d+)$/)
+                ? 'detail'
+                : null;
+  const mobileClassroomId = Number(pathname.match(/^\/community\/(\d+)(?:\/edit)?$/)?.[1] ?? 0);
+  const isMobilePublicPage = mobilePage === 'home' || mobilePage === 'login' || mobilePage === 'qr';
+  const isQrPage = mobilePage === 'qr';
+  const isMobileProtectedPage = mobilePage === 'community' || mobilePage === 'manage' || mobilePage === 'detail' || mobilePage === 'edit';
   const [authChecking, setAuthChecking] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -213,6 +242,7 @@ function App() {
   const handleSignOut = useCallback(() => {
     performLocalSignOut();
     void authApi.logout().catch(() => undefined);
+    window.location.assign('/admin/login');
   }, [performLocalSignOut]);
 
   useEffect(() => {
@@ -230,6 +260,12 @@ function App() {
     let mounted = true;
 
     const bootstrap = async () => {
+      if (publicRegistrationRole || (isMobilePublicPage && !isQrPage)) {
+        if (mounted) {
+          setAuthChecking(false);
+        }
+        return;
+      }
       try {
         const user = await timeoutAfter(
           authApi.me(),
@@ -237,10 +273,12 @@ function App() {
           '登录状态恢复超时，请重新登录。',
         );
         if (mounted) {
-          const destination = postLoginDestination(user.role);
-          if (destination !== '/') {
-            redirectTo(destination);
-            return;
+          if (!isMobileProtectedPage && !isQrPage) {
+            const destination = postLoginDestination(user.role);
+            if (destination !== '/') {
+              redirectTo(destination);
+              return;
+            }
           }
           setCurrentUser(user);
           setAuthError(null);
@@ -264,10 +302,10 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isMobileProtectedPage, isMobilePublicPage, isQrPage, publicRegistrationRole]);
 
   useEffect(() => {
-    if (authChecking || currentUser) {
+    if (authChecking || currentUser || publicRegistrationRole || isMobilePublicPage) {
       return undefined;
     }
 
@@ -292,7 +330,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [authChecking, currentUser]);
+  }, [authChecking, currentUser, isMobilePublicPage, publicRegistrationRole]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -729,6 +767,25 @@ function App() {
     }
   }, [resetWorkspace]);
 
+  const handleMobileLogin = useCallback(async (username: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const response = await authApi.login(username, password);
+      storeToken(response.token);
+      storeLoginQuote(response.quote);
+      setLoginQuote(response.quote);
+      setCurrentUser(response.user);
+      resetWorkspace();
+      redirectTo('/community');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : '登录失败');
+    } finally {
+      setAuthLoading(false);
+      setAuthChecking(false);
+    }
+  }, [resetWorkspace]);
+
   const handleDictionaryCreated = useCallback((newDictionary: Dictionary) => {
     setDictionaries((prev) => [newDictionary, ...prev]);
     setSelectedDictionary(newDictionary);
@@ -1100,6 +1157,18 @@ function App() {
     );
   }
 
+  if (publicRegistrationRole) {
+    return <RegistrationScreen role={publicRegistrationRole} />;
+  }
+
+  if (isMobilePublicPage && mobilePage) {
+    return <StudyCompanionMobile page={mobilePage} user={currentUser} loginLoading={authLoading} loginError={authError} onLogin={mobilePage === 'login' ? handleMobileLogin : undefined} />;
+  }
+
+  if (isMobileProtectedPage && !currentUser) {
+    return <StudyCompanionMobile page="login" loginLoading={authLoading} loginError={authError || '请先登录伴读社区。'} onLogin={handleMobileLogin} />;
+  }
+
   if (!currentUser) {
     return (
       <LoginScreen
@@ -1109,6 +1178,10 @@ function App() {
         onSubmit={handleLogin}
       />
     );
+  }
+
+  if (isMobileProtectedPage && mobilePage) {
+    return <StudyCompanionMobile page={mobilePage} user={currentUser} classroomId={mobileClassroomId} />;
   }
 
   if (isStudent) {

@@ -8,10 +8,12 @@ import com.example.words.exception.BadRequestException;
 import com.example.words.exception.ResourceNotFoundException;
 import com.example.words.model.AppUser;
 import com.example.words.model.Classroom;
+import com.example.words.model.ClassroomCompanionLike;
 import com.example.words.model.ClassroomMember;
 import com.example.words.model.ClassroomStatus;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomDictionaryAssignmentRepository;
+import com.example.words.repository.ClassroomCompanionLikeRepository;
 import com.example.words.repository.ClassroomGroupFeedMessageRepository;
 import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
@@ -42,6 +44,7 @@ public class ClassroomService {
     private final ClassroomMemberRepository classroomMemberRepository;
     private final StudyPlanClassroomRepository studyPlanClassroomRepository;
     private final ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository;
+    private final ClassroomCompanionLikeRepository classroomCompanionLikeRepository;
     private final ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository;
     private final PaperReleaseTargetRepository paperReleaseTargetRepository;
     private final UserService userService;
@@ -52,6 +55,7 @@ public class ClassroomService {
             ClassroomMemberRepository classroomMemberRepository,
             StudyPlanClassroomRepository studyPlanClassroomRepository,
             ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository,
+            ClassroomCompanionLikeRepository classroomCompanionLikeRepository,
             ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository,
             PaperReleaseTargetRepository paperReleaseTargetRepository,
             UserService userService,
@@ -60,6 +64,7 @@ public class ClassroomService {
         this.classroomMemberRepository = classroomMemberRepository;
         this.studyPlanClassroomRepository = studyPlanClassroomRepository;
         this.classroomDictionaryAssignmentRepository = classroomDictionaryAssignmentRepository;
+        this.classroomCompanionLikeRepository = classroomCompanionLikeRepository;
         this.classroomGroupFeedMessageRepository = classroomGroupFeedMessageRepository;
         this.paperReleaseTargetRepository = paperReleaseTargetRepository;
         this.userService = userService;
@@ -95,6 +100,22 @@ public class ClassroomService {
     }
 
     @Transactional(readOnly = true)
+    public Page<ClassroomResponse> findCommunityClassroomsPage(
+            int page,
+            int size,
+            String keyword,
+            String sortBy,
+            String sortDir) {
+        Pageable pageable = buildPageable(page, size, sortBy, sortDir);
+        Specification<Classroom> specification = Specification.<Classroom>where((root, query, criteriaBuilder) ->
+                        criteriaBuilder.notEqual(root.get("status"), ClassroomStatus.ARCHIVED))
+                .and(keywordLike(keyword));
+
+        return classroomRepository.findAll(specification, pageable)
+                .map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
     public List<ClassroomResponse> findStudentClassrooms(AppUser actor) {
         if (actor.getRole() != UserRole.STUDENT) {
             throw new AccessDeniedException("Only students can access their classrooms");
@@ -113,6 +134,45 @@ public class ClassroomService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public ClassroomResponse findVisibleClassroom(Long classroomId, AppUser actor) {
+        Classroom classroom = getClassroomEntity(classroomId);
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Classroom not found: " + classroomId);
+        }
+        boolean visible = actor.getRole() == UserRole.ADMIN
+                || (actor.getRole() == UserRole.TEACHER && actor.getId().equals(classroom.getTeacherId()))
+                || (actor.getRole() == UserRole.STUDENT
+                        && classroomMemberRepository.existsByClassroomIdAndStudentId(classroomId, actor.getId()));
+        if (!visible) {
+            throw new AccessDeniedException("You do not have access to this classroom");
+        }
+        return toResponse(classroom);
+    }
+
+    @Transactional(readOnly = true)
+    public ClassroomResponse findCommunityClassroom(Long classroomId, AppUser actor) {
+        Classroom classroom = getClassroomEntity(classroomId);
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Classroom not found: " + classroomId);
+        }
+        return toResponse(classroom, actor);
+    }
+
+    @Transactional
+    public ClassroomResponse likeCommunityClassroom(Long classroomId, AppUser actor) {
+        Classroom classroom = getClassroomEntity(classroomId);
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Classroom not found: " + classroomId);
+        }
+        int inserted = classroomCompanionLikeRepository.insertIfAbsent(classroomId, actor.getId());
+        if (inserted > 0) {
+            classroom.setCompanionLikeCount(classroomCompanionLikeRepository.countByClassroomId(classroomId));
+            classroomRepository.save(classroom);
+        }
+        return toResponse(classroom, actor);
+    }
+
     @Transactional
     public ClassroomResponse createClassroom(CreateClassroomRequest request, AppUser actor) {
         String name = request.getName().trim();
@@ -128,6 +188,7 @@ public class ClassroomService {
         classroom.setDescription(trimToNull(request.getDescription()));
         classroom.setTeacherId(teacherId);
         classroom.setStatus(ClassroomStatus.ACTIVE);
+        applyCompanionProfile(classroom, request.getCompanionVideoId(), request.getCompanionImageUrls(), request.getCompanionTags());
 
         return toResponse(classroomRepository.save(classroom));
     }
@@ -142,6 +203,7 @@ public class ClassroomService {
         classroom.setName(name);
         classroom.setDescription(trimToNull(request.getDescription()));
         classroom.setTeacherId(resolveUpdatedTeacherId(request, classroom, actor));
+        applyCompanionProfile(classroom, request.getCompanionVideoId(), request.getCompanionImageUrls(), request.getCompanionTags());
 
         return toResponse(classroomRepository.save(classroom));
     }
@@ -177,6 +239,7 @@ public class ClassroomService {
         classroomMemberRepository.deleteByClassroomId(classroomId);
         studyPlanClassroomRepository.deleteByClassroomId(classroomId);
         classroomDictionaryAssignmentRepository.deleteByClassroomId(classroomId);
+        classroomCompanionLikeRepository.deleteByClassroomId(classroomId);
         classroomGroupFeedMessageRepository.deleteByClassroomId(classroomId);
         classroomRepository.delete(classroom);
         return archivedStudyPlanCount;
@@ -267,13 +330,60 @@ public class ClassroomService {
                 classroom.getName(),
                 classroom.getDescription(),
                 classroom.getTeacherId(),
+                classroom.getCompanionVideoId(),
+                classroom.getCompanionImageUrls(),
+                classroom.getCompanionTags(),
+                classroom.getCompanionCommentCount(),
+                classroom.getCompanionLikeCount(),
                 teacher.getDisplayName(),
+                teacher.getAvatarKey(),
+                teacher.getExpertiseTags(),
                 classroomMemberRepository.countByClassroomId(classroom.getId()),
                 classroom.getStatus(),
                 classroom.getArchivedAt(),
                 classroom.getCreatedAt(),
                 classroom.getUpdatedAt()
+                , List.of(), false
         );
+    }
+
+    private ClassroomResponse toResponse(Classroom classroom, AppUser actor) {
+        ClassroomResponse response = toResponse(classroom);
+        List<ClassroomCompanionLike> likes = classroomCompanionLikeRepository
+                .findTop6ByClassroomIdOrderByCreatedAtDesc(classroom.getId());
+        response.setLikeUserAvatarKeys(likes.stream()
+                .map(ClassroomCompanionLike::getUserId)
+                .map(userService::getUserEntity)
+                .map(AppUser::getAvatarKey)
+                .filter(Objects::nonNull)
+                .toList());
+        response.setLikedByCurrentUser(classroomCompanionLikeRepository
+                .existsByClassroomIdAndUserId(classroom.getId(), actor.getId()));
+        return response;
+    }
+
+    private void applyCompanionProfile(
+            Classroom classroom,
+            Long companionVideoId,
+            List<String> companionImageUrls,
+            List<String> companionTags) {
+        classroom.setCompanionVideoId(companionVideoId);
+        classroom.setCompanionImageUrls(normalizeList(companionImageUrls, 12, 500));
+        classroom.setCompanionTags(normalizeList(companionTags, 12, 50));
+    }
+
+    private List<String> normalizeList(List<String> values, int maxItems, int maxLength) {
+        if (values == null) {
+            return null;
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .filter(value -> value.length() <= maxLength)
+                .distinct()
+                .limit(maxItems)
+                .toList();
     }
 
     private Long resolveTeacherId(CreateClassroomRequest request, AppUser actor) {

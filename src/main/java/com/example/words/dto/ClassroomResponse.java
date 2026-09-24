@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 import com.example.words.model.ClassroomStatus;
 
@@ -20,7 +21,21 @@ public class ClassroomResponse {
 
     private Long teacherId;
 
+    private Long companionVideoId;
+
+    private List<String> companionImageUrls;
+
+    private List<String> companionTags;
+
+    private long commentCount;
+
+    private long likeCount;
+
     private String teacherName;
+
+    private String teacherAvatarKey;
+
+    private List<String> teacherExpertiseTags;
 
     private long studentCount;
 
@@ -31,4 +46,8 @@ public class ClassroomResponse {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    private List<String> likeUserAvatarKeys;
+
+    private boolean likedByCurrentUser;
 }
