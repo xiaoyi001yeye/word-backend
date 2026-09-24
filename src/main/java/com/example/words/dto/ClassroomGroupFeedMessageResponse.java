@@ -29,5 +29,7 @@ public class ClassroomGroupFeedMessageResponse {
 
     private String authorName;
 
+    private String authorAvatarKey;
+
     private LocalDateTime createdAt;
 }

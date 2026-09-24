@@ -68,6 +68,37 @@ public class ClassroomController {
         );
     }
 
+    @GetMapping("/community/page")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER','STUDENT')")
+    public ResponseEntity<Page<ClassroomResponse>> listCommunityClassroomsPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "2") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        return ResponseEntity.ok(
+                classroomService.findCommunityClassroomsPage(page, size, keyword, sortBy, sortDir)
+        );
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER','STUDENT')")
+    public ResponseEntity<ClassroomResponse> getClassroom(@PathVariable Long id) {
+        return ResponseEntity.ok(classroomService.findVisibleClassroom(id, currentUserService.getCurrentUser()));
+    }
+
+    @GetMapping("/community/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER','STUDENT')")
+    public ResponseEntity<ClassroomResponse> getCommunityClassroom(@PathVariable Long id) {
+        return ResponseEntity.ok(classroomService.findCommunityClassroom(id, currentUserService.getCurrentUser()));
+    }
+
+    @PostMapping("/{id}/community-like")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER','STUDENT')")
+    public ResponseEntity<ClassroomResponse> likeCommunityClassroom(@PathVariable Long id) {
+        return ResponseEntity.ok(classroomService.likeCommunityClassroom(id, currentUserService.getCurrentUser()));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
     public ResponseEntity<ClassroomResponse> createClassroom(@Valid @RequestBody CreateClassroomRequest request) {

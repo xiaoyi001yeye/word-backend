@@ -11,12 +11,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "users")
@@ -45,6 +48,29 @@ public class AppUser {
 
     @Column(name = "phone")
     private String phone;
+
+    @Column(name = "avatar_key")
+    private String avatarKey;
+
+    @Column(name = "gender")
+    private String gender;
+
+    @Column(name = "school_name")
+    private String schoolName;
+
+    @Column(name = "grade")
+    private String grade;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "interest_tags_json", columnDefinition = "jsonb")
+    private List<String> interestTags;
+
+    @Column(name = "teaching_stage")
+    private String teachingStage;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "expertise_tags_json", columnDefinition = "jsonb")
+    private List<String> expertiseTags;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)

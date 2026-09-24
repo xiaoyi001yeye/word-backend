@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/features/auth/auth-context";
 
 function RedirectToUnifiedLogin() {
-    window.location.replace("/");
+    window.location.replace("/admin/login");
     return null;
 }
 

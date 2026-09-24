@@ -19,6 +19,7 @@ import com.example.words.model.ClassroomMember;
 import com.example.words.model.ClassroomStatus;
 import com.example.words.model.UserRole;
 import com.example.words.repository.ClassroomDictionaryAssignmentRepository;
+import com.example.words.repository.ClassroomCompanionLikeRepository;
 import com.example.words.repository.ClassroomGroupFeedMessageRepository;
 import com.example.words.repository.ClassroomMemberRepository;
 import com.example.words.repository.ClassroomRepository;
@@ -51,6 +52,9 @@ class ClassroomServiceTest {
     private ClassroomDictionaryAssignmentRepository classroomDictionaryAssignmentRepository;
 
     @Mock
+    private ClassroomCompanionLikeRepository classroomCompanionLikeRepository;
+
+    @Mock
     private ClassroomGroupFeedMessageRepository classroomGroupFeedMessageRepository;
 
     @Mock
@@ -71,6 +75,7 @@ class ClassroomServiceTest {
                 classroomMemberRepository,
                 studyPlanClassroomRepository,
                 classroomDictionaryAssignmentRepository,
+                classroomCompanionLikeRepository,
                 classroomGroupFeedMessageRepository,
                 paperReleaseTargetRepository,
                 userService,

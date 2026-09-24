@@ -1,0 +1,3 @@
+ALTER TABLE classrooms
+    ADD COLUMN IF NOT EXISTS companion_comment_count BIGINT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS companion_like_count BIGINT NOT NULL DEFAULT 0;

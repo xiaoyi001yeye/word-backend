@@ -135,8 +135,35 @@ public class ClassroomGroupFeedService {
                 );
         List<ClassroomGroupFeedMessage> visibleMessages = visibleMessages(messages.getContent());
         Map<Long, String> authorNames = authorNames(visibleMessages);
+        Map<Long, String> authorAvatars = authorAvatars(visibleMessages);
         List<ClassroomGroupFeedMessageResponse> content = visibleMessages.stream()
-                .map(message -> toResponse(message, authorNames))
+                .map(message -> toResponse(message, authorNames, authorAvatars))
+                .toList();
+        long removedCount = messages.getContent().size() - visibleMessages.size();
+        long totalElements = Math.max(content.size(), messages.getTotalElements() - removedCount);
+        return new PageImpl<>(content, pageable, totalElements);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ClassroomGroupFeedMessageResponse> listCommunityMessages(
+            Long classroomId,
+            int page,
+            int size,
+            ClassroomGroupFeedMessageType messageType) {
+        getClassroomOrThrow(classroomId);
+        Pageable pageable = buildPageable(page, size);
+        Page<ClassroomGroupFeedMessage> messages = messageType == null
+                ? classroomGroupFeedMessageRepository.findByClassroomIdOrderByCreatedAtDesc(classroomId, pageable)
+                : classroomGroupFeedMessageRepository.findByClassroomIdAndMessageTypeOrderByCreatedAtDesc(
+                        classroomId,
+                        messageType,
+                        pageable
+                );
+        List<ClassroomGroupFeedMessage> visibleMessages = visibleMessages(messages.getContent());
+        Map<Long, String> authorNames = authorNames(visibleMessages);
+        Map<Long, String> authorAvatars = authorAvatars(visibleMessages);
+        List<ClassroomGroupFeedMessageResponse> content = visibleMessages.stream()
+                .map(message -> toResponse(message, authorNames, authorAvatars))
                 .toList();
         long removedCount = messages.getContent().size() - visibleMessages.size();
         long totalElements = Math.max(content.size(), messages.getTotalElements() - removedCount);
@@ -158,6 +185,8 @@ public class ClassroomGroupFeedService {
         message.setContent(trimToNull(request.getContent()));
 
         ClassroomGroupFeedMessage saved = classroomGroupFeedMessageRepository.save(message);
+        classroom.setCompanionCommentCount(classroom.getCompanionCommentCount() + 1);
+        classroomRepository.save(classroom);
         if (actor.getRole() == UserRole.STUDENT) {
             studentPointEventPublisher.publishAfterCommit(new StudentPointEventPublisher.PublishRequest(
                     actor.getId(),
@@ -167,6 +196,43 @@ public class ClassroomGroupFeedService {
             ));
         }
         return toResponse(saved, authorNames(List.of(saved)));
+    }
+
+    @Transactional
+    public ClassroomGroupFeedMessageResponse createCommunityComment(
+            Long classroomId,
+            CreateClassroomGroupFeedTextMessageRequest request,
+            AppUser actor) {
+        Classroom classroom = getClassroomOrThrow(classroomId);
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+            throw new ResourceNotFoundException("Classroom not found: " + classroomId);
+        }
+
+        ClassroomGroupFeedMessage message = new ClassroomGroupFeedMessage();
+        message.setClassroomId(classroomId);
+        message.setAuthorUserId(actor.getId());
+        message.setMessageType(ClassroomGroupFeedMessageType.TEXT);
+        message.setContent(trimToNull(request.getContent()));
+
+        ClassroomGroupFeedMessage saved = classroomGroupFeedMessageRepository.save(message);
+        classroom.setCompanionCommentCount(classroom.getCompanionCommentCount() + 1);
+        classroomRepository.save(classroom);
+        return toResponse(saved, authorNames(List.of(saved)));
+    }
+
+    @Transactional
+    public void deleteCommunityComment(Long classroomId, Long messageId, AppUser actor) {
+        Classroom classroom = getClassroomOrThrow(classroomId);
+        ensureClassroomTeacher(classroom, actor);
+        ClassroomGroupFeedMessage message = classroomGroupFeedMessageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found: " + messageId));
+        if (!classroomId.equals(message.getClassroomId())
+                || message.getMessageType() != ClassroomGroupFeedMessageType.TEXT) {
+            throw new BadRequestException("Only comments from this classroom can be deleted");
+        }
+        classroomGroupFeedMessageRepository.delete(message);
+        classroom.setCompanionCommentCount(Math.max(0, classroom.getCompanionCommentCount() - 1));
+        classroomRepository.save(classroom);
     }
 
     @Transactional
@@ -447,9 +513,19 @@ public class ClassroomGroupFeedService {
                 .collect(Collectors.toMap(AppUser::getId, AppUser::getDisplayName));
     }
 
+    private Map<Long, String> authorAvatars(List<ClassroomGroupFeedMessage> messages) {
+        List<Long> authorIds = messages.stream()
+                .map(ClassroomGroupFeedMessage::getAuthorUserId)
+                .distinct()
+                .toList();
+        return appUserRepository.findAllById(authorIds).stream()
+                .collect(Collectors.toMap(AppUser::getId, AppUser::getAvatarKey));
+    }
+
     private ClassroomGroupFeedMessageResponse toResponse(
             ClassroomGroupFeedMessage message,
-            Map<Long, String> authorNames) {
+            Map<Long, String> authorNames,
+            Map<Long, String> authorAvatars) {
         return new ClassroomGroupFeedMessageResponse(
                 message.getId(),
                 message.getClassroomId(),
@@ -460,8 +536,15 @@ public class ClassroomGroupFeedService {
                 message.getResourceSummary(),
                 message.getAuthorUserId(),
                 authorNames.getOrDefault(message.getAuthorUserId(), "用户#" + message.getAuthorUserId()),
+                authorAvatars.get(message.getAuthorUserId()),
                 message.getCreatedAt()
         );
+    }
+
+    private ClassroomGroupFeedMessageResponse toResponse(
+            ClassroomGroupFeedMessage message,
+            Map<Long, String> authorNames) {
+        return toResponse(message, authorNames, authorAvatars(List.of(message)));
     }
 
     private String trimToNull(String value) {

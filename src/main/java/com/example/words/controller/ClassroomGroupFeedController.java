@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +52,21 @@ public class ClassroomGroupFeedController {
         ));
     }
 
+    @GetMapping("/community-messages")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER','STUDENT')")
+    public ResponseEntity<Page<ClassroomGroupFeedMessageResponse>> listCommunityMessages(
+            @PathVariable Long classroomId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) ClassroomGroupFeedMessageType messageType) {
+        return ResponseEntity.ok(classroomGroupFeedService.listCommunityMessages(
+                classroomId,
+                page,
+                size,
+                messageType
+        ));
+    }
+
     @PostMapping("/messages")
     @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
     public ResponseEntity<ClassroomGroupFeedMessageResponse> createTextMessage(
@@ -61,6 +77,31 @@ public class ClassroomGroupFeedController {
                 request,
                 currentUserService.getCurrentUser()
         ));
+    }
+
+    @PostMapping("/community-comments")
+    @PreAuthorize("hasAnyRole('TEACHER','STUDENT')")
+    public ResponseEntity<ClassroomGroupFeedMessageResponse> createCommunityComment(
+            @PathVariable Long classroomId,
+            @Valid @RequestBody CreateClassroomGroupFeedTextMessageRequest request) {
+        return ResponseEntity.ok(classroomGroupFeedService.createCommunityComment(
+                classroomId,
+                request,
+                currentUserService.getCurrentUser()
+        ));
+    }
+
+    @DeleteMapping("/messages/{messageId}")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<Void> deleteCommunityComment(
+            @PathVariable Long classroomId,
+            @PathVariable Long messageId) {
+        classroomGroupFeedService.deleteCommunityComment(
+                classroomId,
+                messageId,
+                currentUserService.getCurrentUser()
+        );
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/dictionaries")

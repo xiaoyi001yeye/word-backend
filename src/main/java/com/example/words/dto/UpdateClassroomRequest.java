@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -16,4 +17,16 @@ public class UpdateClassroomRequest {
     private String description;
 
     private Long teacherId;
+
+    private Long companionVideoId;
+
+    private List<String> companionImageUrls;
+
+    private List<String> companionTags;
+
+    public UpdateClassroomRequest(String name, String description, Long teacherId) {
+        this.name = name;
+        this.description = description;
+        this.teacherId = teacherId;
+    }
 }

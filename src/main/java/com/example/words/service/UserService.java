@@ -52,6 +52,13 @@ public class UserService {
         user.setDisplayName(request.getDisplayName().trim());
         user.setEmail(trimToNull(request.getEmail()));
         user.setPhone(trimToNull(request.getPhone()));
+        user.setAvatarKey(trimToNull(request.getAvatarKey()));
+        user.setGender(trimToNull(request.getGender()));
+        user.setSchoolName(trimToNull(request.getSchoolName()));
+        user.setGrade(trimToNull(request.getGrade()));
+        user.setInterestTags(request.getInterestTags());
+        user.setTeachingStage(trimToNull(request.getTeachingStage()));
+        user.setExpertiseTags(request.getExpertiseTags());
         user.setRole(request.getRole());
         user.setStatus(UserStatus.ACTIVE);
         AppUser savedUser = appUserRepository.save(user);

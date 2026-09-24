@@ -137,7 +137,17 @@ export interface Classroom {
   description?: string | null;
   teacherId: number;
   teacherName?: string | null;
+  teacherAvatarKey?: string | null;
   studentCount: number;
+  companionVideoId?: number | null;
+  companionImageUrls?: string[] | null;
+  companionTags?: string[] | null;
+  commentCount?: number;
+  likeCount?: number;
+  teacherExpertiseTags?: string[] | null;
+  likeUserAvatarKeys?: string[] | null;
+  likedByCurrentUser?: boolean;
+  status?: 'ACTIVE' | 'ARCHIVED';
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -154,6 +164,7 @@ export interface ClassroomGroupFeedMessage {
   resourceSummary?: string | null;
   authorUserId: number;
   authorName: string;
+  authorAvatarKey?: string | null;
   createdAt?: string | null;
 }
 
@@ -167,11 +178,26 @@ export interface User {
   displayName: string;
   email?: string | null;
   phone?: string | null;
+  avatarKey?: string | null;
+  gender?: string | null;
+  schoolName?: string | null;
+  grade?: string | null;
+  interestTags?: string[] | null;
+  teachingStage?: string | null;
+  expertiseTags?: string[] | null;
   role: UserRole;
   status: UserStatus;
   createdAt?: string | null;
   updatedAt?: string | null;
   lastLoginAt?: string | null;
+}
+
+export interface QrPageSetting {
+  title: string;
+  backgroundImageUrl?: string | null;
+  qrImageUrl?: string | null;
+  shareUrl: string;
+  qrDataUrl: string;
 }
 
 export type AiConfigStatus = 'ENABLED' | 'DISABLED';

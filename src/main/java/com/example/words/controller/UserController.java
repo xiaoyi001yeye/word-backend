@@ -9,11 +9,15 @@ import com.example.words.model.UserRole;
 import com.example.words.service.AccessControlService;
 import com.example.words.service.CurrentUserService;
 import com.example.words.service.UserService;
+import com.example.words.exception.BadRequestException;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,9 +45,27 @@ public class UserController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean authenticated = authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication.getPrincipal() instanceof String principal && "anonymousUser".equals(principal));
+        boolean admin = authenticated && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (!admin && request.getRole() == UserRole.ADMIN) {
+            throw new AccessDeniedException("Public registration cannot create administrators");
+        }
+        if (!admin && request.getRole() == UserRole.STUDENT && isBlank(request.getGrade())) {
+            throw new BadRequestException("grade is required for student registration");
+        }
+        if (!admin && request.getRole() == UserRole.TEACHER && isBlank(request.getTeachingStage())) {
+            throw new BadRequestException("teachingStage is required for teacher registration");
+        }
         return ResponseEntity.ok(userService.createUser(request));
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     @GetMapping
