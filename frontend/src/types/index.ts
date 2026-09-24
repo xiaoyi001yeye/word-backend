@@ -195,6 +195,7 @@ export interface User {
 export interface QrPageSetting {
   title: string;
   backgroundImageUrl?: string | null;
+  qrImageUrl?: string | null;
   shareUrl: string;
   qrDataUrl: string;
 }

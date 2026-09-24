@@ -8,5 +8,7 @@ public record UpdateQrPageSettingRequest(
         @Size(max = 100, message = "伴读社区文本不能超过100个字符")
         String title,
         @Size(max = 500, message = "背景图地址不能超过500个字符")
-        String backgroundImageUrl) {
+        String backgroundImageUrl,
+        @Size(max = 500, message = "二维码图片地址不能超过500个字符")
+        String qrImageUrl) {
 }

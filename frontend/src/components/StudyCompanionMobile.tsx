@@ -415,10 +415,12 @@ function QrPage({ user }: { user?: User | null }) {
   const [settings, setSettings] = useState<QrPageSetting | null>(null);
   const [title, setTitle] = useState('伴读社区');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
+  const [qrImageUrl, setQrImageUrl] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const qrImageInputRef = useRef<HTMLInputElement>(null);
   const isAdmin = user?.role === 'ADMIN';
 
   useEffect(() => {
@@ -426,6 +428,7 @@ function QrPage({ user }: { user?: User | null }) {
       setSettings(value);
       setTitle(value.title);
       setBackgroundImageUrl(value.backgroundImageUrl ?? '');
+      setQrImageUrl(value.qrImageUrl ?? '');
     }).catch(() => setFeedback('二维码配置加载失败，请刷新重试'));
   }, []);
 
@@ -433,10 +436,15 @@ function QrPage({ user }: { user?: User | null }) {
     setSaving(true);
     setFeedback(null);
     try {
-      const value = await qrApi.update({ title: title.trim(), backgroundImageUrl: backgroundImageUrl.trim() || null });
+      const value = await qrApi.update({
+        title: title.trim(),
+        backgroundImageUrl: backgroundImageUrl.trim() || null,
+        qrImageUrl: qrImageUrl.trim() || null,
+      });
       setSettings(value);
       setTitle(value.title);
       setBackgroundImageUrl(value.backgroundImageUrl ?? '');
+      setQrImageUrl(value.qrImageUrl ?? '');
       setFeedback('保存成功');
     } catch (cause) {
       setFeedback(cause instanceof Error ? cause.message : '保存失败');
@@ -445,7 +453,11 @@ function QrPage({ user }: { user?: User | null }) {
     }
   };
 
-  const uploadBackground = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadImage = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    setImageUrl: (url: string) => void,
+    errorMessage: string,
+  ) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -458,9 +470,9 @@ function QrPage({ user }: { user?: User | null }) {
     setFeedback(null);
     try {
       const uploaded = await classroomApi.uploadCompanionImage(file);
-      setBackgroundImageUrl(uploaded.url);
+      setImageUrl(uploaded.url);
     } catch (cause) {
-      setFeedback(cause instanceof Error ? cause.message : '背景图上传失败');
+      setFeedback(cause instanceof Error ? cause.message : errorMessage);
     } finally {
       setUploading(false);
     }
@@ -468,7 +480,7 @@ function QrPage({ user }: { user?: User | null }) {
 
   if (!settings) return <main className="companion-mobile companion-qr-page"><p className="companion-empty">{feedback || '正在加载...'}</p></main>;
   const background = backgroundImageUrl || '/qr-background.png';
-  return <main className="companion-mobile companion-qr-page"><section className="companion-mobile__content"><div className="companion-qr" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,.18), rgba(255,255,255,.18)), url(${background})` }}><button type="button" className="companion-qr__back" aria-label="返回" onClick={() => go('/')}><ArrowLeft size={23} weight="bold" /></button><h1 className="companion-qr__title">{title}</h1><div className="companion-qr__toolbar">{isAdmin && <button type="button" className="companion-button" onClick={() => void save()} disabled={saving || uploading}>{saving ? '保存中...' : '保存'}</button>}</div><img className="companion-qr__image" src={settings.qrDataUrl} alt={`扫描进入${title}`} />{isAdmin && <div className="companion-qr__editor"><label><span>伴读社区文本</span><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} /></label><label><span>背景图</span><button type="button" className="companion-button" onClick={() => imageInputRef.current?.click()} disabled={uploading}>{uploading ? '上传中...' : '更换背景图'}</button><input ref={imageInputRef} className="companion-image-picker__input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={uploadBackground} /></label>{feedback && <p className="companion-form__error">{feedback}</p>}</div>}</div></section></main>;
+  return <main className="companion-mobile companion-qr-page"><section className="companion-mobile__content"><div className="companion-qr" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,.18), rgba(255,255,255,.18)), url(${background})` }}><button type="button" className="companion-qr__back" aria-label="返回" onClick={() => go('/')}><ArrowLeft size={23} weight="bold" /></button><h1 className="companion-qr__title">{title}</h1><div className="companion-qr__toolbar">{isAdmin && <button type="button" className="companion-button" onClick={() => void save()} disabled={saving || uploading}>{saving ? '保存中...' : '保存'}</button>}</div><img className="companion-qr__image" src={qrImageUrl || settings.qrDataUrl} alt={`扫描进入${title}`} />{isAdmin && <div className="companion-qr__editor"><label><span>伴读社区文本</span><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} /></label><label><span>背景图</span><button type="button" className="companion-button" onClick={() => backgroundInputRef.current?.click()} disabled={uploading}>{uploading ? '上传中...' : '更换背景图'}</button><input ref={backgroundInputRef} className="companion-image-picker__input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void uploadImage(event, setBackgroundImageUrl, '背景图上传失败')} /></label><label><span>二维码图片</span><button type="button" className="companion-button" onClick={() => qrImageInputRef.current?.click()} disabled={uploading}>{uploading ? '上传中...' : '更换二维码图片'}</button><input ref={qrImageInputRef} className="companion-image-picker__input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => void uploadImage(event, setQrImageUrl, '二维码图片上传失败')} /></label>{feedback && <p className="companion-form__error">{feedback}</p>}</div>}</div></section></main>;
 }
 
 export function StudyCompanionMobile({ page, user, classroomId, loginLoading, loginError, onLogin }: StudyCompanionMobileProps) {

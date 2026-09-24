@@ -483,7 +483,7 @@ export const classroomApi = {
 
 export const qrApi = {
   get: () => fetchJson<QrPageSetting>(`${API_BASE}/qr`, { skipAuth: true }),
-  update: (request: { title: string; backgroundImageUrl?: string | null }) =>
+  update: (request: { title: string; backgroundImageUrl?: string | null; qrImageUrl?: string | null }) =>
     fetchJson<QrPageSetting>(`${API_BASE}/qr`, {
       method: 'PUT',
       body: JSON.stringify(request),

@@ -40,6 +40,7 @@ public class QrPageSettingService {
                 .orElseThrow(() -> new ResourceNotFoundException("二维码页面配置不存在"));
         setting.setTitle(request.title().trim());
         setting.setBackgroundImageUrl(blankToNull(request.backgroundImageUrl()));
+        setting.setQrImageUrl(blankToNull(request.qrImageUrl()));
         setting.setUpdatedBy(actor.getId());
         setting.setUpdatedAt(LocalDateTime.now());
         return toResponse(repository.save(setting));
@@ -49,6 +50,7 @@ public class QrPageSettingService {
         return new QrPageSettingResponse(
                 setting.getTitle(),
                 setting.getBackgroundImageUrl(),
+                setting.getQrImageUrl(),
                 SHARE_URL,
                 generateQrDataUrl(SHARE_URL));
     }

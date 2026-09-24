@@ -25,6 +25,9 @@ public class QrPageSetting {
     @Column(name = "background_image_url", length = 500)
     private String backgroundImageUrl;
 
+    @Column(name = "qr_image_url", length = 500)
+    private String qrImageUrl;
+
     @Column(name = "updated_by")
     private Long updatedBy;
 

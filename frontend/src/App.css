@@ -2895,7 +2895,7 @@ textarea.form__input {
 .companion-qr__title { position: absolute; top: 3rem; left: 50%; z-index: 2; margin: 0; transform: translateX(-50%); color: #fff; font-size: clamp(1.8rem, 8vw, 3rem); text-shadow: 0 0.15rem 0.45rem rgba(20, 43, 80, 0.45); white-space: nowrap; }
 .companion-qr__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .companion-qr__toolbar { position: absolute; top: 1rem; right: 1rem; z-index: 2; }
-.companion-qr__image { position: absolute; right: 1.5rem; bottom: 1.5rem; z-index: 1; display: block; width: min(12rem, 32vw); aspect-ratio: 1; border: 0.55rem solid #fff; border-radius: 1.1rem; box-shadow: 0 0.8rem 2rem rgba(38, 71, 127, 0.18); }
+.companion-qr__image { position: absolute; right: 1.5rem; bottom: 1.5rem; z-index: 1; display: block; width: min(12rem, 32vw); aspect-ratio: 1; object-fit: contain; border: 0.55rem solid #fff; border-radius: 1.1rem; background: #fff; box-shadow: 0 0.8rem 2rem rgba(38, 71, 127, 0.18); }
 .companion-qr__editor { position: absolute; right: 1rem; bottom: 1rem; left: 1rem; z-index: 2; display: grid; gap: 0.8rem; border: 1px solid rgba(36, 99, 212, 0.18); border-radius: 0.8rem; padding: 1rem; background: rgba(255, 255, 255, 0.94); }
 .companion-qr__editor label { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
 .companion-qr__editor input { min-width: 0; flex: 1; border: 1px solid #d5deeb; border-radius: 0.65rem; padding: 0.7rem; background: #fff; color: #142b50; font: inherit; }
