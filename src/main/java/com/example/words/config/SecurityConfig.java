@@ -46,6 +46,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/auth/quote").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/qr").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/classrooms/companion-images/**")
+                        .permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/uploads/companion-classrooms/**")
                         .permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/users").permitAll()

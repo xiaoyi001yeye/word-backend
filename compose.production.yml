@@ -39,6 +39,7 @@ services:
       start_period: 30s
     volumes:
       - ./logs:/app/logs
+      - ./uploads:/app/uploads
 
   frontend:
     image: words-frontend:latest
