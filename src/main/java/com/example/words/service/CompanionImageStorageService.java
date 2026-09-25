@@ -8,8 +8,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -60,6 +63,18 @@ public class CompanionImageStorageService {
         } catch (IOException exception) {
             throw new IllegalStateException("保存伴读图片失败", exception);
         }
-        return new CompanionImageUploadResponse("/uploads/companion-classrooms/" + fileName, fileName);
+        return new CompanionImageUploadResponse("/api/classrooms/companion-images/" + fileName, fileName);
+    }
+
+    public Optional<Resource> load(String fileName) {
+        if (fileName == null || fileName.isBlank()
+                || fileName.contains("/") || fileName.contains("\\") || fileName.contains("..")) {
+            return Optional.empty();
+        }
+        Path target = rootDirectory.resolve(fileName).normalize();
+        if (!target.startsWith(rootDirectory) || !Files.isRegularFile(target)) {
+            return Optional.empty();
+        }
+        return Optional.of(new FileSystemResource(target));
     }
 }

@@ -4,11 +4,20 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('docker compose exposes only one frontend container on localhost 8083', () => {
+test('docker compose exposes only one frontend container on public port 80', () => {
   const compose = read('docker-compose.yml').replace(/\r\n/g, '\n');
 
-  assert.match(compose, /frontend:\n[\s\S]*?ports:\n\s+- "8083:80"/);
+  assert.match(compose, /frontend:\n[\s\S]*?ports:\n\s+- "80:80"/);
   assert.doesNotMatch(compose, /\n\s+admin-frontend:/);
+});
+
+test('production persists companion uploads and proxies public image reads', () => {
+  const compose = read('compose.production.yml').replace(/\r\n/g, '\n');
+  const nginx = read('frontend/nginx.conf');
+
+  assert.match(compose, /app:\n[\s\S]*?volumes:\n[\s\S]*?- \.\/uploads:\/app\/uploads/);
+  assert.match(nginx, /location \^~ \/api\/ \{[\s\S]*?proxy_pass http:\/\/app:8080/);
+  assert.match(nginx, /location \^~ \/uploads\/ \{[\s\S]*?proxy_pass http:\/\/app:8080\/uploads\//);
 });
 
 test('frontend build includes the admin sub-application', () => {
